@@ -249,6 +249,11 @@ export default function Home() {
 
   const registerAndMatch = async (lat: number, lng: number) => {
     const userId = getDeviceId();
+    const questList = QUESTS[mode];
+
+    // Shared index based on today's date so all matched players get the same synchronized quest
+    const todayIndex = Math.floor(Date.now() / (1000 * 60 * 15)) % questList.length;
+    const synchronizedQuest = questList[todayIndex];
 
     try {
       await supabase.from('active_queue').upsert([
@@ -282,9 +287,7 @@ export default function Home() {
     }
 
     setTimeout(() => {
-      const questList = QUESTS[mode];
-      const randomQuest = questList[Math.floor(Math.random() * questList.length)];
-      setActiveQuest(randomQuest);
+      setActiveQuest(synchronizedQuest);
       setIsSearching(false);
     }, 2000);
   };
