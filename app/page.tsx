@@ -28,6 +28,14 @@ const QUESTS = {
   ]
 };
 
+interface FeedItem {
+  id: string;
+  mode: string;
+  quest_text: string;
+  photo_url: string;
+  created_at: string;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -43,7 +51,7 @@ export default function Home() {
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
-  const [feedPhotos, setFeedPhotos] = useState<string[]>([]);
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
 
   const getDeviceId = () => {
     if (typeof window === 'undefined') return 'user_server';
@@ -82,16 +90,14 @@ export default function Home() {
 
   const fetchGallery = async () => {
     try {
-      const { data, error } = await supabase.storage.from('Proofs').list('', {
-        limit: 20,
-        sortBy: { column: 'created_at', order: 'desc' }
-      });
+      const { data, error } = await supabase
+        .from('mission_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
 
       if (data && !error) {
-        const urls = data
-          .filter((f) => f.name !== '.emptyFolderPlaceholder')
-          .map((f) => supabase.storage.from('Proofs').getPublicUrl(f.name).data.publicUrl);
-        setFeedPhotos(urls);
+        setFeedItems(data);
       }
     } catch (e) {
       console.log('Error fetching gallery:', e);
@@ -221,10 +227,24 @@ export default function Home() {
     }
   };
 
-  const handleCompleteMission = () => {
+  const handleCompleteMission = async () => {
     setIsCompleted(true);
     setStreak((prev) => prev + 1);
     setSavedMins((prev) => prev + 15);
+
+    // Save mission log to database
+    try {
+      await supabase.from('mission_logs').insert([
+        {
+          user_id: getDeviceId(),
+          mode: mode,
+          quest_text: activeQuest || 'Micro Mission Completed',
+          photo_url: proofImage
+        }
+      ]);
+    } catch (e) {
+      console.log('Failed to log mission:', e);
+    }
   };
 
   return (
@@ -374,23 +394,30 @@ export default function Home() {
         <div className="w-full max-w-md my-auto space-y-4">
           <div className="flex justify-between items-center border-b border-slate-800 pb-2">
             <h2 className="text-sm font-bold text-slate-300">Community Proof Feed</h2>
-            <span className="text-xs text-slate-500">{feedPhotos.length} Photos Logged</span>
+            <span className="text-xs text-slate-500">{feedItems.length} Missions Logged</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
-            {feedPhotos.length > 0 ? (
-              feedPhotos.map((url, idx) => (
-                <div key={idx} className="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex flex-col space-y-2">
-                  <img src={url} alt={`Proof ${idx}`} className="w-full h-36 object-cover rounded-xl" />
-                  <div className="flex justify-between items-center px-1">
-                    <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
-                    <span className="text-[10px] text-slate-500">Just now</span>
+          <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            {feedItems.length > 0 ? (
+              feedItems.map((item) => (
+                <div key={item.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-3">
+                  {item.photo_url && (
+                    <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
+                  )}
+                  <div className="space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider bg-rose-500/10 px-2 py-0.5 rounded-md">
+                        {item.mode} Mission
+                      </span>
+                      <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
+                    </div>
+                    <p className="text-xs text-slate-200 italic font-medium pt-1">"{item.quest_text}"</p>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="col-span-2 text-center py-12 text-slate-500 text-xs">
-                No public photos uploaded yet. Complete a mission to be the first!
+              <div className="text-center py-12 text-slate-500 text-xs">
+                No missions logged yet. Complete a mission to be the first!
               </div>
             )}
           </div>
