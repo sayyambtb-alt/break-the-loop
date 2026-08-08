@@ -60,6 +60,13 @@ export default function Home() {
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // Email Auth State
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [emailInput, setEmailInput] = useState('');
+  const [otpInput, setOtpInput] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [authError, setAuthError] = useState('');
+
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
@@ -71,51 +78,82 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const getDeviceId = () => {
-    if (typeof window === 'undefined') return 'user_server';
-    let id = localStorage.getItem('btl_device_id');
-    if (!id) {
-      id = 'user_' + Math.random().toString(36).substring(2, 9);
-      localStorage.setItem('btl_device_id', id);
-    }
-    return id;
-  };
-
   useEffect(() => {
-    async function loadOrCreateProfile() {
-      const devId = getDeviceId();
-      try {
-        const { data } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('device_id', devId)
-          .single();
-
-        if (data) {
-          setHandle(data.handle);
-          setStreak(data.streak);
-          setSavedMins(data.time_saved_mins);
-          if (data.badges) setBadges(data.badges);
-        } else {
-          await supabase.from('profiles').insert([
-            { device_id: devId, handle: 'Explorer', streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'] }
-          ]);
-        }
-      } catch (e) {
-        console.log('Profile setup:', e);
+    async function checkAuthSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user?.email) {
+        setUserEmail(session.user.email);
+        loadOrCreateProfile(session.user.id, session.user.email);
       }
     }
-    loadOrCreateProfile();
+    checkAuthSession();
   }, []);
+
+  const handleSendEmailOtp = async () => {
+    setAuthError('');
+    if (!emailInput.includes('@')) {
+      setAuthError('Please enter a valid email address');
+      return;
+    }
+
+    const { error } = await supabase.auth.signInWithOtp({ email: emailInput });
+
+    if (error) {
+      setAuthError(error.message);
+    } else {
+      setUserEmail(emailInput);
+      setOtpSent(true);
+    }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    setAuthError('');
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: userEmail!,
+      token: otpInput,
+      type: 'email'
+    });
+
+    if (error) {
+      setAuthError(error.message);
+    } else if (data.session?.user) {
+      loadOrCreateProfile(data.session.user.id, userEmail!);
+    }
+  };
+
+  const loadOrCreateProfile = async (userId: string, email: string) => {
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('device_id', userId)
+        .single();
+
+      if (data) {
+        setHandle(data.handle);
+        setStreak(data.streak);
+        setSavedMins(data.time_saved_mins);
+        if (data.badges) setBadges(data.badges);
+      } else {
+        await supabase.from('profiles').insert([
+          { device_id: userId, handle: 'Explorer', streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'], phone: email }
+        ]);
+      }
+    } catch (e) {
+      console.log('Profile setup:', e);
+    }
+  };
 
   const saveHandle = async (newHandle: string) => {
     setHandle(newHandle);
     setIsEditingHandle(false);
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id || 'guest';
     try {
       await supabase
         .from('profiles')
         .update({ handle: newHandle })
-        .eq('device_id', getDeviceId());
+        .eq('device_id', userId);
     } catch (e) {
       console.log('Handle update error:', e);
     }
@@ -274,7 +312,8 @@ export default function Home() {
   };
 
   const registerAndMatch = async (lat: number, lng: number) => {
-    const userId = getDeviceId();
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id || 'guest_user';
     const questList = QUESTS[mode];
     let selectedQuest = questList[Math.floor(Math.random() * questList.length)];
 
@@ -336,7 +375,7 @@ export default function Home() {
 
     setUploading(true);
     try {
-      const fileName = `${getDeviceId()}_${Date.now()}.jpg`;
+      const fileName = `${Date.now()}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from('Proofs')
@@ -401,14 +440,17 @@ export default function Home() {
         }
       ]);
 
-      await supabase
-        .from('profiles')
-        .update({
-          streak: newStreak,
-          time_saved_mins: newSavedMins,
-          badges: updatedBadges
-        })
-        .eq('device_id', getDeviceId());
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        await supabase
+          .from('profiles')
+          .update({
+            streak: newStreak,
+            time_saved_mins: newSavedMins,
+            badges: updatedBadges
+          })
+          .eq('device_id', session.user.id);
+      }
     } catch (e) {
       console.log('Failed to log mission:', e);
     }
@@ -437,6 +479,55 @@ export default function Home() {
           </button>
         </div>
       </header>
+
+      {/* Free Email Auth Modal */}
+      {!userEmail && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl">
+            <div className="text-4xl">✉️</div>
+            <h2 className="text-xl font-extrabold text-slate-100">JOIN BREAK THE LOOP</h2>
+            <p className="text-xs text-slate-400">Enter your email to receive a instant 6-digit login code and save your streaks.</p>
+
+            {authError && (
+              <p className="text-xs text-rose-400 bg-rose-500/10 p-2 rounded-xl font-medium">{authError}</p>
+            )}
+
+            {!otpSent ? (
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  placeholder="yourname@gmail.com"
+                  value={emailInput}
+                  onChange={(e) => setEmailInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+                />
+                <button
+                  onClick={handleSendEmailOtp}
+                  className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                >
+                  Send Login Code
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Enter 6-digit Email Code"
+                  value={otpInput}
+                  onChange={(e) => setOtpInput(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono text-center focus:outline-none focus:border-rose-500"
+                />
+                <button
+                  onClick={handleVerifyEmailOtp}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                >
+                  Verify & Continue
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-6">
@@ -618,7 +709,6 @@ export default function Home() {
                     </div>
                     <p className="text-xs text-slate-200 italic font-medium">"{item.quest_text}"</p>
 
-                    {/* Social Reaction Buttons */}
                     <div className="flex space-x-2 pt-1 border-t border-slate-800/80">
                       <button
                         onClick={() => handleReact(item.id, 'fire')}
@@ -667,10 +757,9 @@ export default function Home() {
               <span className="text-[10px] text-slate-500">✏️</span>
             </button>
           )}
-          <span className="text-[10px] text-slate-500">Tap to edit handle</span>
+          <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
         </div>
 
-        {/* Badges Carousel */}
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
           <span className="text-slate-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
           {badges.map((b, i) => (
