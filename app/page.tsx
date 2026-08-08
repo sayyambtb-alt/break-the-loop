@@ -29,6 +29,7 @@ const QUESTS = {
 };
 
 export default function Home() {
+  const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function Home() {
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
+  const [feedPhotos, setFeedPhotos] = useState<string[]>([]);
 
   const getDeviceId = () => {
     if (typeof window === 'undefined') return 'user_server';
@@ -71,6 +73,30 @@ export default function Home() {
     }
     fetchQueueCount();
   }, [isSearching]);
+
+  useEffect(() => {
+    if (tab === 'feed') {
+      fetchGallery();
+    }
+  }, [tab]);
+
+  const fetchGallery = async () => {
+    try {
+      const { data, error } = await supabase.storage.from('Proofs').list('', {
+        limit: 20,
+        sortBy: { column: 'created_at', order: 'desc' }
+      });
+
+      if (data && !error) {
+        const urls = data
+          .filter((f) => f.name !== '.emptyFolderPlaceholder')
+          .map((f) => supabase.storage.from('Proofs').getPublicUrl(f.name).data.publicUrl);
+        setFeedPhotos(urls);
+      }
+    } catch (e) {
+      console.log('Error fetching gallery:', e);
+    }
+  };
 
   useEffect(() => {
     if (!activeQuest || isCompleted) return;
@@ -171,7 +197,6 @@ export default function Home() {
     try {
       const fileName = `${getDeviceId()}_${Date.now()}.jpg`;
 
-      // Upload directly into bucket 'Proofs'
       const { error: uploadError } = await supabase.storage
         .from('Proofs')
         .upload(fileName, file, {
@@ -206,132 +231,173 @@ export default function Home() {
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
         <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
-        <div className="flex items-center space-x-2 bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-xs text-slate-400">
-          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>{activePlayerCount} Nearby Active</span>
+        <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <button
+            onClick={() => setTab('quest')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              tab === 'quest' ? 'bg-rose-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            Quest
+          </button>
+          <button
+            onClick={() => setTab('feed')}
+            className={`px-3 py-1 rounded-lg font-bold transition-all ${
+              tab === 'feed' ? 'bg-rose-600 text-white' : 'text-slate-400'
+            }`}
+          >
+            Feed
+          </button>
         </div>
       </header>
 
-      <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-8">
-        <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
-          {(['solo', 'duo', 'squad'] as const).map((m) => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setActiveQuest(null);
-                setProofImage(null);
-                setIsCompleted(false);
-              }}
-              className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
-                mode === m
-                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              {m === 'squad' ? 'Squad (3-6)' : m}
-            </button>
-          ))}
-        </div>
-
-        {!activeQuest && !isCompleted && (
-          <div className="flex flex-col items-center space-y-6">
-            <button
-              onClick={handleBreakLoop}
-              disabled={isSearching}
-              className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
-                isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-              }`}
-            >
-              {isSearching ? (
-                <span className="text-2xl animate-spin">🌀</span>
-              ) : (
-                <>
-                  <span>DESTROY</span>
-                  <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
-                </>
-              )}
-            </button>
-            <p className="text-xs text-slate-500 text-center max-w-xs">
-              {isSearching
-                ? locationStatus || 'Scanning nearby 1.5 km radius...'
-                : 'Tap to trigger a random real-world micro-mission.'}
-            </p>
+      {tab === 'quest' ? (
+        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-8">
+          <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
+            {(['solo', 'duo', 'squad'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => {
+                  setMode(m);
+                  setActiveQuest(null);
+                  setProofImage(null);
+                  setIsCompleted(false);
+                }}
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
+                  mode === m
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {m === 'squad' ? 'Squad (3-6)' : m}
+              </button>
+            ))}
           </div>
-        )}
 
-        {activeQuest && !isCompleted && (
-          <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-6 shadow-2xl">
-            <div className="flex justify-between items-center">
-              <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                {mode} Mission Assigned
-              </span>
-              <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold">
-                ⏱️ Rally: {formatTime(timeLeft)}
-              </span>
+          {!activeQuest && !isCompleted && (
+            <div className="flex flex-col items-center space-y-6">
+              <button
+                onClick={handleBreakLoop}
+                disabled={isSearching}
+                className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
+                  isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
+                }`}
+              >
+                {isSearching ? (
+                  <span className="text-2xl animate-spin">🌀</span>
+                ) : (
+                  <>
+                    <span>DESTROY</span>
+                    <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
+                  </>
+                )}
+              </button>
+              <p className="text-xs text-slate-500 text-center max-w-xs">
+                {isSearching
+                  ? locationStatus || 'Scanning nearby 1.5 km radius...'
+                  : 'Tap to trigger a random real-world micro-mission.'}
+              </p>
             </div>
+          )}
 
-            {matchedPartner && (
-              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-center space-x-2 text-xs text-rose-300 font-semibold">
-                <span>🤝</span>
-                <span>{matchedPartner}</span>
+          {activeQuest && !isCompleted && (
+            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-6 shadow-2xl">
+              <div className="flex justify-between items-center">
+                <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {mode} Mission Assigned
+                </span>
+                <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold">
+                  ⏱️ Rally: {formatTime(timeLeft)}
+                </span>
+              </div>
+
+              {matchedPartner && (
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-center space-x-2 text-xs text-rose-300 font-semibold">
+                  <span>🤝</span>
+                  <span>{matchedPartner}</span>
+                </div>
+              )}
+
+              <p className="text-lg font-medium text-slate-200 leading-relaxed">
+                "{activeQuest}"
+              </p>
+
+              <div className="border-2 border-dashed border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-950/50 space-y-2">
+                {uploading ? (
+                  <div className="py-8 flex flex-col items-center space-y-2">
+                    <span className="animate-spin text-2xl">☁️</span>
+                    <span className="text-xs text-rose-400 font-semibold">Uploading photo to Supabase Cloud...</span>
+                  </div>
+                ) : proofImage ? (
+                  <img src={proofImage} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
+                ) : (
+                  <label className="cursor-pointer flex flex-col items-center space-y-2 w-full py-2">
+                    <span className="text-2xl">📸</span>
+                    <span className="text-xs text-slate-400 font-semibold">Attach Photo Proof</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              <button
+                onClick={handleCompleteMission}
+                disabled={uploading}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
+              >
+                Complete & Log Proof
+              </button>
+            </div>
+          )}
+
+          {isCompleted && (
+            <div className="w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+              <div className="text-4xl">🎉</div>
+              <h2 className="text-xl font-extrabold text-emerald-400">LOOP BROKEN!</h2>
+              <p className="text-sm text-slate-300">
+                You saved another 15 minutes from doomscrolling reels.
+              </p>
+              <button
+                onClick={() => setIsCompleted(false)}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+              >
+                Back to Home
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="w-full max-w-md my-auto space-y-4">
+          <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+            <h2 className="text-sm font-bold text-slate-300">Community Proof Feed</h2>
+            <span className="text-xs text-slate-500">{feedPhotos.length} Photos Logged</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto pr-1">
+            {feedPhotos.length > 0 ? (
+              feedPhotos.map((url, idx) => (
+                <div key={idx} className="bg-slate-900 border border-slate-800 rounded-2xl p-2 flex flex-col space-y-2">
+                  <img src={url} alt={`Proof ${idx}`} className="w-full h-36 object-cover rounded-xl" />
+                  <div className="flex justify-between items-center px-1">
+                    <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
+                    <span className="text-[10px] text-slate-500">Just now</span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-2 text-center py-12 text-slate-500 text-xs">
+                No public photos uploaded yet. Complete a mission to be the first!
               </div>
             )}
-
-            <p className="text-lg font-medium text-slate-200 leading-relaxed">
-              "{activeQuest}"
-            </p>
-
-            <div className="border-2 border-dashed border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-950/50 space-y-2">
-              {uploading ? (
-                <div className="py-8 flex flex-col items-center space-y-2">
-                  <span className="animate-spin text-2xl">☁️</span>
-                  <span className="text-xs text-rose-400 font-semibold">Uploading photo to Supabase Cloud...</span>
-                </div>
-              ) : proofImage ? (
-                <img src={proofImage} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
-              ) : (
-                <label className="cursor-pointer flex flex-col items-center space-y-2 w-full py-2">
-                  <span className="text-2xl">📸</span>
-                  <span className="text-xs text-slate-400 font-semibold">Attach Photo Proof</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                    className="hidden"
-                  />
-                </label>
-              )}
-            </div>
-
-            <button
-              onClick={handleCompleteMission}
-              disabled={uploading}
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
-            >
-              Complete & Log Proof
-            </button>
           </div>
-        )}
+        </div>
+      )}
 
-        {isCompleted && (
-          <div className="w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-4xl">🎉</div>
-            <h2 className="text-xl font-extrabold text-emerald-400">LOOP BROKEN!</h2>
-            <p className="text-sm text-slate-300">
-              You saved another 15 minutes from doomscrolling reels.
-            </p>
-            <button
-              onClick={() => setIsCompleted(false)}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-            >
-              Back to Home
-            </button>
-          </div>
-        )}
-      </div>
-
-      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex justify-around text-center">
+      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex justify-around text-center mt-auto">
         <div>
           <p className="text-xs text-slate-500">Loop Streak</p>
           <p className="text-lg font-bold text-slate-200">{streak} Days 🔥</p>
