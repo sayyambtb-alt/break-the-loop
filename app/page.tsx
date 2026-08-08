@@ -39,15 +39,29 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
 
-  // Fetch live queue count from Supabase on load
+  // Get or generate persistent Device ID
+  const getDeviceId = () => {
+    if (typeof window === 'undefined') return 'user_server';
+    let id = localStorage.getItem('btl_device_id');
+    if (!id) {
+      id = 'user_' + Math.random().toString(36).substring(2, 9);
+      localStorage.setItem('btl_device_id', id);
+    }
+    return id;
+  };
+
+  // Fetch only active queue count from the last 15 minutes
   useEffect(() => {
     async function fetchQueueCount() {
       try {
+        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
         const { count } = await supabase
           .from('active_queue')
-          .select('*', { count: 'exact', head: true });
-        if (count !== null && count > 0) {
-          setActivePlayerCount(count);
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', fifteenMinsAgo);
+
+        if (count !== null) {
+          setActivePlayerCount(Math.max(1, count));
         }
       } catch (e) {
         console.log('Fetching queue stats...', e);
@@ -106,17 +120,18 @@ export default function Home() {
   };
 
   const registerAndMatch = async (lat: number, lng: number) => {
-    const userId = 'user_' + Math.random().toString(36).substring(2, 9);
+    const userId = getDeviceId();
 
     try {
-      await supabase.from('active_queue').insert([
+      await supabase.from('active_queue').upsert([
         {
           user_id: userId,
           mode: mode,
           location: `POINT(${lng} ${lat})`,
-          status: 'searching'
+          status: 'searching',
+          created_at: new Date().toISOString()
         }
-      ]);
+      ], { onConflict: 'id' });
     } catch (e) {
       console.log('Database queueing active:', e);
     }
@@ -128,9 +143,9 @@ export default function Home() {
       setIsSearching(false);
 
       if (mode === 'duo') {
-        setMatchedPartner('Live Match Found (Within 1.5km)');
+        setMatchedPartner('Partner Matched Nearby');
       } else if (mode === 'squad') {
-        setMatchedPartner('Squad Assembled: 4 Active Nearby');
+        setMatchedPartner('Squad Assembled: Active Nearby');
       }
     }, 2000);
   };
@@ -158,7 +173,7 @@ export default function Home() {
         <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
         <div className="flex items-center space-x-2 bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-xs text-slate-400">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-          <span>{activePlayerCount} Nearby</span>
+          <span>{activePlayerCount} Nearby Active</span>
         </div>
       </header>
 
