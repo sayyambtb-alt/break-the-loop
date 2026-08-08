@@ -9,19 +9,22 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 const QUESTS = {
   solo: [
-    "Walk 100 steps north. Find a local shop or tea stall you've never ordered from and get the simplest item on the menu.",
-    "Go outside and find an object that is bright orange. Take a photo of it, then walk back.",
-    "Pick up a book or magazine near you, flip to page 42, and read sentence 3 out loud.",
-    "Walk down a street in your neighborhood you usually skip. Take a photo of the most interesting doorway."
+    "Walk 100 steps towards the nearest chai tapri. Order a cutting chai or biscuit you haven't tried before.",
+    "Find an auto-rickshaw with a funny or unique sentence painted on the back. Take a photo of it.",
+    "Walk down a side lane near your society that you usually skip. Take a photo of the coolest doorway or garden.",
+    "Find a local bakery or Quick Bite stall. Ask for their most popular item under ₹50.",
+    "Pick up a local newspaper or magazine, flip to page 5, and read sentence 2 out loud."
   ],
   duo: [
-    "Rally with your partner at the nearest public bench. Find 1 weird local snack together and split it 50/50.",
-    "Meet at the nearest street corner. Choose 1 item each from a nearby shop and draft a funny 2-line backstory for it.",
-    "Find an old stationery or local shop together. Evaluate all the pens and officially declare one 'Pen of the Neighborhood'."
+    "Rally with your partner at the nearest local landmark or station road bench. Split 1 plate of vada pav or sev puri 50/50.",
+    "Meet at the nearest street corner. Pick 1 random item each from a general store and draft a funny 2-line backstory for it.",
+    "Find an old local stationery shop together. Test 3 gel pens and officially declare one 'Pen of the Neighborhood'.",
+    "Head to a nearby coffee spot or local stall. Order two cold coffees and play 1 round of Rock-Paper-Scissors for who pays."
   ],
   squad: [
-    "Assemble your squad at the main plaza. Hold a sign reading 'Free High-Five Zone' and collect 15 high-fives from passersby.",
-    "Race a 10-minute clock to gather 3 items: a leaf larger than your palm, a coin, and a receipt for less than ₹20."
+    "Assemble your squad near the main colony gate or plaza. Race a 10-minute clock to gather: 1 fallen leaf, 1 coin, and 1 receipt under ₹20.",
+    "Hold a sign or hand out 10 high-fives to local shopkeepers or neighbors within 10 minutes.",
+    "Find a public park or open ground together and execute a synchronized 10-second victory jump."
   ]
 };
 
@@ -143,7 +146,7 @@ export default function Home() {
         const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
         if (otherPlayer) {
           const dist = Math.round(otherPlayer.distance_meters);
-          setMatchedPartner(`Matched: Player (${dist}m away)`);
+          setMatchedPartner(`Matched: Partner (${dist}m away)`);
         } else {
           setMatchedPartner('Searching for nearby player... (Found local hub match)');
         }
@@ -176,7 +179,6 @@ export default function Home() {
 
       if (uploadError) {
         console.error('Upload failed:', uploadError);
-        // Fallback local preview if storage errors
         const reader = new FileReader();
         reader.onloadend = () => setProofImage(reader.result as string);
         reader.readAsDataURL(file);
@@ -288,7 +290,7 @@ export default function Home() {
               ) : (
                 <label className="cursor-pointer flex flex-col items-center space-y-2 w-full py-2">
                   <span className="text-2xl">📸</span>
-                  <span className="text-xs text-slate-400 font-medium">Attach Photo Proof</span>
+                  <span className="text-xs text-slate-400 font-medium font-semibold">Attach Photo Proof</span>
                   <input
                     type="file"
                     accept="image/*"
