@@ -171,11 +171,11 @@ export default function Home() {
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${getDeviceId()}_${Date.now()}.${fileExt}`;
-      const filePath = `proofs/${fileName}`;
 
+      // Upload directly into bucket root
       const { error: uploadError } = await supabase.storage
-        .from('proofs')
-        .upload(filePath, file);
+        .from('Proofs')
+        .upload(fileName, file);
 
       if (uploadError) {
         console.error('Upload failed:', uploadError);
@@ -183,7 +183,7 @@ export default function Home() {
         reader.onloadend = () => setProofImage(reader.result as string);
         reader.readAsDataURL(file);
       } else {
-        const { data } = supabase.storage.from('proofs').getPublicUrl(filePath);
+        const { data } = supabase.storage.from('Proofs').getPublicUrl(fileName);
         setProofImage(data.publicUrl);
       }
     } catch (err) {
