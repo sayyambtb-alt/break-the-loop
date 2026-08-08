@@ -27,19 +27,24 @@ export default function Home() {
   const [savedMins, setSavedMins] = useState(30);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // Real GPS & Matchmaking States
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
-  const [rallyTimer, setRallyTimer] = useState<number>(600); // 10 min countdown
+
+  // Trigger mobile phone haptic vibration
+  const triggerHaptic = (pattern: number | number[] = 50) => {
+    if (typeof window !== 'undefined' && 'navigator' in window && 'vibrate' in navigator) {
+      navigator.vibrate(pattern);
+    }
+  };
 
   const handleBreakLoop = () => {
+    triggerHaptic([100, 50, 100]); // Double buzz on press
     setIsSearching(true);
     setActiveQuest(null);
     setProofImage(null);
     setIsCompleted(false);
     setMatchedPartner(null);
 
-    // Request actual browser GPS coordinates
     if ('geolocation' in navigator) {
       setLocationStatus('Acquiring GPS fix...');
       navigator.geolocation.getCurrentPosition(
@@ -59,6 +64,7 @@ export default function Home() {
 
   const triggerMatchmaking = () => {
     setTimeout(() => {
+      triggerHaptic(200); // Strong vibration when quest is unlocked
       const questList = QUESTS[mode];
       const randomQuest = questList[Math.floor(Math.random() * questList.length)];
       setActiveQuest(randomQuest);
@@ -75,6 +81,7 @@ export default function Home() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      triggerHaptic(30);
       const reader = new FileReader();
       reader.onloadend = () => {
         setProofImage(reader.result as string);
@@ -84,13 +91,14 @@ export default function Home() {
   };
 
   const handleCompleteMission = () => {
+    triggerHaptic([50, 100, 150]);
     setIsCompleted(true);
     setStreak((prev) => prev + 1);
     setSavedMins((prev) => prev + 15);
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans">
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Top Header */}
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
         <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
@@ -108,6 +116,7 @@ export default function Home() {
             <button
               key={m}
               onClick={() => {
+                triggerHaptic(20);
                 setMode(m);
                 setActiveQuest(null);
                 setProofImage(null);
@@ -130,12 +139,12 @@ export default function Home() {
             <button
               onClick={handleBreakLoop}
               disabled={isSearching}
-              className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-95 transition-all ${
+              className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-all touch-manipulation ${
                 isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
               }`}
             >
               {isSearching ? (
-                <span className="text-lg animate-spin">🌀</span>
+                <span className="text-2xl animate-spin">🌀</span>
               ) : (
                 <>
                   <span>DESTROY</span>
@@ -195,7 +204,7 @@ export default function Home() {
 
             <button
               onClick={handleCompleteMission}
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all"
+              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
             >
               Complete & Log Proof
             </button>
@@ -211,8 +220,11 @@ export default function Home() {
               You saved another 15 minutes from doomscrolling reels.
             </p>
             <button
-              onClick={() => setIsCompleted(false)}
-              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all"
+              onClick={() => {
+                triggerHaptic(20);
+                setIsCompleted(false);
+              }}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
             >
               Back to Home
             </button>
