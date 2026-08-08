@@ -158,7 +158,7 @@ export default function Home() {
     }
   };
 
-  // Realtime Chat Subscription
+  // Realtime Chat Subscription (Active for Duo & Squad)
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -254,7 +254,6 @@ export default function Home() {
 
     try {
       if (mode !== 'solo') {
-        // Look for existing active queue entries in this mode to lock onto the same quest
         const { data: existingQueue } = await supabase
           .from('active_queue')
           .select('active_quest')
@@ -292,7 +291,7 @@ export default function Home() {
           const dist = Math.round(otherPlayer.distance_meters);
           setMatchedPartner(`Matched: Partner (${dist}m away)`);
         } else {
-          setMatchedPartner('Searching for nearby player... (Found local hub match)');
+          setMatchedPartner('Searching for nearby squad... (Found local hub match)');
         }
       }
     } catch (e) {
@@ -458,16 +457,16 @@ export default function Home() {
                 "{activeQuest}"
               </p>
 
-              {/* In-Mission Live Chat */}
-              {mode !== 'solo' && (
+              {/* In-Mission Live Chat for Duo AND Squad */}
+              {(mode === 'duo' || mode === 'squad') && (
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-1">
-                    <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live Rally Chat</span>
+                    <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
                     <span className="text-[9px] text-emerald-400 font-semibold">● Realtime</span>
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your meeting spot!</p>
+                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
                     ) : (
                       messages.map((m, i) => (
                         <div key={i} className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
