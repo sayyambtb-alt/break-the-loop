@@ -250,18 +250,31 @@ export default function Home() {
   const registerAndMatch = async (lat: number, lng: number) => {
     const userId = getDeviceId();
     const questList = QUESTS[mode];
-
-    // Shared index based on today's date so all matched players get the same synchronized quest
-    const todayIndex = Math.floor(Date.now() / (1000 * 60 * 15)) % questList.length;
-    const synchronizedQuest = questList[todayIndex];
+    let selectedQuest = questList[Math.floor(Math.random() * questList.length)];
 
     try {
+      if (mode !== 'solo') {
+        // Look for existing active queue entries in this mode to lock onto the same quest
+        const { data: existingQueue } = await supabase
+          .from('active_queue')
+          .select('active_quest')
+          .eq('mode', mode)
+          .not('active_quest', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (existingQueue && existingQueue.length > 0 && existingQueue[0].active_quest) {
+          selectedQuest = existingQueue[0].active_quest;
+        }
+      }
+
       await supabase.from('active_queue').upsert([
         {
           user_id: userId,
           mode: mode,
           location: `POINT(${lng} ${lat})`,
           status: 'searching',
+          active_quest: selectedQuest,
           created_at: new Date().toISOString()
         }
       ], { onConflict: 'id' });
@@ -287,7 +300,7 @@ export default function Home() {
     }
 
     setTimeout(() => {
-      setActiveQuest(synchronizedQuest);
+      setActiveQuest(selectedQuest);
       setIsSearching(false);
     }, 2000);
   };
