@@ -30,6 +30,7 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [proofImage, setProofImage] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(2);
   const [savedMins, setSavedMins] = useState(30);
   const [isCompleted, setIsCompleted] = useState(false);
@@ -108,7 +109,7 @@ export default function Home() {
           await registerAndMatch(lat, lng);
         },
         async () => {
-          setLocationStatus('GPS fallback: Goregaon Hub');
+          setLocationStatus('GPS fallback: Active');
           await registerAndMatch(19.166, 72.852);
         }
       );
@@ -121,7 +122,6 @@ export default function Home() {
     const userId = getDeviceId();
 
     try {
-      // 1. Log current position into queue
       await supabase.from('active_queue').upsert([
         {
           user_id: userId,
@@ -132,13 +132,12 @@ export default function Home() {
         }
       ], { onConflict: 'id' });
 
-      // 2. Query spatial proximity matches within 1500m
       if (mode !== 'solo') {
         const { data: matches } = await supabase.rpc('get_nearby_matches', {
           user_lat: lat,
           user_lng: lng,
           search_mode: mode,
-          radius_meters: 1500
+          radius_meters: 3000
         });
 
         const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
@@ -161,14 +160,34 @@ export default function Home() {
     }, 2000);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProofImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${getDeviceId()}_${Date.now()}.${fileExt}`;
+      const filePath = `proofs/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('proofs')
+        .upload(filePath, file);
+
+      if (uploadError) {
+        console.error('Upload failed:', uploadError);
+        // Fallback local preview if storage errors
+        const reader = new FileReader();
+        reader.onloadend = () => setProofImage(reader.result as string);
+        reader.readAsDataURL(file);
+      } else {
+        const { data } = supabase.storage.from('proofs').getPublicUrl(filePath);
+        setProofImage(data.publicUrl);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -259,7 +278,12 @@ export default function Home() {
             </p>
 
             <div className="border-2 border-dashed border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-950/50 space-y-2">
-              {proofImage ? (
+              {uploading ? (
+                <div className="py-8 flex flex-col items-center space-y-2">
+                  <span className="animate-spin text-2xl">☁️</span>
+                  <span className="text-xs text-rose-400 font-semibold">Uploading photo to Supabase Cloud...</span>
+                </div>
+              ) : proofImage ? (
                 <img src={proofImage} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
               ) : (
                 <label className="cursor-pointer flex flex-col items-center space-y-2 w-full py-2">
@@ -277,7 +301,8 @@ export default function Home() {
 
             <button
               onClick={handleCompleteMission}
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+              disabled={uploading}
+              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
             >
               Complete & Log Proof
             </button>
