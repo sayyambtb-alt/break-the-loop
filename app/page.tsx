@@ -39,7 +39,6 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
 
-  // Get or generate persistent Device ID
   const getDeviceId = () => {
     if (typeof window === 'undefined') return 'user_server';
     let id = localStorage.getItem('btl_device_id');
@@ -50,7 +49,6 @@ export default function Home() {
     return id;
   };
 
-  // Fetch only active queue count from the last 15 minutes
   useEffect(() => {
     async function fetchQueueCount() {
       try {
@@ -110,7 +108,7 @@ export default function Home() {
           await registerAndMatch(lat, lng);
         },
         async () => {
-          setLocationStatus('GPS fallback: Active');
+          setLocationStatus('GPS fallback: Goregaon Hub');
           await registerAndMatch(19.166, 72.852);
         }
       );
@@ -123,6 +121,7 @@ export default function Home() {
     const userId = getDeviceId();
 
     try {
+      // 1. Log current position into queue
       await supabase.from('active_queue').upsert([
         {
           user_id: userId,
@@ -132,6 +131,24 @@ export default function Home() {
           created_at: new Date().toISOString()
         }
       ], { onConflict: 'id' });
+
+      // 2. Query spatial proximity matches within 1500m
+      if (mode !== 'solo') {
+        const { data: matches } = await supabase.rpc('get_nearby_matches', {
+          user_lat: lat,
+          user_lng: lng,
+          search_mode: mode,
+          radius_meters: 1500
+        });
+
+        const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
+        if (otherPlayer) {
+          const dist = Math.round(otherPlayer.distance_meters);
+          setMatchedPartner(`Matched: Player (${dist}m away)`);
+        } else {
+          setMatchedPartner('Searching for nearby player... (Found local hub match)');
+        }
+      }
     } catch (e) {
       console.log('Database queueing active:', e);
     }
@@ -141,12 +158,6 @@ export default function Home() {
       const randomQuest = questList[Math.floor(Math.random() * questList.length)];
       setActiveQuest(randomQuest);
       setIsSearching(false);
-
-      if (mode === 'duo') {
-        setMatchedPartner('Partner Matched Nearby');
-      } else if (mode === 'squad') {
-        setMatchedPartner('Squad Assembled: Active Nearby');
-      }
     }, 2000);
   };
 
