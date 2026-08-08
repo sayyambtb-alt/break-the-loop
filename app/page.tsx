@@ -30,6 +30,7 @@ const QUESTS = {
 
 interface FeedItem {
   id: string;
+  user_id: string;
   mode: string;
   quest_text: string;
   photo_url: string;
@@ -43,8 +44,10 @@ export default function Home() {
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [streak, setStreak] = useState(2);
-  const [savedMins, setSavedMins] = useState(30);
+  const [streak, setStreak] = useState(1);
+  const [savedMins, setSavedMins] = useState(15);
+  const [handle, setHandle] = useState('Explorer');
+  const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
   const [locationStatus, setLocationStatus] = useState<string>('');
@@ -61,6 +64,45 @@ export default function Home() {
       localStorage.setItem('btl_device_id', id);
     }
     return id;
+  };
+
+  useEffect(() => {
+    async function loadOrCreateProfile() {
+      const devId = getDeviceId();
+      try {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('device_id', devId)
+          .single();
+
+        if (data) {
+          setHandle(data.handle);
+          setStreak(data.streak);
+          setSavedMins(data.time_saved_mins);
+        } else {
+          await supabase.from('profiles').insert([
+            { device_id: devId, handle: 'Explorer', streak: 1, time_saved_mins: 15 }
+          ]);
+        }
+      } catch (e) {
+        console.log('Profile setup:', e);
+      }
+    }
+    loadOrCreateProfile();
+  }, []);
+
+  const saveHandle = async (newHandle: string) => {
+    setHandle(newHandle);
+    setIsEditingHandle(false);
+    try {
+      await supabase
+        .from('profiles')
+        .update({ handle: newHandle })
+        .eq('device_id', getDeviceId());
+    } catch (e) {
+      console.log('Handle update error:', e);
+    }
   };
 
   useEffect(() => {
@@ -229,19 +271,25 @@ export default function Home() {
 
   const handleCompleteMission = async () => {
     setIsCompleted(true);
-    setStreak((prev) => prev + 1);
-    setSavedMins((prev) => prev + 15);
+    const newStreak = streak + 1;
+    const newSavedMins = savedMins + 15;
+    setStreak(newStreak);
+    setSavedMins(newSavedMins);
 
-    // Save mission log to database
     try {
       await supabase.from('mission_logs').insert([
         {
-          user_id: getDeviceId(),
+          user_id: handle,
           mode: mode,
           quest_text: activeQuest || 'Micro Mission Completed',
           photo_url: proofImage
         }
       ]);
+
+      await supabase
+        .from('profiles')
+        .update({ streak: newStreak, time_saved_mins: newSavedMins })
+        .eq('device_id', getDeviceId());
     } catch (e) {
       console.log('Failed to log mission:', e);
     }
@@ -406,8 +454,8 @@ export default function Home() {
                   )}
                   <div className="space-y-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold text-rose-400 uppercase tracking-wider bg-rose-500/10 px-2 py-0.5 rounded-md">
-                        {item.mode} Mission
+                      <span className="text-xs font-bold text-rose-400">
+                        @{item.user_id || 'Explorer'}
                       </span>
                       <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
                     </div>
@@ -424,15 +472,39 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex justify-around text-center mt-auto">
-        <div>
-          <p className="text-xs text-slate-500">Loop Streak</p>
-          <p className="text-lg font-bold text-slate-200">{streak} Days 🔥</p>
+      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
+        <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
+          {isEditingHandle ? (
+            <input
+              type="text"
+              defaultValue={handle}
+              onBlur={(e) => saveHandle(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
+              autoFocus
+              className="bg-slate-950 border border-rose-500/50 rounded-lg px-2 py-1 text-xs text-rose-400 font-bold focus:outline-none"
+            />
+          ) : (
+            <button
+              onClick={() => setIsEditingHandle(true)}
+              className="text-xs font-bold text-rose-400 hover:underline flex items-center space-x-1"
+            >
+              <span>@{handle}</span>
+              <span className="text-[10px] text-slate-500">✏️</span>
+            </button>
+          )}
+          <span className="text-[10px] text-slate-500">Tap to edit handle</span>
         </div>
-        <div className="w-px bg-slate-800" />
-        <div>
-          <p className="text-xs text-slate-500">Reel Time Saved</p>
-          <p className="text-lg font-bold text-rose-400">{savedMins} Mins ⚡</p>
+
+        <div className="flex justify-around text-center">
+          <div>
+            <p className="text-xs text-slate-500">Loop Streak</p>
+            <p className="text-lg font-bold text-slate-200">{streak} Days 🔥</p>
+          </div>
+          <div className="w-px bg-slate-800" />
+          <div>
+            <p className="text-xs text-slate-500">Reel Time Saved</p>
+            <p className="text-lg font-bold text-rose-400">{savedMins} Mins ⚡</p>
+          </div>
         </div>
       </footer>
     </main>
