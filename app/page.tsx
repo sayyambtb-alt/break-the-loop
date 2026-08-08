@@ -54,6 +54,7 @@ export default function Home() {
   const [streak, setStreak] = useState(1);
   const [savedMins, setSavedMins] = useState(15);
   const [handle, setHandle] = useState('Explorer');
+  const [badges, setBadges] = useState<string[]>(['🌱 First Step']);
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
@@ -92,9 +93,10 @@ export default function Home() {
           setHandle(data.handle);
           setStreak(data.streak);
           setSavedMins(data.time_saved_mins);
+          if (data.badges) setBadges(data.badges);
         } else {
           await supabase.from('profiles').insert([
-            { device_id: devId, handle: 'Explorer', streak: 1, time_saved_mins: 15 }
+            { device_id: devId, handle: 'Explorer', streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'] }
           ]);
         }
       } catch (e) {
@@ -158,7 +160,7 @@ export default function Home() {
     }
   };
 
-  // Realtime Chat Subscription (Active for Duo & Squad)
+  // Realtime Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -291,7 +293,7 @@ export default function Home() {
           const dist = Math.round(otherPlayer.distance_meters);
           setMatchedPartner(`Matched: Partner (${dist}m away)`);
         } else {
-          setMatchedPartner('Searching for nearby squad... (Found local hub match)');
+          setMatchedPartner(`Searching for nearby ${mode}... (Found local hub match)`);
         }
       }
     } catch (e) {
@@ -336,12 +338,34 @@ export default function Home() {
     }
   };
 
+  const evaluateBadges = (currentStreak: number, currentSavedMins: number, currentMode: string, existingBadges: string[]) => {
+    const updated = [...existingBadges];
+
+    if (currentStreak >= 3 && !updated.includes('🔥 3-Day Streak')) {
+      updated.push('🔥 3-Day Streak');
+    }
+    if (currentSavedMins >= 60 && !updated.includes('⚡ 1 Hour Saved')) {
+      updated.push('⚡ 1 Hour Saved');
+    }
+    if (currentMode === 'duo' && !updated.includes('🤝 Duo Tactician')) {
+      updated.push('🤝 Duo Tactician');
+    }
+    if (currentMode === 'squad' && !updated.includes('👑 Squad Leader')) {
+      updated.push('👑 Squad Leader');
+    }
+
+    return updated;
+  };
+
   const handleCompleteMission = async () => {
     setIsCompleted(true);
     const newStreak = streak + 1;
     const newSavedMins = savedMins + 15;
+    const updatedBadges = evaluateBadges(newStreak, newSavedMins, mode, badges);
+
     setStreak(newStreak);
     setSavedMins(newSavedMins);
+    setBadges(updatedBadges);
 
     try {
       await supabase.from('mission_logs').insert([
@@ -355,7 +379,11 @@ export default function Home() {
 
       await supabase
         .from('profiles')
-        .update({ streak: newStreak, time_saved_mins: newSavedMins })
+        .update({
+          streak: newStreak,
+          time_saved_mins: newSavedMins,
+          badges: updatedBadges
+        })
         .eq('device_id', getDeviceId());
     } catch (e) {
       console.log('Failed to log mission:', e);
@@ -457,7 +485,6 @@ export default function Home() {
                 "{activeQuest}"
               </p>
 
-              {/* In-Mission Live Chat for Duo AND Squad */}
               {(mode === 'duo' || mode === 'squad') && (
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-1">
@@ -601,7 +628,17 @@ export default function Home() {
           <span className="text-[10px] text-slate-500">Tap to edit handle</span>
         </div>
 
-        <div className="flex justify-around text-center">
+        {/* Badges Carousel */}
+        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
+          <span className="text-slate-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
+          {badges.map((b, i) => (
+            <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
+              {b}
+            </span>
+          ))}
+        </div>
+
+        <div className="flex justify-around text-center border-t border-slate-800/60 pt-2">
           <div>
             <p className="text-xs text-slate-500">Loop Streak</p>
             <p className="text-lg font-bold text-slate-200">{streak} Days 🔥</p>
