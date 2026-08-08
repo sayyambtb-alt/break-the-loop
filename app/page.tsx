@@ -37,6 +37,24 @@ export default function Home() {
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
+  const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
+
+  // Fetch live queue count from Supabase on load
+  useEffect(() => {
+    async function fetchQueueCount() {
+      try {
+        const { count } = await supabase
+          .from('active_queue')
+          .select('*', { count: 'exact', head: true });
+        if (count !== null && count > 0) {
+          setActivePlayerCount(count);
+        }
+      } catch (e) {
+        console.log('Fetching queue stats...', e);
+      }
+    }
+    fetchQueueCount();
+  }, [isSearching]);
 
   useEffect(() => {
     if (!activeQuest || isCompleted) return;
@@ -138,9 +156,10 @@ export default function Home() {
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
         <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
-        <span className="text-xs bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-slate-400">
-          Reel Detox: Active
-        </span>
+        <div className="flex items-center space-x-2 bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-xs text-slate-400">
+          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>{activePlayerCount} Nearby</span>
+        </div>
       </header>
 
       <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-8">
