@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vopavevysovvucmhkvkr.supabase.co';
@@ -37,6 +37,13 @@ interface FeedItem {
   created_at: string;
 }
 
+interface ChatMessage {
+  id: string;
+  sender_handle: string;
+  message: string;
+  created_at: string;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -55,6 +62,11 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+
+  // Chat State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState('');
+  const chatBottomRef = useRef<HTMLDivElement>(null);
 
   const getDeviceId = () => {
     if (typeof window === 'undefined') return 'user_server';
@@ -146,6 +158,45 @@ export default function Home() {
     }
   };
 
+  // Realtime Chat Subscription
+  useEffect(() => {
+    if (!activeQuest || mode === 'solo') return;
+
+    const channel = supabase
+      .channel('room_goregaon')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: "room_id=eq.room_goregaon" },
+        (payload) => {
+          setMessages((prev) => [...prev, payload.new as ChatMessage]);
+          chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeQuest, mode]);
+
+  const sendMessage = async () => {
+    if (!newMessage.trim()) return;
+    const msgText = newMessage.trim();
+    setNewMessage('');
+
+    try {
+      await supabase.from('mission_messages').insert([
+        {
+          room_id: 'room_goregaon',
+          sender_handle: handle,
+          message: msgText
+        }
+      ]);
+    } catch (e) {
+      console.log('Error sending message:', e);
+    }
+  };
+
   useEffect(() => {
     if (!activeQuest || isCompleted) return;
 
@@ -174,6 +225,7 @@ export default function Home() {
     setProofImage(null);
     setIsCompleted(false);
     setMatchedPartner(null);
+    setMessages([]);
     setTimeLeft(600);
 
     if ('geolocation' in navigator) {
@@ -320,7 +372,7 @@ export default function Home() {
       </header>
 
       {tab === 'quest' ? (
-        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-8">
+        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-6">
           <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
@@ -369,7 +421,7 @@ export default function Home() {
           )}
 
           {activeQuest && !isCompleted && (
-            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-6 shadow-2xl">
+            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
               <div className="flex justify-between items-center">
                 <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {mode} Mission Assigned
@@ -380,27 +432,66 @@ export default function Home() {
               </div>
 
               {matchedPartner && (
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-center space-x-2 text-xs text-rose-300 font-semibold">
+                <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-center space-x-2 text-xs text-rose-300 font-semibold">
                   <span>🤝</span>
                   <span>{matchedPartner}</span>
                 </div>
               )}
 
-              <p className="text-lg font-medium text-slate-200 leading-relaxed">
+              <p className="text-base font-medium text-slate-200 leading-relaxed">
                 "{activeQuest}"
               </p>
 
-              <div className="border-2 border-dashed border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-950/50 space-y-2">
+              {/* In-Mission Live Chat */}
+              {mode !== 'solo' && (
+                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
+                  <div className="flex justify-between items-center border-b border-slate-800 pb-1">
+                    <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live Rally Chat</span>
+                    <span className="text-[9px] text-emerald-400 font-semibold">● Realtime</span>
+                  </div>
+                  <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
+                    {messages.length === 0 ? (
+                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your meeting spot!</p>
+                    ) : (
+                      messages.map((m, i) => (
+                        <div key={i} className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
+                          <span className="text-[10px] font-bold text-rose-400">@{m.sender_handle}: </span>
+                          <span className="text-slate-300">{m.message}</span>
+                        </div>
+                      ))
+                    )}
+                    <div ref={chatBottomRef} />
+                  </div>
+                  <div className="flex space-x-2 pt-1">
+                    <input
+                      type="text"
+                      placeholder="Say something..."
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500"
+                    />
+                    <button
+                      onClick={sendMessage}
+                      className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                    >
+                      Send
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="border-2 border-dashed border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center bg-slate-950/50 space-y-1">
                 {uploading ? (
-                  <div className="py-8 flex flex-col items-center space-y-2">
-                    <span className="animate-spin text-2xl">☁️</span>
+                  <div className="py-4 flex flex-col items-center space-y-1">
+                    <span className="animate-spin text-xl">☁️</span>
                     <span className="text-xs text-rose-400 font-semibold">Uploading photo to Supabase Cloud...</span>
                   </div>
                 ) : proofImage ? (
-                  <img src={proofImage} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
+                  <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
                 ) : (
-                  <label className="cursor-pointer flex flex-col items-center space-y-2 w-full py-2">
-                    <span className="text-2xl">📸</span>
+                  <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
+                    <span className="text-xl">📸</span>
                     <span className="text-xs text-slate-400 font-semibold">Attach Photo Proof</span>
                     <input
                       type="file"
@@ -415,7 +506,7 @@ export default function Home() {
               <button
                 onClick={handleCompleteMission}
                 disabled={uploading}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
               >
                 Complete & Log Proof
               </button>
