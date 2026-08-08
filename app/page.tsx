@@ -35,6 +35,8 @@ interface FeedItem {
   quest_text: string;
   photo_url: string;
   created_at: string;
+  fire_count?: number;
+  five_count?: number;
 }
 
 interface ChatMessage {
@@ -146,17 +148,39 @@ export default function Home() {
 
   const fetchGallery = async () => {
     try {
-      const { data, error } = await supabase
+      const { data: logs, error } = await supabase
         .from('mission_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
 
-      if (data && !error) {
-        setFeedItems(data);
+      if (logs && !error) {
+        const { data: reactions } = await supabase.from('feed_reactions').select('*');
+
+        const logsWithReactions = logs.map((log) => {
+          const logReactions = reactions?.filter((r) => r.log_id === log.id) || [];
+          return {
+            ...log,
+            fire_count: logReactions.filter((r) => r.reaction_type === 'fire').length,
+            five_count: logReactions.filter((r) => r.reaction_type === 'five').length
+          };
+        });
+
+        setFeedItems(logsWithReactions);
       }
     } catch (e) {
       console.log('Error fetching gallery:', e);
+    }
+  };
+
+  const handleReact = async (logId: string, type: 'fire' | 'five') => {
+    try {
+      await supabase.from('feed_reactions').upsert([
+        { log_id: logId, user_handle: handle, reaction_type: type }
+      ]);
+      fetchGallery();
+    } catch (e) {
+      console.log('Reaction error:', e);
     }
   };
 
@@ -585,14 +609,32 @@ export default function Home() {
                   {item.photo_url && (
                     <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
                   )}
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <span className="text-xs font-bold text-rose-400">
                         @{item.user_id || 'Explorer'}
                       </span>
                       <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
                     </div>
-                    <p className="text-xs text-slate-200 italic font-medium pt-1">"{item.quest_text}"</p>
+                    <p className="text-xs text-slate-200 italic font-medium">"{item.quest_text}"</p>
+
+                    {/* Social Reaction Buttons */}
+                    <div className="flex space-x-2 pt-1 border-t border-slate-800/80">
+                      <button
+                        onClick={() => handleReact(item.id, 'fire')}
+                        className="flex items-center space-x-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-300 transition-all active:scale-95"
+                      >
+                        <span>🔥</span>
+                        <span>{item.fire_count || 0}</span>
+                      </button>
+                      <button
+                        onClick={() => handleReact(item.id, 'five')}
+                        className="flex items-center space-x-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-300 transition-all active:scale-95"
+                      >
+                        <span>✋</span>
+                        <span>{item.five_count || 0}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))
