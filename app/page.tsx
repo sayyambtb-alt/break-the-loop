@@ -1,69 +1,237 @@
-import Image from "next/image";
+'use client';
+
+import React, { useState } from 'react';
+
+const QUESTS = {
+  solo: [
+    "Walk 100 steps north. Find a local shop or tea stall you've never ordered from and get the simplest item on the menu.",
+    "Go outside and find an object that is bright orange. Take a photo of it, then walk back.",
+    "Pick up a book or magazine near you, flip to page 42, and read sentence 3 out loud."
+  ],
+  duo: [
+    "Rally with your partner at the nearest public bench. Find 1 weird local snack together and split it 50/50.",
+    "Meet at the nearest street corner. Choose 1 item each from a nearby shop and draft a funny 2-line backstory for it."
+  ],
+  squad: [
+    "Assemble your squad at the main plaza. Hold a sign reading 'Free High-Five Zone' and collect 15 high-fives from passersby.",
+    "Race a 10-minute clock to gather 3 items: a leaf larger than your palm, a coin, and a receipt for less than ₹20."
+  ]
+};
 
 export default function Home() {
+  const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
+  const [isSearching, setIsSearching] = useState(false);
+  const [activeQuest, setActiveQuest] = useState<string | null>(null);
+  const [proofImage, setProofImage] = useState<string | null>(null);
+  const [streak, setStreak] = useState(2);
+  const [savedMins, setSavedMins] = useState(30);
+  const [isCompleted, setIsCompleted] = useState(false);
+
+  // Real GPS & Matchmaking States
+  const [locationStatus, setLocationStatus] = useState<string>('');
+  const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
+  const [rallyTimer, setRallyTimer] = useState<number>(600); // 10 min countdown
+
+  const handleBreakLoop = () => {
+    setIsSearching(true);
+    setActiveQuest(null);
+    setProofImage(null);
+    setIsCompleted(false);
+    setMatchedPartner(null);
+
+    // Request actual browser GPS coordinates
+    if ('geolocation' in navigator) {
+      setLocationStatus('Acquiring GPS fix...');
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLocationStatus(`GPS Locked: ${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`);
+          triggerMatchmaking();
+        },
+        () => {
+          setLocationStatus('GPS fallback: Using neighborhood hub');
+          triggerMatchmaking();
+        }
+      );
+    } else {
+      triggerMatchmaking();
+    }
+  };
+
+  const triggerMatchmaking = () => {
+    setTimeout(() => {
+      const questList = QUESTS[mode];
+      const randomQuest = questList[Math.floor(Math.random() * questList.length)];
+      setActiveQuest(randomQuest);
+      setIsSearching(false);
+
+      if (mode === 'duo') {
+        setMatchedPartner('Player_Neon89 (400m away)');
+      } else if (mode === 'squad') {
+        setMatchedPartner('Squad Assembled: 4 Players Nearby');
+      }
+    }, 2500);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProofImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleCompleteMission = () => {
+    setIsCompleted(true);
+    setStreak((prev) => prev + 1);
+    setSavedMins((prev) => prev + 15);
+  };
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans">
+      {/* Top Header */}
+      <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
+        <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
+        <span className="text-xs bg-slate-900 border border-slate-700 px-3 py-1 rounded-full text-slate-400">
+          Reel Detox: Active
+        </span>
+      </header>
+
+      {/* Main Interactive Area */}
+      <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-8">
+        
+        {/* Mode Selector */}
+        <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
+          {(['solo', 'duo', 'squad'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => {
+                setMode(m);
+                setActiveQuest(null);
+                setProofImage(null);
+                setIsCompleted(false);
+              }}
+              className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all ${
+                mode === m
+                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              {m === 'squad' ? 'Squad (3-6)' : m}
+            </button>
+          ))}
+        </div>
+
+        {/* Big Red Button */}
+        {!activeQuest && !isCompleted && (
+          <div className="flex flex-col items-center space-y-6">
+            <button
+              onClick={handleBreakLoop}
+              disabled={isSearching}
+              className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-95 transition-all ${
+                isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
+              }`}
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              {isSearching ? (
+                <span className="text-lg animate-spin">🌀</span>
+              ) : (
+                <>
+                  <span>DESTROY</span>
+                  <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
+                </>
+              )}
+            </button>
+            <p className="text-xs text-slate-500 text-center max-w-xs">
+              {isSearching
+                ? locationStatus || 'Scanning nearby 1.5 km radius...'
+                : 'Tap to trigger a random real-world micro-mission.'}
+            </p>
+          </div>
+        )}
+
+        {/* Active Quest Card */}
+        {activeQuest && !isCompleted && (
+          <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-6 shadow-2xl">
+            <div className="flex justify-between items-center">
+              <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                {mode} Mission Assigned
+              </span>
+              <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2 py-0.5 rounded">
+                ⏱️ Rally: 09:58
+              </span>
+            </div>
+
+            {/* Multiplayer Partner Badge */}
+            {matchedPartner && (
+              <div className="bg-slate-950 border border-slate-800 p-3 rounded-xl flex items-center justify-center space-x-2 text-xs text-rose-300 font-semibold">
+                <span>🤝</span>
+                <span>{matchedPartner}</span>
+              </div>
+            )}
+
+            <p className="text-lg font-medium text-slate-200 leading-relaxed">
+              "{activeQuest}"
+            </p>
+
+            {/* Photo Proof Upload Area */}
+            <div className="border-2 border-dashed border-slate-800 rounded-2xl p-4 flex flex-col items-center justify-center bg-slate-950/50 space-y-2">
+              {proofImage ? (
+                <img src={proofImage} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
+              ) : (
+                <label className="cursor-pointer flex flex-col items-center space-y-2">
+                  <span className="text-2xl">📸</span>
+                  <span className="text-xs text-slate-400 font-medium">Attach Photo Proof</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
+            </div>
+
+            <button
+              onClick={handleCompleteMission}
+              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3.5 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all"
+            >
+              Complete & Log Proof
+            </button>
+          </div>
+        )}
+
+        {/* Completion Success State */}
+        {isCompleted && (
+          <div className="w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="text-4xl">🎉</div>
+            <h2 className="text-xl font-extrabold text-emerald-400">LOOP BROKEN!</h2>
+            <p className="text-sm text-slate-300">
+              You saved another 15 minutes from doomscrolling reels.
+            </p>
+            <button
+              onClick={() => setIsCompleted(false)}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all"
+            >
+              Back to Home
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Footer Stats */}
+      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex justify-around text-center">
+        <div>
+          <p className="text-xs text-slate-500">Loop Streak</p>
+          <p className="text-lg font-bold text-slate-200">{streak} Days 🔥</p>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+        <div className="w-px bg-slate-800" />
+        <div>
+          <p className="text-xs text-slate-500">Reel Time Saved</p>
+          <p className="text-lg font-bold text-rose-400">{savedMins} Mins ⚡</p>
         </div>
-      </main>
-    </div>
+      </footer>
+    </main>
   );
 }
