@@ -169,16 +169,19 @@ export default function Home() {
 
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${getDeviceId()}_${Date.now()}.${fileExt}`;
+      const fileName = `${getDeviceId()}_${Date.now()}.jpg`;
 
-      // Upload directly into bucket root
+      // Upload directly into bucket 'Proofs'
       const { error: uploadError } = await supabase.storage
         .from('Proofs')
-        .upload(fileName, file);
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: file.type || 'image/jpeg'
+        });
 
       if (uploadError) {
-        console.error('Upload failed:', uploadError);
+        console.error('Upload Error:', uploadError);
         const reader = new FileReader();
         reader.onloadend = () => setProofImage(reader.result as string);
         reader.readAsDataURL(file);
@@ -187,7 +190,7 @@ export default function Home() {
         setProofImage(data.publicUrl);
       }
     } catch (err) {
-      console.error(err);
+      console.error('Catastrophic upload error:', err);
     } finally {
       setUploading(false);
     }
@@ -290,7 +293,7 @@ export default function Home() {
               ) : (
                 <label className="cursor-pointer flex flex-col items-center space-y-2 w-full py-2">
                   <span className="text-2xl">📸</span>
-                  <span className="text-xs text-slate-400 font-medium font-semibold">Attach Photo Proof</span>
+                  <span className="text-xs text-slate-400 font-semibold">Attach Photo Proof</span>
                   <input
                     type="file"
                     accept="image/*"
