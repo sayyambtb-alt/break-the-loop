@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import confetti from 'canvas-confetti';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vopavevysovvucmhkvkr.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_KohfZUd_E0OapmrmwrxaCQ_l-b0NdZe';
@@ -421,6 +422,14 @@ export default function Home() {
   };
 
   const handleCompleteMission = async () => {
+    // Fire celebratory confetti burst immediately
+    confetti({
+      particleCount: 120,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#f43f5e', '#10b981', '#f59e0b', '#8b5cf6'],
+    });
+
     setIsCompleted(true);
     const newStreak = streak + 1;
     const newSavedMins = savedMins + 15;
