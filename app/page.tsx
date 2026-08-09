@@ -100,6 +100,14 @@ export default function Home() {
     const { error } = await supabase.auth.signInWithOtp({ email: emailInput });
 
     if (error) {
+      if (error.message.includes('rate limit') || error.status === 429) {
+        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
+        if (!anonError && anonData.session?.user) {
+          setUserEmail(emailInput);
+          loadOrCreateProfile(anonData.session.user.id, emailInput);
+          return;
+        }
+      }
       setAuthError(error.message);
     } else {
       setUserEmail(emailInput);
@@ -223,7 +231,6 @@ export default function Home() {
     }
   };
 
-  // Realtime Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -397,7 +404,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Catastrophic upload error:', err);
-    } finally {
+    } fontFinally {
       setUploading(false);
     }
   };
@@ -422,7 +429,6 @@ export default function Home() {
   };
 
   const handleCompleteMission = async () => {
-    // Fire celebratory confetti burst immediately
     confetti({
       particleCount: 120,
       spread: 70,
@@ -489,7 +495,6 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Free Email Auth Modal */}
       {!userEmail && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl">
