@@ -112,6 +112,14 @@ export default function Home() {
     }
   }, []);
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUserEmail(null);
+    setOtpSent(false);
+    setEmailInput('');
+    setOtpInput('');
+  };
+
   const handleHeaderTouchStart = () => {
     longPressTimerRef.current = setTimeout(() => {
       triggerDevPanel();
@@ -925,7 +933,17 @@ export default function Home() {
             </button>
           )}
 
-          <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Guest'}</span>
+            {userEmail && (
+              <button
+                onClick={handleSignOut}
+                className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg hover:bg-rose-500/20 transition-all"
+              >
+                Logout
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
