@@ -68,6 +68,9 @@ export default function Home() {
   const [otpSent, setOtpSent] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Notification State
+  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
@@ -88,7 +91,31 @@ export default function Home() {
       }
     }
     checkAuthSession();
+
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      if (Notification.permission === 'granted') {
+        setNotificationsEnabled(true);
+      }
+    }
   }, []);
+
+  const requestNotificationPermission = async () => {
+    if (typeof window === 'undefined' || !('Notification' in window)) {
+      alert('Notifications are not supported on this browser.');
+      return;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission === 'granted') {
+      setNotificationsEnabled(true);
+      new Notification('Break The Loop 🔥', {
+        body: 'Daily reminders active! Get ready to destroy boredom.',
+        icon: '/icon.png'
+      });
+    } else {
+      alert('Notification access was denied. You can enable it in your browser settings.');
+    }
+  };
 
   const handleGuestLogin = async () => {
     setAuthError('');
@@ -478,23 +505,37 @@ export default function Home() {
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
         <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
-        <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+        <div className="flex items-center space-x-2">
           <button
-            onClick={() => setTab('quest')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              tab === 'quest' ? 'bg-rose-600 text-white' : 'text-slate-400'
+            onClick={requestNotificationPermission}
+            className={`p-2 rounded-xl text-xs font-bold border transition-all ${
+              notificationsEnabled
+                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
+            title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
           >
-            Quest
+            {notificationsEnabled ? '🔔' : '🔕'}
           </button>
-          <button
-            onClick={() => setTab('feed')}
-            className={`px-3 py-1 rounded-lg font-bold transition-all ${
-              tab === 'feed' ? 'bg-rose-600 text-white' : 'text-slate-400'
-            }`}
-          >
-            Feed
-          </button>
+
+          <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+            <button
+              onClick={() => setTab('quest')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                tab === 'quest' ? 'bg-rose-600 text-white' : 'text-slate-400'
+              }`}
+            >
+              Quest
+            </button>
+            <button
+              onClick={() => setTab('feed')}
+              className={`px-3 py-1 rounded-lg font-bold transition-all ${
+                tab === 'feed' ? 'bg-rose-600 text-white' : 'text-slate-400'
+              }`}
+            >
+              Feed
+            </button>
+          </div>
         </div>
       </header>
 
