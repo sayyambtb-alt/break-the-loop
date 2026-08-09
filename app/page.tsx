@@ -82,13 +82,24 @@ export default function Home() {
   useEffect(() => {
     async function checkAuthSession() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user?.email) {
-        setUserEmail(session.user.email);
-        loadOrCreateProfile(session.user.id, session.user.email);
+      if (session?.user) {
+        setUserEmail(session.user.email || 'guest@breaktheloop.app');
+        loadOrCreateProfile(session.user.id, session.user.email || 'guest@breaktheloop.app');
       }
     }
     checkAuthSession();
   }, []);
+
+  const handleGuestLogin = async () => {
+    setAuthError('');
+    const { data, error } = await supabase.auth.signInAnonymously();
+    if (error) {
+      setAuthError(error.message);
+    } else if (data.session?.user) {
+      setUserEmail('guest@breaktheloop.app');
+      loadOrCreateProfile(data.session.user.id, 'guest@breaktheloop.app');
+    }
+  };
 
   const handleSendEmailOtp = async () => {
     setAuthError('');
@@ -100,14 +111,6 @@ export default function Home() {
     const { error } = await supabase.auth.signInWithOtp({ email: emailInput });
 
     if (error) {
-      if (error.message.includes('rate limit') || error.status === 429) {
-        const { data: anonData, error: anonError } = await supabase.auth.signInAnonymously();
-        if (!anonError && anonData.session?.user) {
-          setUserEmail(emailInput);
-          loadOrCreateProfile(anonData.session.user.id, emailInput);
-          return;
-        }
-      }
       setAuthError(error.message);
     } else {
       setUserEmail(emailInput);
@@ -404,7 +407,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Catastrophic upload error:', err);
-    } fontFinally {
+    } finally {
       setUploading(false);
     }
   };
@@ -500,7 +503,7 @@ export default function Home() {
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl">
             <div className="text-4xl">✉️</div>
             <h2 className="text-xl font-extrabold text-slate-100">JOIN BREAK THE LOOP</h2>
-            <p className="text-xs text-slate-400">Enter your email to receive a instant 6-digit login code and save your streaks.</p>
+            <p className="text-xs text-slate-400">Enter your email or continue as a guest to save your streaks.</p>
 
             {authError && (
               <p className="text-xs text-rose-400 bg-rose-500/10 p-2 rounded-xl font-medium">{authError}</p>
@@ -520,6 +523,18 @@ export default function Home() {
                   className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
                 >
                   Send Login Code
+                </button>
+                
+                <div className="relative py-1">
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
+                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-slate-900 px-2 text-slate-500">Or</span></div>
+                </div>
+
+                <button
+                  onClick={handleGuestLogin}
+                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
+                >
+                  ⚡ Continue as Guest
                 </button>
               </div>
             ) : (
