@@ -8,22 +8,22 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vopavevysov
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_KohfZUd_E0OapmrmwrxaCQ_l-b0NdZe';
 const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-const QUESTS = {
+const DEFAULT_QUESTS = {
   solo: [
-    "Walk 100 steps towards the nearest chai tapri. Order a cutting chai or biscuit you haven't tried before.",
-    "Find an auto-rickshaw with a funny or unique sentence painted on the back. Take a photo of it.",
-    "Walk down a side lane near your society that you usually skip. Take a photo of the coolest doorway or garden.",
+    "Walk 100 steps towards the nearest chai tapri. Order a cutting chai or snack you haven't tried before.",
+    "Find an auto-rickshaw or taxi with a funny or unique sentence painted on the back. Take a photo of it.",
+    "Walk down a side lane near your locality that you usually skip. Take a photo of the coolest doorway or garden.",
     "Find a local bakery or Quick Bite stall. Ask for their most popular item under ₹50.",
     "Pick up a local newspaper or magazine, flip to page 5, and read sentence 2 out loud."
   ],
   duo: [
-    "Rally with your partner at the nearest local landmark or station road bench. Split 1 plate of vada pav or sev puri 50/50.",
-    "Meet at the nearest street corner. Pick 1 random item each from a general store and draft a funny 2-line backstory for it.",
+    "Rally with your partner at the nearest local landmark or bench. Split 1 plate of vada pav, samosa, or street food 50/50.",
+    "Meet at the nearest street corner. Pick 1 random item each from a kirana store and draft a funny 2-line backstory for it.",
     "Find an old local stationery shop together. Test 3 gel pens and officially declare one 'Pen of the Neighborhood'.",
-    "Head to a nearby coffee spot or local stall. Order two cold coffees and play 1 round of Rock-Paper-Scissors for who pays."
+    "Head to a nearby coffee spot or local stall. Order two drinks and play 1 round of Rock-Paper-Scissors for who pays."
   ],
   squad: [
-    "Assemble your squad near the main colony gate or plaza. Race a 10-minute clock to gather: 1 fallen leaf, 1 coin, and 1 receipt under ₹20.",
+    "Assemble your squad near the main locality gate or plaza. Race a 10-minute clock to gather: 1 fallen leaf, 1 coin, and 1 receipt under ₹20.",
     "Hold a sign or hand out 10 high-fives to local shopkeepers or neighbors within 10 minutes.",
     "Find a public park or open ground together and execute a synchronized 10-second victory jump."
   ]
@@ -47,6 +47,12 @@ interface ChatMessage {
   created_at: string;
 }
 
+interface DbQuest {
+  id: string;
+  mode: string;
+  quest_text: string;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -61,6 +67,12 @@ export default function Home() {
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
+  // Dev Admin State
+  const [showDevPanel, setShowDevPanel] = useState(false);
+  const [customQuests, setCustomQuests] = useState<DbQuest[]>([]);
+  const [newQuestText, setNewQuestText] = useState('');
+  const [newQuestMode, setNewQuestMode] = useState<'solo' | 'duo' | 'squad'>('solo');
+
   // Email Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
@@ -74,7 +86,6 @@ export default function Home() {
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
-  const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
 
   // Chat State
@@ -91,6 +102,7 @@ export default function Home() {
       }
     }
     checkAuthSession();
+    fetchCustomQuests();
 
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'granted') {
@@ -98,6 +110,35 @@ export default function Home() {
       }
     }
   }, []);
+
+  const fetchCustomQuests = async () => {
+    try {
+      const { data } = await supabase.from('quests').select('*').order('created_at', { ascending: false });
+      if (data) setCustomQuests(data);
+    } catch (e) {
+      console.log('Quests table sync:', e);
+    }
+  };
+
+  const addCustomQuest = async () => {
+    if (!newQuestText.trim()) return;
+    try {
+      await supabase.from('quests').insert([{ mode: newQuestMode, quest_text: newQuestText.trim() }]);
+      setNewQuestText('');
+      fetchCustomQuests();
+    } catch (e) {
+      console.log('Add quest error:', e);
+    }
+  };
+
+  const deleteCustomQuest = async (id: string) => {
+    try {
+      await supabase.from('quests').delete().eq('id', id);
+      fetchCustomQuests();
+    } catch (e) {
+      console.log('Delete quest error:', e);
+    }
+  };
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -109,7 +150,7 @@ export default function Home() {
     if (permission === 'granted') {
       setNotificationsEnabled(true);
       new Notification('Break The Loop 🔥', {
-        body: 'Daily reminders active! Get ready to destroy boredom.',
+        body: 'Daily reminders active! Get ready to destroy boredom across India.',
         icon: '/icon.png'
       });
     } else {
@@ -199,25 +240,6 @@ export default function Home() {
   };
 
   useEffect(() => {
-    async function fetchQueueCount() {
-      try {
-        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-        const { count } = await supabase
-          .from('active_queue')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', fifteenMinsAgo);
-
-        if (count !== null) {
-          setActivePlayerCount(Math.max(1, count));
-        }
-      } catch (e) {
-        console.log('Fetching queue stats...', e);
-      }
-    }
-    fetchQueueCount();
-  }, [isSearching]);
-
-  useEffect(() => {
     if (tab === 'feed') {
       fetchGallery();
     }
@@ -265,10 +287,10 @@ export default function Home() {
     if (!activeQuest || mode === 'solo') return;
 
     const channel = supabase
-      .channel('room_goregaon')
+      .channel('room_india_hub')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: "room_id=eq.room_goregaon" },
+        { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: "room_id=eq.room_india_hub" },
         (payload) => {
           setMessages((prev) => [...prev, payload.new as ChatMessage]);
           chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -289,7 +311,7 @@ export default function Home() {
     try {
       await supabase.from('mission_messages').insert([
         {
-          room_id: 'room_goregaon',
+          room_id: 'room_india_hub',
           sender_handle: handle,
           message: msgText
         }
@@ -341,19 +363,21 @@ export default function Home() {
         },
         async () => {
           setLocationStatus('GPS fallback: Active');
-          await registerAndMatch(19.166, 72.852);
+          await registerAndMatch(19.017, 72.847);
         }
       );
     } else {
-      await registerAndMatch(19.166, 72.852);
+      await registerAndMatch(19.017, 72.847);
     }
   };
 
   const registerAndMatch = async (lat: number, lng: number) => {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
-    const questList = QUESTS[mode];
-    let selectedQuest = questList[Math.floor(Math.random() * questList.length)];
+
+    const dbModeQuests = customQuests.filter((q) => q.mode === mode).map((q) => q.quest_text);
+    const combinedQuestList = [...DEFAULT_QUESTS[mode], ...dbModeQuests];
+    let selectedQuest = combinedQuestList[Math.floor(Math.random() * combinedQuestList.length)];
 
     try {
       if (mode !== 'solo') {
@@ -382,20 +406,7 @@ export default function Home() {
       ], { onConflict: 'id' });
 
       if (mode !== 'solo') {
-        const { data: matches } = await supabase.rpc('get_nearby_matches', {
-          user_lat: lat,
-          user_lng: lng,
-          search_mode: mode,
-          radius_meters: 3000
-        });
-
-        const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
-        if (otherPlayer) {
-          const dist = Math.round(otherPlayer.distance_meters);
-          setMatchedPartner(`Matched: Partner (${dist}m away)`);
-        } else {
-          setMatchedPartner(`Searching for nearby ${mode}... (Found local hub match)`);
-        }
+        setMatchedPartner(`Searching for nearby ${mode} across India... (Matched to local hub)`);
       }
     } catch (e) {
       console.log('Database queueing active:', e);
@@ -599,6 +610,62 @@ export default function Home() {
         </div>
       )}
 
+      {/* Developer Admin Modal */}
+      {showDevPanel && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl max-h-[85vh] overflow-y-auto">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 className="text-sm font-extrabold text-rose-500">🛠️ DEVELOPER MISSION CONTROL</h2>
+              <button onClick={() => setShowDevPanel(false)} className="text-slate-400 font-bold text-sm">✕</button>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-bold text-slate-400 uppercase">Add New Custom Mission</label>
+              <div className="flex space-x-2">
+                {(['solo', 'duo', 'squad'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setNewQuestMode(m)}
+                    className={`flex-1 py-1 text-xs font-bold rounded-lg capitalize ${
+                      newQuestMode === m ? 'bg-rose-600 text-white' : 'bg-slate-950 text-slate-400'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                placeholder="Write custom mission text..."
+                value={newQuestText}
+                onChange={(e) => setNewQuestText(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-100 focus:outline-none focus:border-rose-500 h-20"
+              />
+              <button
+                onClick={addCustomQuest}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-xl font-bold text-xs shadow-lg transition-all"
+              >
+                + Add Mission Live
+              </button>
+            </div>
+
+            <div className="space-y-2 border-t border-slate-800 pt-3">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Live Added Missions ({customQuests.length})</span>
+              <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                {customQuests.map((q) => (
+                  <div key={q.id} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                    <div>
+                      <span className="bg-rose-500/10 text-rose-400 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase mr-2">{q.mode}</span>
+                      <span className="text-slate-300">{q.quest_text}</span>
+                    </div>
+                    <button onClick={() => deleteCustomQuest(q.id)} className="text-rose-500 text-xs font-bold ml-2">🗑️</button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-6">
           <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
@@ -642,7 +709,7 @@ export default function Home() {
               </button>
               <p className="text-xs text-slate-500 text-center max-w-xs">
                 {isSearching
-                  ? locationStatus || 'Scanning nearby 1.5 km radius...'
+                  ? locationStatus || 'Scanning nearby area...'
                   : 'Tap to trigger a random real-world micro-mission.'}
               </p>
             </div>
@@ -759,7 +826,7 @@ export default function Home() {
       ) : (
         <div className="w-full max-w-md my-auto space-y-4">
           <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-            <h2 className="text-sm font-bold text-slate-300">Community Proof Feed</h2>
+            <h2 className="text-sm font-bold text-slate-300">Pan-India Proof Feed</h2>
             <span className="text-xs text-slate-500">{feedItems.length} Missions Logged</span>
           </div>
 
@@ -827,7 +894,13 @@ export default function Home() {
               <span className="text-[10px] text-slate-500">✏️</span>
             </button>
           )}
-          <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
+
+          <button
+            onClick={() => setShowDevPanel(true)}
+            className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg hover:bg-rose-500/20 transition-all"
+          >
+            🛠️ Dev Panel
+          </button>
         </div>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
