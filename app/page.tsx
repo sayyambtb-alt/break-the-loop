@@ -72,6 +72,7 @@ export default function Home() {
   const [customQuests, setCustomQuests] = useState<DbQuest[]>([]);
   const [newQuestText, setNewQuestText] = useState('');
   const [newQuestMode, setNewQuestMode] = useState<'solo' | 'duo' | 'squad'>('solo');
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Email Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -110,6 +111,26 @@ export default function Home() {
       }
     }
   }, []);
+
+  const handleHeaderTouchStart = () => {
+    longPressTimerRef.current = setTimeout(() => {
+      triggerDevPanel();
+    }, 2000);
+  };
+
+  const handleHeaderTouchEnd = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+    }
+  };
+
+  const triggerDevPanel = () => {
+    if (!userEmail || userEmail === 'guest@breaktheloop.app') {
+      alert('Developer Access Denied: Requires Admin Email Authentication.');
+      return;
+    }
+    setShowDevPanel(true);
+  };
 
   const fetchCustomQuests = async () => {
     try {
@@ -515,7 +536,16 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
-        <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
+        <h1
+          onMouseDown={handleHeaderTouchStart}
+          onMouseUp={handleHeaderTouchEnd}
+          onTouchStart={handleHeaderTouchStart}
+          onTouchEnd={handleHeaderTouchEnd}
+          className="text-xl font-extrabold tracking-wider text-rose-500 cursor-pointer select-none"
+          title="Hold to open admin mode"
+        >
+          BREAK THE LOOP
+        </h1>
         <div className="flex items-center space-x-2">
           <button
             onClick={requestNotificationPermission}
@@ -895,12 +925,7 @@ export default function Home() {
             </button>
           )}
 
-          <button
-            onClick={() => setShowDevPanel(true)}
-            className="text-[10px] font-bold text-rose-400 bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg hover:bg-rose-500/20 transition-all"
-          >
-            🛠️ Dev Panel
-          </button>
+          <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
         </div>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
