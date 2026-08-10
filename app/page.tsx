@@ -15,12 +15,20 @@ export default function Home() {
   const [authError, setAuthError] = useState('');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // Clear any cached sessions on initial page load
+  useEffect(() => {
+    supabase.auth.signOut();
+  }, []);
+
   const handleSendEmailOtp = async () => {
     setAuthError('');
     if (!emailInput.includes('@')) {
       setAuthError('Please enter a valid email address');
       return;
     }
+
+    // Ensure previous sessions are cleared before requesting a code
+    await supabase.auth.signOut();
 
     const { error } = await supabase.auth.signInWithOtp({ email: emailInput });
 
@@ -50,6 +58,14 @@ export default function Home() {
     } else if (data.session) {
       setIsLoggedIn(true);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setIsLoggedIn(false);
+    setOtpSent(false);
+    setEmailInput('');
+    setOtpInput('');
   };
 
   return (
@@ -90,7 +106,7 @@ export default function Home() {
       ) : (
         <div>
           <h2>Welcome Explorer!</h2>
-          <button onClick={() => setIsLoggedIn(false)} style={{ padding: '0.5rem 1rem' }}>
+          <button onClick={handleLogout} style={{ padding: '0.5rem 1rem' }}>
             Logout
           </button>
         </div>
