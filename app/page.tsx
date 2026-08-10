@@ -59,11 +59,11 @@ export default function Home() {
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
 
-  // Email Auth State
+  // Email Auth State Machine
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [otpInput, setOtpInput] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+  const [step, setStep] = useState<'LOGIN' | 'OTP' | 'AUTHENTICATED'>('LOGIN');
   const [authError, setAuthError] = useState('');
 
   // Notification State
@@ -81,22 +81,22 @@ export default function Home() {
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    async function checkAuthSession() {
+    async function initAuth() {
       const { data: { session } } = await supabase.auth.getSession();
-      // Only set userEmail if session exists AND we haven't explicitly triggered OTP step
-      if (session?.user && !otpSent) {
+      if (session?.user && step === 'LOGIN') {
         setUserEmail(session.user.email || 'guest@breaktheloop.app');
+        setStep('AUTHENTICATED');
         loadOrCreateProfile(session.user.id, session.user.email || 'guest@breaktheloop.app');
       }
     }
-    checkAuthSession();
+    initAuth();
 
     if (typeof window !== 'undefined' && 'Notification' in window) {
       if (Notification.permission === 'granted') {
         setNotificationsEnabled(true);
       }
     }
-  }, [otpSent]);
+  }, []);
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -112,7 +112,7 @@ export default function Home() {
         icon: '/icon.png'
       });
     } else {
-      alert('Notification access was denied. You can enable it in your browser settings.');
+      alert('Notification access was denied.');
     }
   };
 
@@ -124,6 +124,7 @@ export default function Home() {
       setAuthError(error.message);
     } else if (data.session?.user) {
       setUserEmail('guest@breaktheloop.app');
+      setStep('AUTHENTICATED');
       loadOrCreateProfile(data.session.user.id, 'guest@breaktheloop.app');
     }
   };
@@ -135,26 +136,29 @@ export default function Home() {
       return;
     }
 
-    // Explicitly sign out first so Supabase doesn't reuse active tokens
     await supabase.auth.signOut();
 
     const { error } = await supabase.auth.signInWithOtp({
       email: emailInput,
       options: {
         shouldCreateUser: true,
-        emailRedirectTo: undefined // Stop magic link auto-redirects
       }
     });
 
     if (error) {
       setAuthError(error.message);
     } else {
-      setOtpSent(true);
+      setStep('OTP');
     }
   };
 
   const handleVerifyEmailOtp = async () => {
     setAuthError('');
+    if (!otpInput.trim()) {
+      setAuthError('Please enter the 6-digit code');
+      return;
+    }
+
     const { data, error } = await supabase.auth.verifyOtp({
       email: emailInput,
       token: otpInput.trim(),
@@ -165,6 +169,7 @@ export default function Home() {
       setAuthError(error.message);
     } else if (data.session?.user) {
       setUserEmail(emailInput);
+      setStep('AUTHENTICATED');
       loadOrCreateProfile(data.session.user.id, emailInput);
     }
   };
@@ -172,7 +177,7 @@ export default function Home() {
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     setUserEmail(null);
-    setOtpSent(false);
+    setStep('LOGIN');
     setOtpInput('');
     setEmailInput('');
   };
@@ -556,7 +561,7 @@ export default function Home() {
         </div>
       </header>
 
-      {!userEmail && (
+      {step !== 'AUTHENTICATED' && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl">
             <div className="text-4xl">✉️</div>
@@ -567,7 +572,7 @@ export default function Home() {
               <p className="text-xs text-rose-400 bg-rose-500/10 p-2 rounded-xl font-medium">{authError}</p>
             )}
 
-            {!otpSent ? (
+            {step === 'LOGIN' ? (
               <div className="space-y-3">
                 <input
                   type="email"
@@ -611,7 +616,7 @@ export default function Home() {
                   Verify & Continue
                 </button>
                 <button
-                  onClick={() => setOtpSent(false)}
+                  onClick={() => setStep('LOGIN')}
                   className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
                 >
                   Change Email
