@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
@@ -85,7 +83,7 @@ export default function Home() {
   useEffect(() => {
     async function checkAuthSession() {
       const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
+      if (session?.user && !otpSent) {
         setUserEmail(session.user.email || 'guest@breaktheloop.app');
         loadOrCreateProfile(session.user.id, session.user.email || 'guest@breaktheloop.app');
       }
@@ -97,7 +95,7 @@ export default function Home() {
         setNotificationsEnabled(true);
       }
     }
-  }, []);
+  }, [otpSent]);
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -119,6 +117,7 @@ export default function Home() {
 
   const handleGuestLogin = async () => {
     setAuthError('');
+    await supabase.auth.signOut();
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) {
       setAuthError(error.message);
@@ -135,7 +134,15 @@ export default function Home() {
       return;
     }
 
-    const { error } = await supabase.auth.signInWithOtp({ email: emailInput });
+    // Explicitly sign out any stale session to prevent bypass
+    await supabase.auth.signOut();
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email: emailInput,
+      options: {
+        shouldCreateUser: true,
+      }
+    });
 
     if (error) {
       setAuthError(error.message);
@@ -149,7 +156,7 @@ export default function Home() {
     setAuthError('');
     const { data, error } = await supabase.auth.verifyOtp({
       email: userEmail!,
-      token: otpInput,
+      token: otpInput.trim(),
       type: 'email'
     });
 
@@ -158,6 +165,14 @@ export default function Home() {
     } else if (data.session?.user) {
       loadOrCreateProfile(data.session.user.id, userEmail!);
     }
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setUserEmail(null);
+    setOtpSent(false);
+    setOtpInput('');
+    setEmailInput('');
   };
 
   const loadOrCreateProfile = async (userId: string, email: string) => {
@@ -593,6 +608,12 @@ export default function Home() {
                 >
                   Verify & Continue
                 </button>
+                <button
+                  onClick={() => setOtpSent(false)}
+                  className="text-xs text-slate-500 hover:underline pt-2"
+                >
+                  Change Email
+                </button>
               </div>
             )}
           </div>
@@ -827,7 +848,17 @@ export default function Home() {
               <span className="text-[10px] text-slate-500">✏️</span>
             </button>
           )}
-          <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
+          <div className="flex items-center space-x-2">
+            <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
+            {userEmail && (
+              <button
+                onClick={handleSignOut}
+                className="text-[10px] text-rose-400 hover:underline font-semibold"
+              >
+                Sign Out
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
