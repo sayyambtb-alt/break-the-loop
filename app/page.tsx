@@ -83,6 +83,7 @@ export default function Home() {
   useEffect(() => {
     async function checkAuthSession() {
       const { data: { session } } = await supabase.auth.getSession();
+      // Only set userEmail if session exists AND we haven't explicitly triggered OTP step
       if (session?.user && !otpSent) {
         setUserEmail(session.user.email || 'guest@breaktheloop.app');
         loadOrCreateProfile(session.user.id, session.user.email || 'guest@breaktheloop.app');
@@ -134,20 +135,20 @@ export default function Home() {
       return;
     }
 
-    // Explicitly sign out any stale session to prevent bypass
+    // Explicitly sign out first so Supabase doesn't reuse active tokens
     await supabase.auth.signOut();
 
     const { error } = await supabase.auth.signInWithOtp({
       email: emailInput,
       options: {
         shouldCreateUser: true,
+        emailRedirectTo: undefined // Stop magic link auto-redirects
       }
     });
 
     if (error) {
       setAuthError(error.message);
     } else {
-      setUserEmail(emailInput);
       setOtpSent(true);
     }
   };
@@ -155,7 +156,7 @@ export default function Home() {
   const handleVerifyEmailOtp = async () => {
     setAuthError('');
     const { data, error } = await supabase.auth.verifyOtp({
-      email: userEmail!,
+      email: emailInput,
       token: otpInput.trim(),
       type: 'email'
     });
@@ -163,7 +164,8 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else if (data.session?.user) {
-      loadOrCreateProfile(data.session.user.id, userEmail!);
+      setUserEmail(emailInput);
+      loadOrCreateProfile(data.session.user.id, emailInput);
     }
   };
 
@@ -610,7 +612,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setOtpSent(false)}
-                  className="text-xs text-slate-500 hover:underline pt-2"
+                  className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
                 >
                   Change Email
                 </button>
