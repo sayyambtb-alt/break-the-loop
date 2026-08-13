@@ -365,7 +365,6 @@ export default function Home() {
     setMessages([]);
     setTimeLeft(600);
 
-    // Generate fresh room ID for this specific session
     const newRoomId = `room_${Math.random().toString(36).substring(2, 9)}`;
     setRoomId(newRoomId);
 
@@ -396,26 +395,42 @@ export default function Home() {
     const targetCity = isMumbai ? 'mumbai' : 'general';
 
     let selectedQuest = "Rally at Shivaji Park outer circle. Complete 2 brisk walking rounds together and grab a juice!";
-    try {
-      const { data: dbQuests } = await supabase
-        .from('quests')
-        .select('quest_text')
-        .eq('mode', mode)
-        .eq('city', targetCity)
-        .eq('is_active', true);
 
-      if (dbQuests && dbQuests.length > 0) {
-        selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+    // Sync quest text with any active room in queue for duo/squad
+    try {
+      if (mode !== 'solo') {
+        const { data: existingQueue } = await supabase
+          .from('active_queue')
+          .select('active_quest')
+          .eq('mode', mode)
+          .not('active_quest', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (existingQueue && existingQueue.length > 0 && existingQueue[0].active_quest) {
+          selectedQuest = existingQueue[0].active_quest;
+        } else {
+          const { data: dbQuests } = await supabase
+            .from('quests')
+            .select('quest_text')
+            .eq('mode', mode)
+            .eq('city', targetCity)
+            .eq('is_active', true);
+
+          if (dbQuests && dbQuests.length > 0) {
+            selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+          }
+        }
       } else {
-        const { data: fallbackQuests } = await supabase
+        const { data: dbQuests } = await supabase
           .from('quests')
           .select('quest_text')
-          .eq('mode', mode)
-          .eq('city', 'general')
+          .eq('mode', 'solo')
+          .eq('city', targetCity)
           .eq('is_active', true);
 
-        if (fallbackQuests && fallbackQuests.length > 0) {
-          selectedQuest = fallbackQuests[Math.floor(Math.random() * fallbackQuests.length)].quest_text;
+        if (dbQuests && dbQuests.length > 0) {
+          selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
         }
       }
     } catch (e) {
