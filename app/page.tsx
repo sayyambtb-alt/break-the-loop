@@ -46,6 +46,7 @@ export default function Home() {
   const [badges, setBadges] = useState<string[]>(['🌱 First Step']);
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
+  const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
 
   // Email Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -67,6 +68,7 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -333,6 +335,7 @@ export default function Home() {
     setActiveQuest(null);
     setProofImage(null);
     setIsCompleted(false);
+    setCardDataUrl(null);
     setMatchedPartner(null);
     setMessages([]);
     setTimeLeft(600);
@@ -360,13 +363,11 @@ export default function Home() {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
     
-    // GPS inside Greater Mumbai
     const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
     const targetCity = isMumbai ? 'mumbai' : 'general';
 
     let selectedQuest = "Rally at Shivaji Park outer circle. Complete 2 brisk walking rounds together and grab a juice!";
     try {
-      // Direct query for mode + city
       const { data: dbQuests } = await supabase
         .from('quests')
         .select('quest_text')
@@ -481,6 +482,103 @@ export default function Home() {
     return updated;
   };
 
+  const generateShareCard = (newStreak: number, newSavedMins: number) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1920;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Dark sleek gradient
+    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
+    bgGradient.addColorStop(0, '#090d16');
+    bgGradient.addColorStop(1, '#020617');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, 1080, 1920);
+
+    // Subtle Accent Glow
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
+    ctx.beginPath();
+    ctx.arc(540, 400, 350, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Top Header
+    ctx.fillStyle = '#f43f5e';
+    ctx.font = '900 52px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BREAK THE LOOP', 540, 220);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '600 32px sans-serif';
+    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
+
+    // Card Box
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(100, 360, 880, 1100, 40);
+    ctx.fill();
+    ctx.stroke();
+
+    // Mission Title Badge
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+    ctx.beginPath();
+    ctx.roundRect(140, 420, 800, 80, 20);
+    ctx.fill();
+
+    ctx.fillStyle = '#fda4af';
+    ctx.font = '700 36px sans-serif';
+    ctx.fillText(`MODE: ${mode.toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
+
+    // Quest Text Wrap
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '600 42px sans-serif';
+    const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
+    const words = text.split(' ');
+    let line = '';
+    let y = 600;
+
+    for (let i = 0; i < words.length; i++) {
+      const testLine = line + words[i] + ' ';
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > 780 && i > 0) {
+        ctx.fillText(line, 540, y);
+        line = words[i] + ' ';
+        y += 60;
+      } else {
+        line = testLine;
+      }
+    }
+    ctx.fillText(line, 540, y);
+
+    // Stats Section inside Box
+    const statsY = Math.max(y + 100, 1050);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '600 32px sans-serif';
+    ctx.fillText('STREAK', 320, statsY);
+    ctx.fillText('TIME SAVED', 760, statsY);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '900 64px sans-serif';
+    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
+
+    ctx.fillStyle = '#f43f5e';
+    ctx.fillText(`${newSavedMins} Mins ⚡`, 760, statsY + 80);
+
+    // Footer Info
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '700 40px sans-serif';
+    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '500 32px sans-serif';
+    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
+
+    setCardDataUrl(canvas.toDataURL('image/png'));
+  };
+
   const handleCompleteMission = async () => {
     confetti({
       particleCount: 120,
@@ -497,6 +595,8 @@ export default function Home() {
     setStreak(newStreak);
     setSavedMins(newSavedMins);
     setBadges(updatedBadges);
+
+    generateShareCard(newStreak, newSavedMins);
 
     try {
       await supabase.from('mission_logs').insert([
@@ -521,6 +621,34 @@ export default function Home() {
       }
     } catch (e) {
       console.log('Failed to log mission:', e);
+    }
+  };
+
+  const handleShareCard = async () => {
+    if (!cardDataUrl) return;
+
+    try {
+      const blob = await (await fetch(cardDataUrl)).blob();
+      const file = new File([blob], 'break-the-loop.png', { type: 'image/png' });
+
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: 'Break The Loop 🔥',
+          text: 'I just broke the reel addiction loop in Mumbai! Check this out.'
+        });
+      } else {
+        const a = document.createElement('a');
+        a.href = cardDataUrl;
+        a.download = 'break-the-loop-story.png';
+        a.click();
+      }
+    } catch (e) {
+      console.log('Sharing failed, downloading fallback:', e);
+      const a = document.createElement('a');
+      a.href = cardDataUrl;
+      a.download = 'break-the-loop-story.png';
+      a.click();
     }
   };
 
@@ -773,9 +901,26 @@ export default function Home() {
             <div className="w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
               <div className="text-4xl">🎉</div>
               <h2 className="text-xl font-extrabold text-emerald-400">LOOP BROKEN!</h2>
-              <p className="text-sm text-slate-300">
+              <p className="text-xs text-slate-300">
                 You saved another 15 minutes from doomscrolling reels.
               </p>
+
+              {cardDataUrl && (
+                <div className="space-y-3 pt-2">
+                  <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-slate-950">
+                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
+                  </div>
+
+                  <button
+                    onClick={handleShareCard}
+                    className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                  >
+                    <span>📲</span>
+                    <span>Share to Instagram Story / WhatsApp</span>
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={() => setIsCompleted(false)}
                 className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
