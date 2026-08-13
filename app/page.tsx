@@ -347,8 +347,8 @@ export default function Home() {
           await registerAndMatch(lat, lng);
         },
         async () => {
-          setLocationStatus('GPS fallback: Active');
-          await registerAndMatch(19.0176, 72.8481); // Dadar Default GPS
+          setLocationStatus('GPS fallback: Dadar Active');
+          await registerAndMatch(19.0176, 72.8481);
         }
       );
     } else {
@@ -360,13 +360,13 @@ export default function Home() {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
     
-    // Check if GPS is inside Greater Mumbai bounds
+    // GPS inside Greater Mumbai
     const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
     const targetCity = isMumbai ? 'mumbai' : 'general';
 
-    let selectedQuest = "Order a cutting chai at the nearest tapri and ask for Parle-G vs Khari recommendations.";
+    let selectedQuest = "Rally at Shivaji Park outer circle. Complete 2 brisk walking rounds together and grab a juice!";
     try {
-      // First try fetching city-specific quests
+      // Direct query for mode + city
       const { data: dbQuests } = await supabase
         .from('quests')
         .select('quest_text')
@@ -377,7 +377,6 @@ export default function Home() {
       if (dbQuests && dbQuests.length > 0) {
         selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
       } else {
-        // Fallback to general quests if no city quests match
         const { data: fallbackQuests } = await supabase
           .from('quests')
           .select('quest_text')
@@ -394,20 +393,6 @@ export default function Home() {
     }
 
     try {
-      if (mode !== 'solo') {
-        const { data: existingQueue } = await supabase
-          .from('active_queue')
-          .select('active_quest')
-          .eq('mode', mode)
-          .not('active_quest', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (existingQueue && existingQueue.length > 0 && existingQueue[0].active_quest) {
-          selectedQuest = existingQueue[0].active_quest;
-        }
-      }
-
       await supabase.from('active_queue').upsert([
         {
           user_id: userId,
@@ -430,9 +415,9 @@ export default function Home() {
         const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
         if (otherPlayer) {
           const dist = Math.round(otherPlayer.distance_meters);
-          setMatchedPartner(`Matched: Partner (${dist}m away)`);
+          setMatchedPartner(`Matched: Local Partner (${dist}m away)`);
         } else {
-          setMatchedPartner(`Searching for nearby ${mode}... (Found local hub match)`);
+          setMatchedPartner(`Searching for nearby ${mode} squad in Mumbai...`);
         }
       }
     } catch (e) {
