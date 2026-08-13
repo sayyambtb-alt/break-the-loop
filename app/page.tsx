@@ -39,6 +39,7 @@ export default function Home() {
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string>('room_goregaon');
+  const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(1);
@@ -70,7 +71,7 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // URL Deep Link Processing on Launch
+  // Read URL Deep Link Parameters on Initial Load
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -80,9 +81,10 @@ export default function Home() {
 
       if (urlRoom) {
         setRoomId(urlRoom);
+        setIsInviteSession(true);
         if (urlMode) setMode(urlMode as 'duo' | 'squad');
         if (urlQuest) setActiveQuest(decodeURIComponent(urlQuest));
-        setMatchedPartner('Matched: Direct Invite Partner 🤝');
+        setMatchedPartner('Joined Direct WhatsApp Lobby 🤝');
       }
     }
   }, []);
@@ -108,11 +110,6 @@ export default function Home() {
   const handleGuestLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
     setAuthError('');
-    if (typeof window !== 'undefined') {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
-    await supabase.auth.signOut();
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) {
       setAuthError(error.message);
@@ -130,12 +127,6 @@ export default function Home() {
       setAuthError('Please enter a valid email address');
       return;
     }
-
-    if (typeof window !== 'undefined') {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
-    await supabase.auth.signOut();
 
     const { error } = await supabase.auth.signInWithOtp({
       email: emailInput,
@@ -287,6 +278,7 @@ export default function Home() {
     }
   };
 
+  // Realtime Supabase Channel Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -357,16 +349,19 @@ export default function Home() {
 
   const handleBreakLoop = async () => {
     setIsSearching(true);
-    setActiveQuest(null);
     setProofImage(null);
     setIsCompleted(false);
     setCardDataUrl(null);
-    setMatchedPartner(null);
     setMessages([]);
     setTimeLeft(600);
 
-    const newRoomId = `room_${Math.random().toString(36).substring(2, 9)}`;
-    setRoomId(newRoomId);
+    // ONLY generate a new room ID if this user did not join through an invite link
+    let currentRoom = roomId;
+    if (!isInviteSession) {
+      currentRoom = `room_${Math.random().toString(36).substring(2, 9)}`;
+      setRoomId(currentRoom);
+      setMatchedPartner(null);
+    }
 
     if ('geolocation' in navigator) {
       setLocationStatus('Acquiring GPS fix...');
@@ -375,60 +370,63 @@ export default function Home() {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           setLocationStatus(`GPS Locked: ${lat.toFixed(2)}, ${lng.toFixed(2)}`);
-          await registerAndMatch(lat, lng, newRoomId);
+          await registerAndMatch(lat, lng, currentRoom);
         },
         async () => {
           setLocationStatus('GPS fallback: Dadar Active');
-          await registerAndMatch(19.0176, 72.8481, newRoomId);
+          await registerAndMatch(19.0176, 72.8481, currentRoom);
         }
       );
     } else {
-      await registerAndMatch(19.0176, 72.8481, newRoomId);
+      await registerAndMatch(19.0176, 72.8481, currentRoom);
     }
   };
 
-  const registerAndMatch = async (lat: number, lng: number, currentRoomId: string) => {
+  const registerAndMatch = async (lat: number, lng: number, currentRoom: string) => {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
     
     const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
     const targetCity = isMumbai ? 'mumbai' : 'general';
 
-    let selectedQuest = "Rally at Shivaji Park outer circle. Complete 2 brisk walking rounds together and grab a juice!";
+    let selectedQuest = activeQuest;
 
-    try {
-      const { data: dbQuests } = await supabase
-        .from('quests')
-        .select('quest_text')
-        .eq('mode', mode)
-        .eq('city', targetCity)
-        .eq('is_active', true);
+    // If no quest is set yet, pick one from DB
+    if (!selectedQuest) {
+      selectedQuest = "Rally at Shivaji Park outer circle. Complete 2 brisk walking rounds together and grab a juice!";
+      try {
+        const { data: dbQuests } = await supabase
+          .from('quests')
+          .select('quest_text')
+          .eq('mode', mode)
+          .eq('city', targetCity)
+          .eq('is_active', true);
 
-      if (dbQuests && dbQuests.length > 0) {
-        selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+        if (dbQuests && dbQuests.length > 0) {
+          selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+        }
+      } catch (e) {
+        console.log('Fetching dynamic quests error:', e);
       }
-    } catch (e) {
-      console.log('Fetching dynamic quests error:', e);
     }
 
     try {
-      // Clean up stale queue entries older than 5 minutes for strict real-time accuracy
-      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
-
-      if (mode !== 'solo') {
+      if (mode !== 'solo' && !isInviteSession) {
+        const thirtySecsAgo = new Date(Date.now() - 30 * 1000).toISOString();
+        
+        // Strict query: Exclude current user_id to prevent self-matching
         const { data: matches } = await supabase
           .from('active_queue')
-          .select('user_id, created_at')
+          .select('user_id')
           .eq('mode', mode)
           .neq('user_id', userId)
-          .gte('created_at', fiveMinsAgo)
-          .order('created_at', { ascending: false })
+          .gte('created_at', thirtySecsAgo)
           .limit(1);
 
         if (matches && matches.length > 0) {
           setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
         } else {
-          setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
+          setMatchedPartner(`No live players searching right now. Tap "Invite Friend" below!`);
         }
       }
 
@@ -450,7 +448,7 @@ export default function Home() {
     setTimeout(() => {
       setActiveQuest(selectedQuest);
       setIsSearching(false);
-    }, 2000);
+    }, 1500);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -781,6 +779,7 @@ export default function Home() {
                   setActiveQuest(null);
                   setProofImage(null);
                   setIsCompleted(false);
+                  setIsInviteSession(false);
                 }}
                 className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
                   mode === m
