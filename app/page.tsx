@@ -348,11 +348,11 @@ export default function Home() {
         },
         async () => {
           setLocationStatus('GPS fallback: Active');
-          await registerAndMatch(19.166, 72.852);
+          await registerAndMatch(19.0176, 72.8481); // Dadar Default GPS
         }
       );
     } else {
-      await registerAndMatch(19.166, 72.852);
+      await registerAndMatch(19.0176, 72.8481);
     }
   };
 
@@ -360,17 +360,34 @@ export default function Home() {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
     
-    // Fetch quests dynamically from Supabase database
-    let selectedQuest = "Walk 100 steps to the nearest chai tapri and order cutting chai.";
+    // Check if GPS is inside Greater Mumbai bounds
+    const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
+    const targetCity = isMumbai ? 'mumbai' : 'general';
+
+    let selectedQuest = "Order a cutting chai at the nearest tapri and ask for Parle-G vs Khari recommendations.";
     try {
+      // First try fetching city-specific quests
       const { data: dbQuests } = await supabase
         .from('quests')
         .select('quest_text')
         .eq('mode', mode)
+        .eq('city', targetCity)
         .eq('is_active', true);
 
       if (dbQuests && dbQuests.length > 0) {
         selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+      } else {
+        // Fallback to general quests if no city quests match
+        const { data: fallbackQuests } = await supabase
+          .from('quests')
+          .select('quest_text')
+          .eq('mode', mode)
+          .eq('city', 'general')
+          .eq('is_active', true);
+
+        if (fallbackQuests && fallbackQuests.length > 0) {
+          selectedQuest = fallbackQuests[Math.floor(Math.random() * fallbackQuests.length)].quest_text;
+        }
       }
     } catch (e) {
       console.log('Fetching dynamic quests error:', e);
