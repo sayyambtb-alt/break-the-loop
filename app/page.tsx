@@ -396,48 +396,42 @@ export default function Home() {
 
     let selectedQuest = "Rally at Shivaji Park outer circle. Complete 2 brisk walking rounds together and grab a juice!";
 
-    // Sync quest text with any active room in queue for duo/squad
     try {
-      if (mode !== 'solo') {
-        const { data: existingQueue } = await supabase
-          .from('active_queue')
-          .select('active_quest')
-          .eq('mode', mode)
-          .not('active_quest', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1);
+      const { data: dbQuests } = await supabase
+        .from('quests')
+        .select('quest_text')
+        .eq('mode', mode)
+        .eq('city', targetCity)
+        .eq('is_active', true);
 
-        if (existingQueue && existingQueue.length > 0 && existingQueue[0].active_quest) {
-          selectedQuest = existingQueue[0].active_quest;
-        } else {
-          const { data: dbQuests } = await supabase
-            .from('quests')
-            .select('quest_text')
-            .eq('mode', mode)
-            .eq('city', targetCity)
-            .eq('is_active', true);
-
-          if (dbQuests && dbQuests.length > 0) {
-            selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
-          }
-        }
-      } else {
-        const { data: dbQuests } = await supabase
-          .from('quests')
-          .select('quest_text')
-          .eq('mode', 'solo')
-          .eq('city', targetCity)
-          .eq('is_active', true);
-
-        if (dbQuests && dbQuests.length > 0) {
-          selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
-        }
+      if (dbQuests && dbQuests.length > 0) {
+        selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
       }
     } catch (e) {
       console.log('Fetching dynamic quests error:', e);
     }
 
     try {
+      // Clean up stale queue entries older than 5 minutes for strict real-time accuracy
+      const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+      if (mode !== 'solo') {
+        const { data: matches } = await supabase
+          .from('active_queue')
+          .select('user_id, created_at')
+          .eq('mode', mode)
+          .neq('user_id', userId)
+          .gte('created_at', fiveMinsAgo)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (matches && matches.length > 0) {
+          setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
+        } else {
+          setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
+        }
+      }
+
       await supabase.from('active_queue').upsert([
         {
           user_id: userId,
@@ -449,22 +443,6 @@ export default function Home() {
         }
       ], { onConflict: 'id' });
 
-      if (mode !== 'solo') {
-        const { data: matches } = await supabase.rpc('get_nearby_matches', {
-          user_lat: lat,
-          user_lng: lng,
-          search_mode: mode,
-          radius_meters: 3000
-        });
-
-        const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
-        if (otherPlayer) {
-          const dist = Math.round(otherPlayer.distance_meters);
-          setMatchedPartner(`Matched: Local Partner (${dist}m away)`);
-        } else {
-          setMatchedPartner(`Searching for nearby ${mode} squad... (Or tap Invite Friend)`);
-        }
-      }
     } catch (e) {
       console.log('Database queueing active:', e);
     }
@@ -869,7 +847,7 @@ export default function Home() {
                     <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-lg font-bold transition-all flex items-center space-x-1"
+                      className="text-[10px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
                     >
                       <span>📲</span>
                       <span>Invite Friend</span>
@@ -877,7 +855,7 @@ export default function Home() {
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
+                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Tap "Invite Friend" above to bring a partner in!</p>
                     ) : (
                       messages.map((m, i) => (
                         <div key={i} className="bg-slate-900 p-2 rounded-xl border border-slate-800/80">
@@ -895,7 +873,7 @@ export default function Home() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500"
+                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500"
                     />
                     <button
                       onClick={sendMessage}
