@@ -4,7 +4,15 @@ import confetti from 'canvas-confetti';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vopavevysovvucmhkvkr.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_KohfZUd_E0OapmrmwrxaCQ_l-b0NdZe';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+// Completely disabled automatic session detection
+const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
+  }
+});
 
 const QUESTS = {
   solo: [
@@ -98,8 +106,13 @@ export default function Home() {
     }
   };
 
-  const handleGuestLogin = async () => {
+  const handleGuestLogin = async (e: React.MouseEvent) => {
+    e.preventDefault();
     setAuthError('');
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
     await supabase.auth.signOut();
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) {
@@ -110,14 +123,20 @@ export default function Home() {
     }
   };
 
-  const handleSendEmailOtp = async () => {
+  const handleSendEmailOtp = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Stop any hidden form submissions
     setAuthError('');
+    
     if (!emailInput.includes('@')) {
       setAuthError('Please enter a valid email address');
       return;
     }
 
-    // Force clear session before sending OTP
+    // Nuke all browser storage from orbit before sending the code
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
     await supabase.auth.signOut();
 
     const { error } = await supabase.auth.signInWithOtp({
@@ -130,12 +149,15 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else {
+      // Force UI to show OTP input box
       setIsOtpSent(true);
     }
   };
 
-  const handleVerifyEmailOtp = async () => {
+  const handleVerifyEmailOtp = async (e: React.MouseEvent) => {
+    e.preventDefault();
     setAuthError('');
+    
     if (!otpInput.trim()) {
       setAuthError('Please enter the 6-digit code');
       return;
@@ -156,6 +178,10 @@ export default function Home() {
   };
 
   const handleSignOut = async () => {
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
     await supabase.auth.signOut();
     setUserEmail(null);
     setIsOtpSent(false);
@@ -566,7 +592,7 @@ export default function Home() {
                   onClick={handleSendEmailOtp}
                   className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
                 >
-                  Send Login Code
+                  Send 6-Digit Code
                 </button>
                 
                 <div className="relative py-1">
