@@ -38,6 +38,7 @@ export default function Home() {
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string>('room_goregaon');
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(1);
@@ -68,6 +69,23 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // URL Deep Link Processing on Launch
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlRoom = params.get('room');
+      const urlMode = params.get('mode');
+      const urlQuest = params.get('quest');
+
+      if (urlRoom) {
+        setRoomId(urlRoom);
+        if (urlMode) setMode(urlMode as 'duo' | 'squad');
+        if (urlQuest) setActiveQuest(decodeURIComponent(urlQuest));
+        setMatchedPartner('Matched: Direct Invite Partner 🤝');
+      }
+    }
+  }, []);
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -273,10 +291,10 @@ export default function Home() {
     if (!activeQuest || mode === 'solo') return;
 
     const channel = supabase
-      .channel('room_goregaon')
+      .channel(roomId)
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: "room_id=eq.room_goregaon" },
+        { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: `room_id=eq.${roomId}` },
         (payload) => {
           setMessages((prev) => [...prev, payload.new as ChatMessage]);
           chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -287,7 +305,7 @@ export default function Home() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeQuest, mode]);
+  }, [activeQuest, mode, roomId]);
 
   const sendMessage = async () => {
     if (!newMessage.trim()) return;
@@ -297,7 +315,7 @@ export default function Home() {
     try {
       await supabase.from('mission_messages').insert([
         {
-          room_id: 'room_goregaon',
+          room_id: roomId,
           sender_handle: handle,
           message: msgText
         }
@@ -308,8 +326,9 @@ export default function Home() {
   };
 
   const handleWhatsAppInvite = () => {
+    const inviteLink = `https://breaktheloopapp.in/?room=${roomId}&mode=${mode}&quest=${encodeURIComponent(activeQuest || '')}`;
     const text = encodeURIComponent(
-      `🔥 Hey! @${handle} just triggered a ${mode.toUpperCase()} Raid in Mumbai on Break The Loop!\n\nJoin my live quest room right now: https://breaktheloopapp.in`
+      `🔥 Hey! @${handle} invited you to a ${mode.toUpperCase()} Raid on Break The Loop!\n\nTap this link to join my exact mission lobby right now:\n${inviteLink}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
@@ -346,6 +365,10 @@ export default function Home() {
     setMessages([]);
     setTimeLeft(600);
 
+    // Generate fresh room ID for this specific session
+    const newRoomId = `room_${Math.random().toString(36).substring(2, 9)}`;
+    setRoomId(newRoomId);
+
     if ('geolocation' in navigator) {
       setLocationStatus('Acquiring GPS fix...');
       navigator.geolocation.getCurrentPosition(
@@ -353,19 +376,19 @@ export default function Home() {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           setLocationStatus(`GPS Locked: ${lat.toFixed(2)}, ${lng.toFixed(2)}`);
-          await registerAndMatch(lat, lng);
+          await registerAndMatch(lat, lng, newRoomId);
         },
         async () => {
           setLocationStatus('GPS fallback: Dadar Active');
-          await registerAndMatch(19.0176, 72.8481);
+          await registerAndMatch(19.0176, 72.8481, newRoomId);
         }
       );
     } else {
-      await registerAndMatch(19.0176, 72.8481);
+      await registerAndMatch(19.0176, 72.8481, newRoomId);
     }
   };
 
-  const registerAndMatch = async (lat: number, lng: number) => {
+  const registerAndMatch = async (lat: number, lng: number, currentRoomId: string) => {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
     
@@ -424,7 +447,7 @@ export default function Home() {
           const dist = Math.round(otherPlayer.distance_meters);
           setMatchedPartner(`Matched: Local Partner (${dist}m away)`);
         } else {
-          setMatchedPartner(`Searching for nearby ${mode} squad in Mumbai...`);
+          setMatchedPartner(`Searching for nearby ${mode} squad... (Or tap Invite Friend)`);
         }
       }
     } catch (e) {
