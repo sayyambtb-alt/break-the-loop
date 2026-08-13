@@ -7,7 +7,6 @@ import confetti from 'canvas-confetti';
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vopavevysovvucmhkvkr.supabase.co';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_KohfZUd_E0OapmrmwrxaCQ_l-b0NdZe';
 
-// Completely disabled automatic session detection
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -15,27 +14,6 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: false
   }
 });
-
-const QUESTS = {
-  solo: [
-    "Walk 100 steps towards the nearest chai tapri. Order a cutting chai or biscuit you haven't tried before.",
-    "Find an auto-rickshaw with a funny or unique sentence painted on the back. Take a photo of it.",
-    "Walk down a side lane near your society that you usually skip. Take a photo of the coolest doorway or garden.",
-    "Find a local bakery or Quick Bite stall. Ask for their most popular item under ₹50.",
-    "Pick up a local newspaper or magazine, flip to page 5, and read sentence 2 out loud."
-  ],
-  duo: [
-    "Rally with your partner at the nearest local landmark or station road bench. Split 1 plate of vada pav or sev puri 50/50.",
-    "Meet at the nearest street corner. Pick 1 random item each from a general store and draft a funny 2-line backstory for it.",
-    "Find an old local stationery shop together. Test 3 gel pens and officially declare one 'Pen of the Neighborhood'.",
-    "Head to a nearby coffee spot or local stall. Order two cold coffees and play 1 round of Rock-Paper-Scissors for who pays."
-  ],
-  squad: [
-    "Assemble your squad near the main colony gate or plaza. Race a 10-minute clock to gather: 1 fallen leaf, 1 coin, and 1 receipt under ₹20.",
-    "Hold a sign or hand out 10 high-fives to local shopkeepers or neighbors within 10 minutes.",
-    "Find a public park or open ground together and execute a synchronized 10-second victory jump."
-  ]
-};
 
 interface FeedItem {
   id: string;
@@ -126,7 +104,7 @@ export default function Home() {
   };
 
   const handleSendEmailOtp = async (e: React.MouseEvent) => {
-    e.preventDefault(); // Stop any hidden form submissions
+    e.preventDefault();
     setAuthError('');
     
     if (!emailInput.includes('@')) {
@@ -134,7 +112,6 @@ export default function Home() {
       return;
     }
 
-    // Nuke all browser storage from orbit before sending the code
     if (typeof window !== 'undefined') {
       localStorage.clear();
       sessionStorage.clear();
@@ -151,7 +128,6 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else {
-      // Force UI to show OTP input box
       setIsOtpSent(true);
     }
   };
@@ -383,8 +359,22 @@ export default function Home() {
   const registerAndMatch = async (lat: number, lng: number) => {
     const { data: { session } } = await supabase.auth.getSession();
     const userId = session?.user?.id || 'guest_user';
-    const questList = QUESTS[mode];
-    let selectedQuest = questList[Math.floor(Math.random() * questList.length)];
+    
+    // Fetch quests dynamically from Supabase database
+    let selectedQuest = "Walk 100 steps to the nearest chai tapri and order cutting chai.";
+    try {
+      const { data: dbQuests } = await supabase
+        .from('quests')
+        .select('quest_text')
+        .eq('mode', mode)
+        .eq('is_active', true);
+
+      if (dbQuests && dbQuests.length > 0) {
+        selectedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+      }
+    } catch (e) {
+      console.log('Fetching dynamic quests error:', e);
+    }
 
     try {
       if (mode !== 'solo') {
