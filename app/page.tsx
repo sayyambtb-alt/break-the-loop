@@ -68,7 +68,6 @@ export default function Home() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) {
@@ -308,6 +307,13 @@ export default function Home() {
     }
   };
 
+  const handleWhatsAppInvite = () => {
+    const text = encodeURIComponent(
+      `🔥 Hey! @${handle} just triggered a ${mode.toUpperCase()} Raid in Mumbai on Break The Loop!\n\nJoin my live quest room right now: https://breaktheloopapp.in`
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank');
+  };
+
   useEffect(() => {
     if (!activeQuest || isCompleted) return;
 
@@ -489,20 +495,17 @@ export default function Home() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Dark sleek gradient
     const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
     bgGradient.addColorStop(0, '#090d16');
     bgGradient.addColorStop(1, '#020617');
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    // Subtle Accent Glow
     ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
     ctx.beginPath();
     ctx.arc(540, 400, 350, 0, Math.PI * 2);
     ctx.fill();
 
-    // Top Header
     ctx.fillStyle = '#f43f5e';
     ctx.font = '900 52px sans-serif';
     ctx.textAlign = 'center';
@@ -512,7 +515,6 @@ export default function Home() {
     ctx.font = '600 32px sans-serif';
     ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
 
-    // Card Box
     ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
     ctx.strokeStyle = '#f43f5e';
     ctx.lineWidth = 4;
@@ -521,7 +523,6 @@ export default function Home() {
     ctx.fill();
     ctx.stroke();
 
-    // Mission Title Badge
     ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
     ctx.beginPath();
     ctx.roundRect(140, 420, 800, 80, 20);
@@ -531,7 +532,6 @@ export default function Home() {
     ctx.font = '700 36px sans-serif';
     ctx.fillText(`MODE: ${mode.toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
 
-    // Quest Text Wrap
     ctx.fillStyle = '#f8fafc';
     ctx.font = '600 42px sans-serif';
     const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
@@ -552,7 +552,6 @@ export default function Home() {
     }
     ctx.fillText(line, 540, y);
 
-    // Stats Section inside Box
     const statsY = Math.max(y + 100, 1050);
 
     ctx.fillStyle = '#64748b';
@@ -567,7 +566,6 @@ export default function Home() {
     ctx.fillStyle = '#f43f5e';
     ctx.fillText(`${newSavedMins} Mins ⚡`, 760, statsY + 80);
 
-    // Footer Info
     ctx.fillStyle = '#e2e8f0';
     ctx.font = '700 40px sans-serif';
     ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
@@ -831,7 +829,13 @@ export default function Home() {
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-1">
                     <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
-                    <span className="text-[9px] text-emerald-400 font-semibold">● Realtime</span>
+                    <button
+                      onClick={handleWhatsAppInvite}
+                      className="text-[10px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-lg font-bold transition-all flex items-center space-x-1"
+                    >
+                      <span>📲</span>
+                      <span>Invite Friend</span>
+                    </button>
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
@@ -876,10 +880,11 @@ export default function Home() {
                 ) : (
                   <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
                     <span className="text-xl">📸</span>
-                    <span className="text-xs text-slate-400 font-semibold">Attach Photo Proof</span>
+                    <span className="text-xs text-slate-400 font-semibold">Take Live Photo Proof</span>
                     <input
                       type="file"
                       accept="image/*"
+                      capture="environment"
                       onChange={handleImageUpload}
                       className="hidden"
                     />
