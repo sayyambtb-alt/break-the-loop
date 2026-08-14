@@ -37,6 +37,7 @@ export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
+  const [searchTimer, setSearchTimer] = useState(30);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string>('room_goregaon');
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
@@ -70,9 +71,18 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Read URL Deep Link Parameters on Initial Load
+  const clientIdRef = useRef<string>('');
+  const searchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      let storedId = sessionStorage.getItem('btl_session_id');
+      if (!storedId) {
+        storedId = `session_${Math.random().toString(36).substring(2, 10)}`;
+        sessionStorage.setItem('btl_session_id', storedId);
+      }
+      clientIdRef.current = storedId;
+
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
       const urlMode = params.get('mode');
@@ -231,6 +241,7 @@ export default function Home() {
     }
   };
 
+  // Realtime Live Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -286,8 +297,14 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const cancelSearch = () => {
+    if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+    setIsSearching(false);
+  };
+
   const handleBreakLoop = async () => {
     setIsSearching(true);
+    setSearchTimer(30);
     setProofImage(null);
     setIsCompleted(false);
     setCardDataUrl(null);
@@ -306,31 +323,28 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           setLocationStatus(`GPS Locked: ${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`);
-          await registerAndMatch(pos.coords.latitude, pos.coords.longitude, currentRoom);
+          await startContinuousSearch(pos.coords.latitude, pos.coords.longitude, currentRoom);
         },
         async () => {
           setLocationStatus('GPS fallback: Dadar Active');
-          await registerAndMatch(19.0176, 72.8481, currentRoom);
+          await startContinuousSearch(19.0176, 72.8481, currentRoom);
         }
       );
     } else {
-      await registerAndMatch(19.0176, 72.8481, currentRoom);
+      await startContinuousSearch(19.0176, 72.8481, currentRoom);
     }
   };
 
-  const registerAndMatch = async (lat: number, lng: number, currentRoom: string) => {
-    // Generate a fresh unique session ID for EVERY click to prevent self-id clashes
-    const clickSessionId = `session_${Math.random().toString(36).substring(2, 10)}`;
+  const startContinuousSearch = async (lat: number, lng: number, initialRoomId: string) => {
+    const currentSessionId = clientIdRef.current || `session_${Math.random().toString(36).substring(2, 8)}`;
     const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
     const targetCity = isMumbai ? 'mumbai' : 'general';
 
-    let matchFound = false;
-    let finalRoomId = currentRoom;
-    let finalQuest = activeQuest;
+    let assignedQuest = activeQuest;
 
-    try {
-      // Step 1: Select Quest if not already set
-      if (!finalQuest) {
+    // Fetch initial quest from DB if needed
+    if (!assignedQuest) {
+      try {
         const { data: dbQuests } = await supabase
           .from('quests')
           .select('quest_text')
@@ -339,62 +353,88 @@ export default function Home() {
           .eq('is_active', true);
 
         if (dbQuests && dbQuests.length > 0) {
-          finalQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+          assignedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
         } else {
-          finalQuest = "Rally nearby and complete a micro-mission!";
+          assignedQuest = "Rally nearby and complete a micro-mission!";
         }
+      } catch (e) {
+        assignedQuest = "Rally nearby and complete a micro-mission!";
       }
+    }
 
-      // Step 2: Announce THIS device in active_queue
+    // Publish THIS session into queue
+    try {
       await supabase.from('active_queue').insert([
         {
-          user_id: clickSessionId,
+          user_id: currentSessionId,
           mode: mode,
           location: `POINT(${lng} ${lat})`,
-          status: finalRoomId,
-          active_quest: finalQuest,
+          status: initialRoomId,
+          active_quest: assignedQuest,
           created_at: new Date().toISOString()
         }
       ]);
+    } catch (e) {
+      console.log('Queue insert error:', e);
+    }
 
-      // Step 3: Check for recent players (last 5 minutes)
-      if (mode !== 'solo' && !isInviteSession) {
-        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    // SOLO MODE: Immediate start
+    if (mode === 'solo' || isInviteSession) {
+      setActiveQuest(assignedQuest);
+      setIsSearching(false);
+      return;
+    }
 
+    // DUO / SQUAD MODE: Continuous 30-Second Polling
+    let attempts = 0;
+    const maxAttempts = 15; // 15 checks * 2 sec = 30 seconds
+
+    searchIntervalRef.current = setInterval(async () => {
+      attempts++;
+      setSearchTimer((prev) => Math.max(0, prev - 2));
+
+      try {
+        const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+
+        // Check if anyone ELSE is in the active_queue
         const { data: activeOthers } = await supabase
           .from('active_queue')
           .select('user_id, status, active_quest')
           .eq('mode', mode)
-          .neq('user_id', clickSessionId)
-          .gte('created_at', fiveMinsAgo)
+          .neq('user_id', currentSessionId)
+          .gte('created_at', twoMinsAgo)
           .order('created_at', { ascending: false })
           .limit(1);
 
         if (activeOthers && activeOthers.length > 0) {
-          matchFound = true;
-          finalRoomId = activeOthers[0].status; // Join partner's room ID
-          finalQuest = activeOthers[0].active_quest; // Sync quest
-          setRoomId(finalRoomId);
+          // MATCH FOUND!
+          if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+
+          const partnerRoom = activeOthers[0].status;
+          const partnerQuest = activeOthers[0].active_quest;
+
+          setRoomId(partnerRoom);
+          setActiveQuest(partnerQuest);
           setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
-        } else {
-          setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
+          setIsSearching(false);
+
+          await supabase.from('mission_messages').insert([
+            { room_id: partnerRoom, sender_handle: 'System', message: `✅ @${handle} auto-matched nearby and joined the local raid!` }
+          ]);
+          return;
         }
+      } catch (e) {
+        console.log('Polling check error:', e);
       }
 
-    } catch (e) {
-      console.log('Database queueing error:', e);
-    }
-
-    setTimeout(async () => {
-      setActiveQuest(finalQuest);
-      setIsSearching(false);
-
-      if (matchFound) {
-        await supabase.from('mission_messages').insert([
-          { room_id: finalRoomId, sender_handle: 'System', message: `✅ @${handle} auto-matched nearby and joined the local raid!` }
-        ]);
+      // If timer ran out without finding anyone
+      if (attempts >= maxAttempts) {
+        if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+        setActiveQuest(assignedQuest);
+        setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
+        setIsSearching(false);
       }
-    }, 1500);
+    }, 2000);
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -748,7 +788,10 @@ export default function Home() {
                 }`}
               >
                 {isSearching ? (
-                  <span className="text-2xl animate-spin">🌀</span>
+                  <div className="flex flex-col items-center space-y-1">
+                    <span className="text-2xl animate-spin">🌀</span>
+                    <span className="text-xs text-rose-200 font-mono font-normal">SEARCHING... ({searchTimer}s)</span>
+                  </div>
                 ) : (
                   <>
                     <span>DESTROY</span>
@@ -756,11 +799,32 @@ export default function Home() {
                   </>
                 )}
               </button>
-              <p className="text-xs text-slate-500 text-center max-w-xs">
-                {isSearching
-                  ? locationStatus || 'Scanning nearby 1.5 km radius...'
-                  : 'Tap to trigger a random real-world micro-mission.'}
-              </p>
+
+              <div className="text-center space-y-2 max-w-xs">
+                <p className="text-xs text-slate-500">
+                  {isSearching
+                    ? `Scanning nearby 1.5 km radius for ${mode.toUpperCase()} partners...`
+                    : 'Tap to trigger a random real-world micro-mission.'}
+                </p>
+
+                {isSearching && (
+                  <div className="flex flex-col items-center space-y-2 pt-2">
+                    <button
+                      onClick={handleWhatsAppInvite}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+                    >
+                      <span>📲</span>
+                      <span>Invite Friend via WhatsApp Now</span>
+                    </button>
+                    <button
+                      onClick={cancelSearch}
+                      className="text-[10px] text-slate-500 hover:underline"
+                    >
+                      Cancel Search
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -800,7 +864,7 @@ export default function Home() {
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Tap "Invite Friend" above to bring a partner in!</p>
+                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
                     ) : (
                       messages.map((m, i) => (
                         <div key={i} className={`bg-slate-900 p-2 rounded-xl border ${m.sender_handle === 'System' ? 'border-emerald-500/30' : 'border-slate-800/80'}`}>
