@@ -225,7 +225,7 @@ export default function Home() {
     }
   };
 
-  // Realtime Live Chat Subscription for Assigned Room
+  // Realtime Live Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -281,7 +281,7 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ==================== REALTIME WEBSOCKET MATCHMAKING ENGINE ====================
+  // ==================== STABLE REALTIME WEBSOCKET MATCHING ====================
   const handleBreakLoop = async () => {
     setIsSearching(true);
     setProofImage(null);
@@ -314,7 +314,6 @@ export default function Home() {
   };
 
   const startRealtimeWebSocketMatch = async (myRoomId: string) => {
-    // Solo or Direct Invite skips radar search
     if (mode === 'solo' || isInviteSession) {
       if (!activeQuest) {
         await pickRandomQuest();
@@ -339,26 +338,23 @@ export default function Home() {
       }
     }
 
-    // Connect to global Realtime Broadcast Channel for the mode
     const channelName = `mumbai_radar_${mode}`;
     const broadcastChannel = supabase.channel(channelName);
     broadcastChannelRef.current = broadcastChannel;
 
     broadcastChannel
       .on('broadcast', { event: 'looking_for_match' }, (payload) => {
-        // If someone else is searching, accept their match signal!
         if (payload.sender_id !== peerSessionIdRef.current) {
-          stopWebSocketSearch();
-
           const sharedRoom = payload.room_id;
           const sharedQuest = payload.quest_text;
 
+          if (searchBroadcastTimerRef.current) clearInterval(searchBroadcastTimerRef.current);
+
           setRoomId(sharedRoom);
           setActiveQuest(sharedQuest);
-          setMatchedPartner(`Matched: Local Partner (${payload.handle}) 🤝`);
+          setMatchedPartner(`Matched: Local Partner (@${payload.handle}) 🤝`);
           setIsSearching(false);
 
-          // Reply back with ACK so the other device knows we joined!
           broadcastChannel.send({
             type: 'broadcast',
             event: 'match_accepted',
@@ -372,8 +368,7 @@ export default function Home() {
         }
       })
       .on('broadcast', { event: 'match_accepted' }, (payload) => {
-        // Our broadcast was accepted by another device!
-        stopWebSocketSearch();
+        if (searchBroadcastTimerRef.current) clearInterval(searchBroadcastTimerRef.current);
 
         setRoomId(payload.room_id);
         setActiveQuest(payload.quest_text);
@@ -382,7 +377,6 @@ export default function Home() {
       })
       .subscribe((status) => {
         if (status === 'SUBSCRIBED') {
-          // Send continuous broadcast ping every 1.5s until another device hears us
           searchBroadcastTimerRef.current = setInterval(() => {
             broadcastChannel.send({
               type: 'broadcast',
@@ -394,32 +388,14 @@ export default function Home() {
                 handle: handle
               }
             });
-          }, 1500);
+          }, 1000);
         }
       });
-
-    // Fallback: If no device connects via WebSocket after 25s, assign quest anyway
-    setTimeout(() => {
-      if (isSearching) {
-        stopWebSocketSearch();
-        setActiveQuest(defaultQuestText);
-        setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
-        setIsSearching(false);
-      }
-    }, 25000);
-  };
-
-  const stopWebSocketSearch = () => {
-    if (searchBroadcastTimerRef.current) {
-      clearInterval(searchBroadcastTimerRef.current);
-    }
-    if (broadcastChannelRef.current) {
-      supabase.removeChannel(broadcastChannelRef.current);
-    }
   };
 
   const cancelSearch = () => {
-    stopWebSocketSearch();
+    if (searchBroadcastTimerRef.current) clearInterval(searchBroadcastTimerRef.current);
+    if (broadcastChannelRef.current) supabase.removeChannel(broadcastChannelRef.current);
     setIsSearching(false);
   };
 
