@@ -98,6 +98,15 @@ export default function Home() {
     }
   }, []);
 
+  // Cleanup: leave any open presence channel if the page closes or unmounts
+  useEffect(() => {
+    return () => {
+      if (presenceChannelRef.current) {
+        supabase.removeChannel(presenceChannelRef.current);
+      }
+    };
+  }, []);
+
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
     const permission = await Notification.requestPermission();
@@ -311,11 +320,15 @@ export default function Home() {
         .eq('city', 'mumbai')
         .eq('is_active', true);
 
-      if (dbQuests && dbQuests.length > 0) {
-        questForRoom = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
-      } else {
-        questForRoom = "Rally at Shivaji Park outer circle and complete a micro-mission!";
-      }
+      questForRoom = dbQuests && dbQuests.length > 0
+        ? dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text
+        : "Rally at Shivaji Park outer circle and complete a micro-mission!";
+    }
+
+    // Clear out any leftover channel from a previous/abandoned search first
+    if (presenceChannelRef.current) {
+      await supabase.removeChannel(presenceChannelRef.current);
+      presenceChannelRef.current = null;
     }
 
     const channel = supabase.channel(`presence_radar_${mode}`, {
@@ -327,12 +340,16 @@ export default function Home() {
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        const keys = Object.keys(state);
+        const now = Date.now();
 
-        // Find another active key in presence state
-        const otherKey = keys.find((k) => k !== mySessionIdRef.current);
+        // Only match someone who joined in the last 15 seconds — ignores stale ghost entries
+        const otherKey = Object.keys(state).find((k) => {
+          if (k === mySessionIdRef.current) return false;
+          const entry: any = state[k]?.[0];
+          return entry && now - (entry.joined_at || 0) < 15000;
+        });
 
-        if (otherKey && state[otherKey] && state[otherKey].length > 0) {
+        if (otherKey) {
           const partnerData: any = state[otherKey][0];
 
           // Deterministic Host Selection (Alphabetically lower key acts as Room Host)
@@ -345,7 +362,9 @@ export default function Home() {
           setMatchedPartner(`Matched: Local Partner (@${partnerData.handle || 'Explorer'}) 🤝`);
           setIsSearching(false);
 
-          channel.unsubscribe();
+          channel.untrack();
+          supabase.removeChannel(channel);
+          presenceChannelRef.current = null;
         }
       })
       .subscribe(async (status) => {
@@ -354,7 +373,8 @@ export default function Home() {
             session_id: mySessionIdRef.current,
             room_id: generatedRoom,
             quest_text: questForRoom,
-            handle: handle
+            handle: handle,
+            joined_at: Date.now()
           });
         }
       });
@@ -362,7 +382,9 @@ export default function Home() {
 
   const cancelSearch = () => {
     if (presenceChannelRef.current) {
-      presenceChannelRef.current.unsubscribe();
+      presenceChannelRef.current.untrack();
+      supabase.removeChannel(presenceChannelRef.current);
+      presenceChannelRef.current = null;
     }
     setIsSearching(false);
   };
@@ -710,6 +732,7 @@ export default function Home() {
               <button
                 key={m}
                 onClick={() => {
+                  if (isSearching) cancelSearch();
                   setMode(m);
                   setActiveQuest(null);
                   setProofImage(null);
