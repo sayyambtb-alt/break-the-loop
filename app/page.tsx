@@ -70,16 +70,9 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const clientIdRef = useRef<string>('');
+  // Read URL Deep Link Parameters on Initial Load
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      let storedId = localStorage.getItem('btl_client_id');
-      if (!storedId) {
-        storedId = `device_${Math.random().toString(36).substring(2, 10)}`;
-        localStorage.setItem('btl_client_id', storedId);
-      }
-      clientIdRef.current = storedId;
-
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
       const urlMode = params.get('mode');
@@ -326,7 +319,8 @@ export default function Home() {
   };
 
   const registerAndMatch = async (lat: number, lng: number, currentRoom: string) => {
-    const deviceClientId = clientIdRef.current || `device_${Math.random().toString(36).substring(2, 8)}`;
+    // Generate a fresh unique session ID for EVERY click to prevent self-id clashes
+    const clickSessionId = `session_${Math.random().toString(36).substring(2, 10)}`;
     const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
     const targetCity = isMumbai ? 'mumbai' : 'general';
 
@@ -335,27 +329,7 @@ export default function Home() {
     let finalQuest = activeQuest;
 
     try {
-      if (mode !== 'solo' && !isInviteSession) {
-        const threeMinsAgo = new Date(Date.now() - 3 * 60 * 1000).toISOString();
-
-        const { data: activeOthers } = await supabase
-          .from('active_queue')
-          .select('user_id, status, active_quest')
-          .eq('mode', mode)
-          .neq('user_id', deviceClientId)
-          .gte('created_at', threeMinsAgo)
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (activeOthers && activeOthers.length > 0) {
-          matchFound = true;
-          finalRoomId = activeOthers[0].status;
-          finalQuest = activeOthers[0].active_quest;
-          setRoomId(finalRoomId);
-          setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
-        }
-      }
-
+      // Step 1: Select Quest if not already set
       if (!finalQuest) {
         const { data: dbQuests } = await supabase
           .from('quests')
@@ -369,15 +343,12 @@ export default function Home() {
         } else {
           finalQuest = "Rally nearby and complete a micro-mission!";
         }
-
-        if (mode !== 'solo' && !isInviteSession) {
-          setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
-        }
       }
 
+      // Step 2: Announce THIS device in active_queue
       await supabase.from('active_queue').insert([
         {
-          user_id: deviceClientId,
+          user_id: clickSessionId,
           mode: mode,
           location: `POINT(${lng} ${lat})`,
           status: finalRoomId,
@@ -385,6 +356,30 @@ export default function Home() {
           created_at: new Date().toISOString()
         }
       ]);
+
+      // Step 3: Check for recent players (last 5 minutes)
+      if (mode !== 'solo' && !isInviteSession) {
+        const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+        const { data: activeOthers } = await supabase
+          .from('active_queue')
+          .select('user_id, status, active_quest')
+          .eq('mode', mode)
+          .neq('user_id', clickSessionId)
+          .gte('created_at', fiveMinsAgo)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (activeOthers && activeOthers.length > 0) {
+          matchFound = true;
+          finalRoomId = activeOthers[0].status; // Join partner's room ID
+          finalQuest = activeOthers[0].active_quest; // Sync quest
+          setRoomId(finalRoomId);
+          setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
+        } else {
+          setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
+        }
+      }
 
     } catch (e) {
       console.log('Database queueing error:', e);
