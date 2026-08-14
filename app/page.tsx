@@ -37,7 +37,6 @@ export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
-  const [searchTimer, setSearchTimer] = useState(30);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string>('room_goregaon');
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
@@ -51,7 +50,7 @@ export default function Home() {
   const [isCompleted, setIsCompleted] = useState(false);
   const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
 
-  // Email Auth State
+  // Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [emailInput, setEmailInput] = useState('');
   const [otpInput, setOtpInput] = useState('');
@@ -71,17 +70,14 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  const clientIdRef = useRef<string>('');
-  const searchIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  // References for WebSockets Broadcast Channel
+  const broadcastChannelRef = useRef<any>(null);
+  const searchBroadcastTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const peerSessionIdRef = useRef<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      let storedId = sessionStorage.getItem('btl_session_id');
-      if (!storedId) {
-        storedId = `session_${Math.random().toString(36).substring(2, 10)}`;
-        sessionStorage.setItem('btl_session_id', storedId);
-      }
-      clientIdRef.current = storedId;
+      peerSessionIdRef.current = `peer_${Math.random().toString(36).substring(2, 10)}`;
 
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
@@ -99,11 +95,7 @@ export default function Home() {
   }, []);
 
   const requestNotificationPermission = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      alert('Notifications are not supported on this browser.');
-      return;
-    }
-
+    if (typeof window === 'undefined' || !('Notification' in window)) return;
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       setNotificationsEnabled(true);
@@ -111,8 +103,6 @@ export default function Home() {
         body: 'Daily reminders active! Get ready to destroy boredom.',
         icon: '/icon.png'
       });
-    } else {
-      alert('Notification access was denied.');
     }
   };
 
@@ -132,10 +122,7 @@ export default function Home() {
   const handleSendEmailOtp = async (e: React.MouseEvent) => {
     e.preventDefault();
     setAuthError('');
-    if (!emailInput.includes('@')) {
-      setAuthError('Please enter a valid email address');
-      return;
-    }
+    if (!emailInput.includes('@')) return setAuthError('Please enter a valid email address');
     await supabase.auth.signOut();
     const { error } = await supabase.auth.signInWithOtp({
       email: emailInput,
@@ -148,10 +135,7 @@ export default function Home() {
   const handleVerifyEmailOtp = async (e: React.MouseEvent) => {
     e.preventDefault();
     setAuthError('');
-    if (!otpInput.trim()) {
-      setAuthError('Please enter the 6-digit code');
-      return;
-    }
+    if (!otpInput.trim()) return setAuthError('Please enter the 6-digit code');
     const { data, error } = await supabase.auth.verifyOtp({
       email: emailInput,
       token: otpInput.trim(),
@@ -241,7 +225,7 @@ export default function Home() {
     }
   };
 
-  // Realtime Live Chat Subscription
+  // Realtime Live Chat Subscription for Assigned Room
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -297,24 +281,18 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const cancelSearch = () => {
-    if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
-    setIsSearching(false);
-  };
-
+  // ==================== REALTIME WEBSOCKET MATCHMAKING ENGINE ====================
   const handleBreakLoop = async () => {
     setIsSearching(true);
-    setSearchTimer(30);
     setProofImage(null);
     setIsCompleted(false);
     setCardDataUrl(null);
     setMessages([]);
     setTimeLeft(600);
 
-    let currentRoom = roomId;
+    const generatedRoom = isInviteSession ? roomId : `room_${Math.random().toString(36).substring(2, 9)}`;
     if (!isInviteSession) {
-      currentRoom = `room_${Math.random().toString(36).substring(2, 9)}`;
-      setRoomId(currentRoom);
+      setRoomId(generatedRoom);
       setMatchedPartner(null);
     }
 
@@ -323,118 +301,145 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
           setLocationStatus(`GPS Locked: ${pos.coords.latitude.toFixed(2)}, ${pos.coords.longitude.toFixed(2)}`);
-          await startContinuousSearch(pos.coords.latitude, pos.coords.longitude, currentRoom);
+          await startRealtimeWebSocketMatch(generatedRoom);
         },
         async () => {
           setLocationStatus('GPS fallback: Dadar Active');
-          await startContinuousSearch(19.0176, 72.8481, currentRoom);
+          await startRealtimeWebSocketMatch(generatedRoom);
         }
       );
     } else {
-      await startContinuousSearch(19.0176, 72.8481, currentRoom);
+      await startRealtimeWebSocketMatch(generatedRoom);
     }
   };
 
-  const startContinuousSearch = async (lat: number, lng: number, initialRoomId: string) => {
-    const currentSessionId = clientIdRef.current || `session_${Math.random().toString(36).substring(2, 8)}`;
-    const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
-    const targetCity = isMumbai ? 'mumbai' : 'general';
-
-    let assignedQuest = activeQuest;
-
-    // Fetch initial quest from DB if needed
-    if (!assignedQuest) {
-      try {
-        const { data: dbQuests } = await supabase
-          .from('quests')
-          .select('quest_text')
-          .eq('mode', mode)
-          .eq('city', targetCity)
-          .eq('is_active', true);
-
-        if (dbQuests && dbQuests.length > 0) {
-          assignedQuest = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
-        } else {
-          assignedQuest = "Rally nearby and complete a micro-mission!";
-        }
-      } catch (e) {
-        assignedQuest = "Rally nearby and complete a micro-mission!";
-      }
-    }
-
-    // Publish THIS session into queue
-    try {
-      await supabase.from('active_queue').insert([
-        {
-          user_id: currentSessionId,
-          mode: mode,
-          location: `POINT(${lng} ${lat})`,
-          status: initialRoomId,
-          active_quest: assignedQuest,
-          created_at: new Date().toISOString()
-        }
-      ]);
-    } catch (e) {
-      console.log('Queue insert error:', e);
-    }
-
-    // SOLO MODE: Immediate start
+  const startRealtimeWebSocketMatch = async (myRoomId: string) => {
+    // Solo or Direct Invite skips radar search
     if (mode === 'solo' || isInviteSession) {
-      setActiveQuest(assignedQuest);
+      if (!activeQuest) {
+        await pickRandomQuest();
+      }
       setIsSearching(false);
       return;
     }
 
-    // DUO / SQUAD MODE: Continuous 30-Second Polling
-    let attempts = 0;
-    const maxAttempts = 15; // 15 checks * 2 sec = 30 seconds
+    let defaultQuestText = activeQuest;
+    if (!defaultQuestText) {
+      const { data: dbQuests } = await supabase
+        .from('quests')
+        .select('quest_text')
+        .eq('mode', mode)
+        .eq('city', 'mumbai')
+        .eq('is_active', true);
 
-    searchIntervalRef.current = setInterval(async () => {
-      attempts++;
-      setSearchTimer((prev) => Math.max(0, prev - 2));
+      if (dbQuests && dbQuests.length > 0) {
+        defaultQuestText = dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text;
+      } else {
+        defaultQuestText = "Rally at Shivaji Park outer circle and complete a micro-mission!";
+      }
+    }
 
-      try {
-        const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    // Connect to global Realtime Broadcast Channel for the mode
+    const channelName = `mumbai_radar_${mode}`;
+    const broadcastChannel = supabase.channel(channelName);
+    broadcastChannelRef.current = broadcastChannel;
 
-        // Check if anyone ELSE is in the active_queue
-        const { data: activeOthers } = await supabase
-          .from('active_queue')
-          .select('user_id, status, active_quest')
-          .eq('mode', mode)
-          .neq('user_id', currentSessionId)
-          .gte('created_at', twoMinsAgo)
-          .order('created_at', { ascending: false })
-          .limit(1);
+    broadcastChannel
+      .on('broadcast', { event: 'looking_for_match' }, (payload) => {
+        // If someone else is searching, accept their match signal!
+        if (payload.sender_id !== peerSessionIdRef.current) {
+          stopWebSocketSearch();
 
-        if (activeOthers && activeOthers.length > 0) {
-          // MATCH FOUND!
-          if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
+          const sharedRoom = payload.room_id;
+          const sharedQuest = payload.quest_text;
 
-          const partnerRoom = activeOthers[0].status;
-          const partnerQuest = activeOthers[0].active_quest;
-
-          setRoomId(partnerRoom);
-          setActiveQuest(partnerQuest);
-          setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
+          setRoomId(sharedRoom);
+          setActiveQuest(sharedQuest);
+          setMatchedPartner(`Matched: Local Partner (${payload.handle}) 🤝`);
           setIsSearching(false);
 
-          await supabase.from('mission_messages').insert([
-            { room_id: partnerRoom, sender_handle: 'System', message: `✅ @${handle} auto-matched nearby and joined the local raid!` }
-          ]);
-          return;
+          // Reply back with ACK so the other device knows we joined!
+          broadcastChannel.send({
+            type: 'broadcast',
+            event: 'match_accepted',
+            payload: {
+              room_id: sharedRoom,
+              quest_text: sharedQuest,
+              peer_id: peerSessionIdRef.current,
+              handle: handle
+            }
+          });
         }
-      } catch (e) {
-        console.log('Polling check error:', e);
-      }
+      })
+      .on('broadcast', { event: 'match_accepted' }, (payload) => {
+        // Our broadcast was accepted by another device!
+        stopWebSocketSearch();
 
-      // If timer ran out without finding anyone
-      if (attempts >= maxAttempts) {
-        if (searchIntervalRef.current) clearInterval(searchIntervalRef.current);
-        setActiveQuest(assignedQuest);
+        setRoomId(payload.room_id);
+        setActiveQuest(payload.quest_text);
+        setMatchedPartner(`Matched: Local Partner (@${payload.handle}) 🤝`);
+        setIsSearching(false);
+      })
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          // Send continuous broadcast ping every 1.5s until another device hears us
+          searchBroadcastTimerRef.current = setInterval(() => {
+            broadcastChannel.send({
+              type: 'broadcast',
+              event: 'looking_for_match',
+              payload: {
+                sender_id: peerSessionIdRef.current,
+                room_id: myRoomId,
+                quest_text: defaultQuestText,
+                handle: handle
+              }
+            });
+          }, 1500);
+        }
+      });
+
+    // Fallback: If no device connects via WebSocket after 25s, assign quest anyway
+    setTimeout(() => {
+      if (isSearching) {
+        stopWebSocketSearch();
+        setActiveQuest(defaultQuestText);
         setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
         setIsSearching(false);
       }
-    }, 2000);
+    }, 25000);
+  };
+
+  const stopWebSocketSearch = () => {
+    if (searchBroadcastTimerRef.current) {
+      clearInterval(searchBroadcastTimerRef.current);
+    }
+    if (broadcastChannelRef.current) {
+      supabase.removeChannel(broadcastChannelRef.current);
+    }
+  };
+
+  const cancelSearch = () => {
+    stopWebSocketSearch();
+    setIsSearching(false);
+  };
+
+  const pickRandomQuest = async () => {
+    try {
+      const { data: dbQuests } = await supabase
+        .from('quests')
+        .select('quest_text')
+        .eq('mode', mode)
+        .eq('city', 'mumbai')
+        .eq('is_active', true);
+
+      if (dbQuests && dbQuests.length > 0) {
+        setActiveQuest(dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text);
+      } else {
+        setActiveQuest("Rally at Shivaji Park outer circle and complete a micro-mission!");
+      }
+    } catch (e) {
+      setActiveQuest("Rally at Shivaji Park outer circle and complete a micro-mission!");
+    }
   };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -790,7 +795,7 @@ export default function Home() {
                 {isSearching ? (
                   <div className="flex flex-col items-center space-y-1">
                     <span className="text-2xl animate-spin">🌀</span>
-                    <span className="text-xs text-rose-200 font-mono font-normal">SEARCHING... ({searchTimer}s)</span>
+                    <span className="text-xs text-rose-200 font-mono font-normal">SEARCHING...</span>
                   </div>
                 ) : (
                   <>
@@ -803,7 +808,7 @@ export default function Home() {
               <div className="text-center space-y-2 max-w-xs">
                 <p className="text-xs text-slate-500">
                   {isSearching
-                    ? `Scanning nearby 1.5 km radius for ${mode.toUpperCase()} partners...`
+                    ? `Broadcasting Live WebSocket Radar for ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
                 </p>
 
@@ -864,7 +869,7 @@ export default function Home() {
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
+                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Tap "Invite Friend" above to bring a partner in!</p>
                     ) : (
                       messages.map((m, i) => (
                         <div key={i} className={`bg-slate-900 p-2 rounded-xl border ${m.sender_handle === 'System' ? 'border-emerald-500/30' : 'border-slate-800/80'}`}>
