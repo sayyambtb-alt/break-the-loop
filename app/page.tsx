@@ -63,7 +63,6 @@ export default function Home() {
   const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
-  const [activePlayerCount, setActivePlayerCount] = useState<number>(1);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
 
   // Chat State
@@ -71,9 +70,17 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Read URL Deep Link Parameters on Initial Load
+  // Local Unique Client Session ID to distinguish devices
+  const clientIdRef = useRef<string>('');
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      let storedId = localStorage.getItem('btl_client_id');
+      if (!storedId) {
+        storedId = `device_${Math.random().toString(36).substring(2, 10)}`;
+        localStorage.setItem('btl_client_id', storedId);
+      }
+      clientIdRef.current = storedId;
+
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
       const urlMode = params.get('mode');
@@ -217,25 +224,6 @@ export default function Home() {
       console.log('Handle update error:', e);
     }
   };
-
-  useEffect(() => {
-    async function fetchQueueCount() {
-      try {
-        const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-        const { count } = await supabase
-          .from('active_queue')
-          .select('*', { count: 'exact', head: true })
-          .gte('created_at', fifteenMinsAgo);
-
-        if (count !== null) {
-          setActivePlayerCount(Math.max(1, count));
-        }
-      } catch (e) {
-        console.log('Fetching queue stats...', e);
-      }
-    }
-    fetchQueueCount();
-  }, [isSearching]);
 
   useEffect(() => {
     if (tab === 'feed') {
@@ -384,8 +372,7 @@ export default function Home() {
   };
 
   const registerAndMatch = async (lat: number, lng: number, currentRoom: string) => {
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id || 'guest_user';
+    const deviceClientId = clientIdRef.current || `device_${Math.random().toString(36).substring(2, 8)}`;
     
     const isMumbai = lat >= 18.8000 && lat <= 19.3500 && lng >= 72.7000 && lng <= 73.0000;
     const targetCity = isMumbai ? 'mumbai' : 'general';
@@ -395,38 +382,8 @@ export default function Home() {
     let finalQuest = activeQuest;
 
     try {
-      if (mode !== 'solo' && !isInviteSession) {
-        const { data: matches } = await supabase.rpc('get_nearby_matches', {
-          user_lat: lat,
-          user_lng: lng,
-          search_mode: mode,
-          radius_meters: 3000
-        });
-
-        const otherPlayer = matches?.find((m: { user_id: string; distance_meters: number }) => m.user_id !== userId);
-
-        if (otherPlayer) {
-          const { data: partnerQueue } = await supabase
-            .from('active_queue')
-            .select('status, active_quest, created_at')
-            .eq('user_id', otherPlayer.user_id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-
-          if (partnerQueue && partnerQueue.length > 0) {
-            const twoMinsAgo = Date.now() - 120000;
-            if (new Date(partnerQueue[0].created_at).getTime() > twoMinsAgo) {
-              finalRoomId = partnerQueue[0].status; 
-              finalQuest = partnerQueue[0].active_quest;
-              matchFound = true;
-              setRoomId(finalRoomId);
-              setMatchedPartner(`Matched: Local Partner (${Math.round(otherPlayer.distance_meters)}m away) 🤝`);
-            }
-          }
-        }
-      }
-
-      if (!matchFound && !finalQuest) {
+      // 1. Fetch random quest if not already set by invite
+      if (!finalQuest) {
         const { data: dbQuests } = await supabase
           .from('quests')
           .select('quest_text')
@@ -439,15 +396,12 @@ export default function Home() {
         } else {
           finalQuest = "Rally nearby and complete a micro-mission!";
         }
-        
-        if (mode !== 'solo' && !isInviteSession) {
-          setMatchedPartner(`No active players nearby right now. Tap "Invite Friend" below!`);
-        }
       }
 
+      // 2. Publish THIS device into the active_queue FIRST
       await supabase.from('active_queue').upsert([
         {
-          user_id: userId,
+          user_id: deviceClientId,
           mode: mode,
           location: `POINT(${lng} ${lat})`,
           status: finalRoomId,
@@ -455,6 +409,30 @@ export default function Home() {
           created_at: new Date().toISOString()
         }
       ], { onConflict: 'id' });
+
+      // 3. Look for ANY other active device searching for the same mode in the last 2 minutes
+      if (mode !== 'solo' && !isInviteSession) {
+        const twoMinsAgo = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+        
+        const { data: activeOthers } = await supabase
+          .from('active_queue')
+          .select('user_id, status, active_quest')
+          .eq('mode', mode)
+          .neq('user_id', deviceClientId)
+          .gte('created_at', twoMinsAgo)
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (activeOthers && activeOthers.length > 0) {
+          matchFound = true;
+          finalRoomId = activeOthers[0].status; // Join their room
+          finalQuest = activeOthers[0].active_quest; // Sync to their quest
+          setRoomId(finalRoomId);
+          setMatchedPartner(`Matched: Live Local Partner nearby! 🤝`);
+        } else {
+          setMatchedPartner(`Searching nearby... (Tap "Invite Friend" to speed up)`);
+        }
+      }
 
     } catch (e) {
       console.log('Database queueing error:', e);
