@@ -61,6 +61,10 @@ export default function Home() {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [authError, setAuthError] = useState('');
 
+  // Handle Setup Modal
+  const [showHandleModal, setShowHandleModal] = useState(false);
+  const [newHandleInput, setNewHandleInput] = useState('');
+
   // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
@@ -89,6 +93,11 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const cachedHandle = localStorage.getItem('btl_user_handle');
+      if (cachedHandle) {
+        setHandle(cachedHandle);
+      }
+
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
       const urlMode = params.get('mode');
@@ -197,23 +206,73 @@ export default function Home() {
     setIsOtpSent(false);
     setOtpInput('');
     setEmailInput('');
+    setHandle('Explorer');
   };
 
   const loadOrCreateProfile = async (userId: string, email: string) => {
     try {
       const { data } = await supabase.from('profiles').select('*').eq('device_id', userId).single();
       if (data) {
-        setHandle(data.handle);
+        if (data.handle && data.handle !== 'Explorer') {
+          setHandle(data.handle);
+          if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', data.handle);
+        }
         setStreak(data.streak);
         setSavedMins(data.time_saved_mins);
         if (data.badges) setBadges(data.badges);
+        if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
+          setShowHandleModal(true);
+        }
       } else {
+        const defaultHandle = email.split('@')[0] || 'Explorer';
         await supabase.from('profiles').insert([
-          { device_id: userId, handle: 'Explorer', streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'], phone: email }
+          { device_id: userId, handle: defaultHandle, streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'], phone: email }
         ]);
+        setHandle(defaultHandle);
+        if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', defaultHandle);
+        if (email !== 'guest@breaktheloop.app') {
+          setNewHandleInput(defaultHandle);
+          setShowHandleModal(true);
+        }
       }
     } catch (e) {
       console.log('Profile setup error:', e);
+    }
+  };
+
+  const saveHandleDirect = async (chosenHandle: string) => {
+    const cleaned = chosenHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
+    if (!cleaned) return;
+    setHandle(cleaned);
+    if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
+    setShowHandleModal(false);
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (userId) {
+      try {
+        await supabase.from('profiles').update({ handle: cleaned }).eq('device_id', userId);
+      } catch (e) {
+        console.log('Handle update error:', e);
+      }
+    }
+  };
+
+  const saveHandle = async (newHandle: string) => {
+    const cleaned = newHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
+    if (!cleaned) return;
+    setHandle(cleaned);
+    if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
+    setIsEditingHandle(false);
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    const userId = session?.user?.id;
+    if (userId) {
+      try {
+        await supabase.from('profiles').update({ handle: cleaned }).eq('device_id', userId);
+      } catch (e) {
+        console.log('Handle update error:', e);
+      }
     }
   };
 
@@ -244,16 +303,13 @@ export default function Home() {
     }
   };
 
-  const saveHandle = async (newHandle: string) => {
-    setHandle(newHandle);
-    setIsEditingHandle(false);
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id || 'guest';
-    try {
-      await supabase.from('profiles').update({ handle: newHandle }).eq('device_id', userId);
-    } catch (e) {
-      console.log('Handle update error:', e);
-    }
+  const inviteFriendDirect = (friendHandle: string) => {
+    const friendRoom = `room_${Math.random().toString(36).substring(2, 9)}`;
+    const inviteLink = `https://breaktheloopapp.in/?room=${friendRoom}&mode=duo&quest=${encodeURIComponent('Rally at nearest landmark and complete this raid!')}`;
+    const text = encodeURIComponent(
+      `🔥 Hey @${friendHandle}! Let's do a Duo Raid on Break The Loop right now!\n\nTap here to jump into my lobby:\n${inviteLink}`
+    );
+    window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
@@ -442,7 +498,7 @@ export default function Home() {
       });
 
       if (error) {
-        console.error('Matchmaking error detail:', error);
+        console.error('Matchmaking error:', error);
         alert(`Matchmaking error: ${error.message || JSON.stringify(error)}`);
         setIsSearching(false);
         return;
@@ -857,8 +913,38 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Choose Handle Modal */}
+      {showHandleModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="text-3xl">🏷️</div>
+            <h2 className="text-lg font-extrabold text-slate-100">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-xs text-slate-400">
+              Pick a unique handle so other Mumbaikars can recognize and add you to their squad!
+            </p>
+            <div className="relative">
+              <span className="absolute left-4 top-3 text-rose-400 font-bold text-sm">@</span>
+              <input
+                type="text"
+                placeholder="SS"
+                value={newHandleInput}
+                onChange={(e) => setNewHandleInput(e.target.value)}
+                maxLength={20}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-4 py-2.5 text-sm text-slate-100 font-bold focus:outline-none focus:border-rose-500"
+              />
+            </div>
+            <button
+              onClick={() => saveHandleDirect(newHandleInput || handle)}
+              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+            >
+              Claim Tag & Start
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Auth Modal */}
-      {(!isLoggedIn || showAuthModal) && (
+      {(!isLoggedIn || showAuthModal) && !showHandleModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
             {isLoggedIn && (
@@ -984,8 +1070,17 @@ export default function Home() {
               ) : (
                 friendsList.map((f, i) => (
                   <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
-                    <span className="font-bold text-rose-400">@{f}</span>
-                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">Met IRL ⚡</span>
+                    <div>
+                      <span className="font-bold text-rose-400">@{f}</span>
+                      <span className="block text-[9px] text-slate-500">Met IRL</span>
+                    </div>
+                    <button
+                      onClick={() => inviteFriendDirect(f)}
+                      className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 active:scale-95 transition-all"
+                    >
+                      <span>⚡</span>
+                      <span>Raid</span>
+                    </button>
                   </div>
                 ))
               )}
