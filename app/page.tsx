@@ -86,6 +86,7 @@ export default function Home() {
   const [lastPartnerUserId, setLastPartnerUserId] = useState<string | null>(null);
   const [isFriendAdded, setIsFriendAdded] = useState(false);
   const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
+  const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [showWrappedModal, setShowWrappedModal] = useState(false);
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
@@ -143,12 +144,42 @@ export default function Home() {
           loadOrCreateProfile(uid, email || 'guest@breaktheloop.app');
           fetchFriends(uid);
           listenForDirectInvites(uid);
+          initPresence(uid);
         } else {
           setIsLoggedIn(false);
         }
       });
     }
   }, []);
+
+  // Supabase Realtime Presence (Live Online/Offline Tracking)
+  const initPresence = (userId: string) => {
+    const presenceChannel = supabase.channel('global_presence', {
+      config: { presence: { key: userId } }
+    });
+
+    presenceChannel
+      .on('presence', { event: 'sync' }, () => {
+        const state = presenceChannel.presenceState();
+        const activeIds = new Set<string>(Object.keys(state));
+        setOnlineUserIds(activeIds);
+      })
+      .on('presence', { event: 'join' }, ({ key }) => {
+        setOnlineUserIds((prev) => new Set([...Array.from(prev), key]));
+      })
+      .on('presence', { event: 'leave' }, ({ key }) => {
+        setOnlineUserIds((prev) => {
+          const updated = new Set(prev);
+          updated.delete(key);
+          return updated;
+        });
+      })
+      .subscribe(async (status) => {
+        if (status === 'SUBSCRIBED') {
+          await presenceChannel.track({ online_at: new Date().toISOString() });
+        }
+      });
+  };
 
   // Listen for Live In-App Raid Invites
   const listenForDirectInvites = (userId: string) => {
@@ -250,7 +281,6 @@ export default function Home() {
       setShowFriendsModal(false);
       setTimeLeft(600);
       setMessages([]);
-      alert(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`);
     } catch (e) {
       console.log('Error sending direct raid invite:', e);
       alert('Could not send raid invite. Please try again.');
@@ -288,6 +318,7 @@ export default function Home() {
       loadOrCreateProfile(uid, 'guest@breaktheloop.app');
       fetchFriends(uid);
       listenForDirectInvites(uid);
+      initPresence(uid);
     }
   };
 
@@ -325,6 +356,7 @@ export default function Home() {
       loadOrCreateProfile(uid, emailInput);
       fetchFriends(uid);
       listenForDirectInvites(uid);
+      initPresence(uid);
     }
   };
 
@@ -1224,7 +1256,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Friends List Modal */}
+      {/* Friends List Modal with Realtime Online/Offline Status */}
       {showFriendsModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl relative">
@@ -1241,22 +1273,35 @@ export default function Home() {
               {friendsList.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "Add as Friend"!</p>
               ) : (
-                friendsList.map((f, i) => (
-                  <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
-                    <div>
-                      <span className="font-bold text-rose-400">@{f.handle}</span>
-                      <span className="block text-[9px] text-slate-500">Met IRL</span>
+                friendsList.map((f, i) => {
+                  const isOnline = onlineUserIds.has(f.friend_user_id);
+                  return (
+                    <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                      <div>
+                        <div className="flex items-center space-x-1.5">
+                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-600'}`} />
+                          <span className="font-bold text-rose-400">@{f.handle}</span>
+                        </div>
+                        <span className="block text-[9px] text-slate-500 pl-3.5">
+                          {isOnline ? 'Online in App' : 'Offline'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => sendDirectRaidInvite(f)}
+                        disabled={!isOnline || sendingInviteTo === f.handle}
+                        className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
+                          isOnline
+                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 active:scale-95'
+                            : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                        }`}
+                        title={isOnline ? 'Send Instant Raid Challenge' : 'User is currently offline'}
+                      >
+                        <span>⚡</span>
+                        <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Direct Raid' : 'Offline'}</span>
+                      </button>
                     </div>
-                    <button
-                      onClick={() => sendDirectRaidInvite(f)}
-                      disabled={sendingInviteTo === f.handle}
-                      className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 active:scale-95 transition-all disabled:opacity-50"
-                    >
-                      <span>⚡</span>
-                      <span>{sendingInviteTo === f.handle ? 'Sending...' : 'Direct Raid'}</span>
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
