@@ -38,6 +38,13 @@ interface FriendProfile {
   handle: string;
 }
 
+interface IncomingInvite {
+  id: string;
+  sender_handle: string;
+  room_id: string;
+  quest_text: string;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -57,6 +64,7 @@ export default function Home() {
 
   // Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [isGuest, setIsGuest] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
@@ -73,7 +81,7 @@ export default function Home() {
   // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
-  // Friends & Wrapped State
+  // Friends, Wrapped & Direct Raid State
   const [lastPartnerHandle, setLastPartnerHandle] = useState<string | null>(null);
   const [lastPartnerUserId, setLastPartnerUserId] = useState<string | null>(null);
   const [isFriendAdded, setIsFriendAdded] = useState(false);
@@ -81,6 +89,8 @@ export default function Home() {
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [showWrappedModal, setShowWrappedModal] = useState(false);
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
+  const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
+  const [sendingInviteTo, setSendingInviteTo] = useState<string | null>(null);
 
   // Notification State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -114,12 +124,14 @@ export default function Home() {
         setIsInviteSession(true);
         if (urlMode) setMode(urlMode as 'duo' | 'squad');
         if (urlQuest) setActiveQuest(decodeURIComponent(urlQuest));
-        setMatchedPartner('Joined Direct WhatsApp Lobby 🤝');
+        setMatchedPartner('Joined Direct Duo Lobby 🤝');
       }
 
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
           const email = session.user.email;
+          const uid = session.user.id;
+          setCurrentUserId(uid);
           if (email && email !== 'guest@breaktheloop.app') {
             setUserEmail(email);
             setIsGuest(false);
@@ -128,14 +140,124 @@ export default function Home() {
             setUserEmail('guest@breaktheloop.app');
           }
           setIsLoggedIn(true);
-          loadOrCreateProfile(session.user.id, email || 'guest@breaktheloop.app');
-          fetchFriends(session.user.id);
+          loadOrCreateProfile(uid, email || 'guest@breaktheloop.app');
+          fetchFriends(uid);
+          listenForDirectInvites(uid);
         } else {
           setIsLoggedIn(false);
         }
       });
     }
   }, []);
+
+  // Listen for Live In-App Raid Invites
+  const listenForDirectInvites = (userId: string) => {
+    supabase
+      .channel(`invites_${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'raid_invites',
+          filter: `receiver_user_id=eq.${userId}`
+        },
+        (payload: any) => {
+          if (payload.new && payload.new.status === 'pending') {
+            setIncomingInvite({
+              id: payload.new.id,
+              sender_handle: payload.new.sender_handle,
+              room_id: payload.new.room_id,
+              quest_text: payload.new.quest_text
+            });
+          }
+        }
+      )
+      .subscribe();
+  };
+
+  const acceptDirectInvite = async () => {
+    if (!incomingInvite) return;
+    try {
+      await supabase
+        .from('raid_invites')
+        .update({ status: 'accepted' })
+        .eq('id', incomingInvite.id);
+
+      setRoomId(incomingInvite.room_id);
+      setActiveQuest(incomingInvite.quest_text);
+      setMatchedPartner(`Direct Raid with @${incomingInvite.sender_handle} 🤝`);
+      setMode('duo');
+      setIsInviteSession(true);
+      setIsSearching(false);
+      setIncomingInvite(null);
+      setShowFriendsModal(false);
+      setTimeLeft(600);
+      setMessages([]);
+    } catch (e) {
+      console.log('Error accepting raid invite:', e);
+    }
+  };
+
+  const declineDirectInvite = async () => {
+    if (!incomingInvite) return;
+    try {
+      await supabase
+        .from('raid_invites')
+        .update({ status: 'declined' })
+        .eq('id', incomingInvite.id);
+      setIncomingInvite(null);
+    } catch (e) {
+      console.log('Error declining raid invite:', e);
+    }
+  };
+
+  const sendDirectRaidInvite = async (friend: FriendProfile) => {
+    if (!currentUserId) return;
+    setSendingInviteTo(friend.handle);
+
+    try {
+      const { data: quests } = await supabase
+        .from('quests')
+        .select('quest_text')
+        .eq('mode', 'duo')
+        .eq('is_active', true);
+
+      const chosenQuest =
+        quests && quests.length > 0
+          ? quests[Math.floor(Math.random() * quests.length)].quest_text
+          : 'Head to the nearest landmark or cafe together and complete a photo challenge!';
+
+      const newRoomId = `room_${Math.random().toString(36).substring(2, 9)}`;
+
+      await supabase.from('raid_invites').insert([
+        {
+          sender_user_id: currentUserId,
+          sender_handle: handle,
+          receiver_user_id: friend.friend_user_id,
+          room_id: newRoomId,
+          quest_text: chosenQuest,
+          status: 'pending'
+        }
+      ]);
+
+      setRoomId(newRoomId);
+      setActiveQuest(chosenQuest);
+      setMatchedPartner(`Challenged @${friend.handle} ⚡`);
+      setMode('duo');
+      setIsInviteSession(true);
+      setIsSearching(false);
+      setShowFriendsModal(false);
+      setTimeLeft(600);
+      setMessages([]);
+      alert(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`);
+    } catch (e) {
+      console.log('Error sending direct raid invite:', e);
+      alert('Could not send raid invite. Please try again.');
+    } finally {
+      setSendingInviteTo(null);
+    }
+  };
 
   const requestNotificationPermission = async () => {
     if (typeof window === 'undefined' || !('Notification' in window)) return;
@@ -157,12 +279,15 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else if (data.session?.user) {
+      const uid = data.session.user.id;
+      setCurrentUserId(uid);
       setUserEmail('guest@breaktheloop.app');
       setIsGuest(true);
       setIsLoggedIn(true);
       setShowAuthModal(false);
-      loadOrCreateProfile(data.session.user.id, 'guest@breaktheloop.app');
-      fetchFriends(data.session.user.id);
+      loadOrCreateProfile(uid, 'guest@breaktheloop.app');
+      fetchFriends(uid);
+      listenForDirectInvites(uid);
     }
   };
 
@@ -191,12 +316,15 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else if (data.session?.user) {
+      const uid = data.session.user.id;
+      setCurrentUserId(uid);
       setUserEmail(emailInput);
       setIsGuest(false);
       setIsLoggedIn(true);
       setShowAuthModal(false);
-      loadOrCreateProfile(data.session.user.id, emailInput);
-      fetchFriends(data.session.user.id);
+      loadOrCreateProfile(uid, emailInput);
+      fetchFriends(uid);
+      listenForDirectInvites(uid);
     }
   };
 
@@ -207,6 +335,7 @@ export default function Home() {
     }
     await supabase.auth.signOut();
     setUserEmail(null);
+    setCurrentUserId(null);
     setIsGuest(false);
     setIsLoggedIn(false);
     setIsOtpSent(false);
@@ -326,15 +455,6 @@ export default function Home() {
     } catch (e) {
       console.log('Add friend error:', e);
     }
-  };
-
-  const inviteFriendDirect = (friendHandle: string) => {
-    const friendRoom = `room_${Math.random().toString(36).substring(2, 9)}`;
-    const inviteLink = `https://breaktheloopapp.in/?room=${friendRoom}&mode=duo&quest=${encodeURIComponent('Rally at nearest landmark and complete this raid!')}`;
-    const text = encodeURIComponent(
-      `🔥 Hey @${friendHandle}! Let's do a Duo Raid on Break The Loop right now!\n\nTap here to jump into my lobby:\n${inviteLink}`
-    );
-    window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
@@ -595,16 +715,15 @@ export default function Home() {
         .from('quests')
         .select('quest_text')
         .eq('mode', mode)
-        .eq('city', 'mumbai')
         .eq('is_active', true);
 
       if (dbQuests && dbQuests.length > 0) {
         setActiveQuest(dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text);
       } else {
-        setActiveQuest("Rally nearby and complete a micro-mission!");
+        setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
       }
     } catch (e) {
-      setActiveQuest("Rally nearby and complete a micro-mission!");
+      setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
     }
   };
 
@@ -940,6 +1059,33 @@ export default function Home() {
         </div>
       </header>
 
+      {/* Incoming Live In-App Raid Invite Notification Banner */}
+      {incomingInvite && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-rose-950 border-2 border-rose-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(244,63,94,0.5)] animate-bounce text-center space-y-2">
+          <div className="text-2xl">⚡</div>
+          <h3 className="font-extrabold text-sm text-slate-100">
+            @{incomingInvite.sender_handle} challenged you to a Duo Raid!
+          </h3>
+          <p className="text-[11px] text-rose-200 italic">
+            "{incomingInvite.quest_text}"
+          </p>
+          <div className="flex space-x-2 pt-2">
+            <button
+              onClick={declineDirectInvite}
+              className="flex-1 bg-slate-900 text-slate-300 py-2 rounded-xl text-xs font-bold"
+            >
+              Decline
+            </button>
+            <button
+              onClick={acceptDirectInvite}
+              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/40"
+            >
+              Accept Raid 🔥
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Choose Handle Modal */}
       {showHandleModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
@@ -1102,11 +1248,12 @@ export default function Home() {
                       <span className="block text-[9px] text-slate-500">Met IRL</span>
                     </div>
                     <button
-                      onClick={() => inviteFriendDirect(f.handle)}
-                      className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 active:scale-95 transition-all"
+                      onClick={() => sendDirectRaidInvite(f)}
+                      disabled={sendingInviteTo === f.handle}
+                      className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 active:scale-95 transition-all disabled:opacity-50"
                     >
                       <span>⚡</span>
-                      <span>Raid</span>
+                      <span>{sendingInviteTo === f.handle ? 'Sending...' : 'Direct Raid'}</span>
                     </button>
                   </div>
                 ))
