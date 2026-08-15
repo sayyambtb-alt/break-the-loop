@@ -70,8 +70,8 @@ export default function Home() {
   const [newMessage, setNewMessage] = useState('');
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Presence Channel Ref
-  const presenceChannelRef = useRef<any>(null);
+  // Matchmaking channel ref (listens for the DB telling us we've been matched)
+  const matchChannelRef = useRef<any>(null);
   const mySessionIdRef = useRef<string>('');
 
   useEffect(() => {
@@ -98,11 +98,11 @@ export default function Home() {
     }
   }, []);
 
-  // Cleanup: leave any open presence channel if the page closes or unmounts
+  // Cleanup: drop any open matchmaking subscription if the page closes or unmounts
   useEffect(() => {
     return () => {
-      if (presenceChannelRef.current) {
-        supabase.removeChannel(presenceChannelRef.current);
+      if (matchChannelRef.current) {
+        supabase.removeChannel(matchChannelRef.current);
       }
     };
   }, []);
@@ -290,7 +290,7 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ==================== PRESENCE-BASED MATCHMAKING ENGINE ====================
+  // ==================== DATABASE-ATOMIC MATCHMAKING ====================
   const handleBreakLoop = async () => {
     setIsSearching(true);
     setProofImage(null);
@@ -325,66 +325,66 @@ export default function Home() {
         : "Rally at Shivaji Park outer circle and complete a micro-mission!";
     }
 
-    // Clear out any leftover channel from a previous/abandoned search first
-    if (presenceChannelRef.current) {
-      await supabase.removeChannel(presenceChannelRef.current);
-      presenceChannelRef.current = null;
+    if (matchChannelRef.current) {
+      await supabase.removeChannel(matchChannelRef.current);
+      matchChannelRef.current = null;
     }
 
-    const channel = supabase.channel(`presence_radar_${mode}`, {
-      config: { presence: { key: mySessionIdRef.current } }
+    const { data, error } = await supabase.rpc('find_or_create_match', {
+      p_session_key: mySessionIdRef.current,
+      p_mode: mode,
+      p_room_id: generatedRoom,
+      p_quest_text: questForRoom,
+      p_handle: handle
     });
 
-    presenceChannelRef.current = channel;
+    if (error) {
+      console.log('Matchmaking error:', error);
+      setIsSearching(false);
+      return;
+    }
 
-    channel
-      .on('presence', { event: 'sync' }, () => {
-        const state = channel.presenceState();
-        const now = Date.now();
+    const result = data && data[0];
 
-        // Only match someone who joined in the last 15 seconds — ignores stale ghost entries
-        const otherKey = Object.keys(state).find((k) => {
-          if (k === mySessionIdRef.current) return false;
-          const entry: any = state[k]?.[0];
-          return entry && now - (entry.joined_at || 0) < 15000;
-        });
+    if (result && result.matched) {
+      setRoomId(result.final_room_id);
+      setActiveQuest(result.final_quest_text);
+      setMatchedPartner(`Matched: Local Partner (@${result.partner_handle || 'Explorer'}) 🤝`);
+      setIsSearching(false);
+      return;
+    }
 
-        if (otherKey) {
-          const partnerData: any = state[otherKey][0];
-
-          // Deterministic Host Selection (Alphabetically lower key acts as Room Host)
-          const isHost = mySessionIdRef.current < otherKey;
-          const finalRoom = isHost ? generatedRoom : partnerData.room_id;
-          const finalQuest = isHost ? questForRoom : partnerData.quest_text;
-
-          setRoomId(finalRoom);
-          setActiveQuest(finalQuest);
-          setMatchedPartner(`Matched: Local Partner (@${partnerData.handle || 'Explorer'}) 🤝`);
-          setIsSearching(false);
-
-          channel.untrack();
-          supabase.removeChannel(channel);
-          presenceChannelRef.current = null;
+    const channel = supabase
+      .channel(`match_wait_${mySessionIdRef.current}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'matchmaking_queue',
+          filter: `session_key=eq.${mySessionIdRef.current}`
+        },
+        (payload) => {
+          const row: any = payload.new;
+          if (row.status === 'matched') {
+            setRoomId(row.matched_room_id);
+            setActiveQuest(row.quest_text);
+            setMatchedPartner(`Matched: Local Partner (@${row.partner_handle || 'Explorer'}) 🤝`);
+            setIsSearching(false);
+            supabase.removeChannel(channel);
+            matchChannelRef.current = null;
+          }
         }
-      })
-      .subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await channel.track({
-            session_id: mySessionIdRef.current,
-            room_id: generatedRoom,
-            quest_text: questForRoom,
-            handle: handle,
-            joined_at: Date.now()
-          });
-        }
-      });
+      )
+      .subscribe();
+
+    matchChannelRef.current = channel;
   };
 
   const cancelSearch = () => {
-    if (presenceChannelRef.current) {
-      presenceChannelRef.current.untrack();
-      supabase.removeChannel(presenceChannelRef.current);
-      presenceChannelRef.current = null;
+    if (matchChannelRef.current) {
+      supabase.removeChannel(matchChannelRef.current);
+      matchChannelRef.current = null;
     }
     setIsSearching(false);
   };
