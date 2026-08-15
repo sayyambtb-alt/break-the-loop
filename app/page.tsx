@@ -33,6 +33,11 @@ interface ChatMessage {
   created_at: string;
 }
 
+interface FriendProfile {
+  friend_user_id: string;
+  handle: string;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -70,8 +75,9 @@ export default function Home() {
 
   // Friends & Wrapped State
   const [lastPartnerHandle, setLastPartnerHandle] = useState<string | null>(null);
+  const [lastPartnerUserId, setLastPartnerUserId] = useState<string | null>(null);
   const [isFriendAdded, setIsFriendAdded] = useState(false);
-  const [friendsList, setFriendsList] = useState<string[]>([]);
+  const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
   const [showFriendsModal, setShowFriendsModal] = useState(false);
   const [showWrappedModal, setShowWrappedModal] = useState(false);
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
@@ -278,9 +284,21 @@ export default function Home() {
 
   const fetchFriends = async (userId: string) => {
     try {
-      const { data } = await supabase.from('friends').select('friend_handle').eq('user_id', userId);
-      if (data) {
-        setFriendsList(data.map((f) => f.friend_handle));
+      const { data: friendsRows } = await supabase.from('friends').select('friend_user_id').eq('user_id', userId);
+      if (friendsRows && friendsRows.length > 0) {
+        const friendIds = friendsRows.map((f) => f.friend_user_id);
+        const { data: profiles } = await supabase.from('profiles').select('device_id, handle').in('device_id', friendIds);
+        
+        const mappedList: FriendProfile[] = friendsRows.map((f) => {
+          const match = profiles?.find((p) => p.device_id === f.friend_user_id);
+          return {
+            friend_user_id: f.friend_user_id,
+            handle: match?.handle || 'Explorer'
+          };
+        });
+        setFriendsList(mappedList);
+      } else {
+        setFriendsList([]);
       }
     } catch (e) {
       console.log('Error fetching friends:', e);
@@ -288,16 +306,16 @@ export default function Home() {
   };
 
   const handleAddFriend = async () => {
-    if (!lastPartnerHandle) return;
+    if (!lastPartnerUserId) return;
     const { data: { session } } = await supabase.auth.getSession();
     const currentUserId = session?.user?.id || 'guest_user';
 
     try {
-      await supabase.from('friends').insert([
-        { user_id: currentUserId, friend_handle: lastPartnerHandle }
+      await supabase.from('friends').upsert([
+        { user_id: currentUserId, friend_user_id: lastPartnerUserId }
       ]);
       setIsFriendAdded(true);
-      setFriendsList((prev) => Array.from(new Set([...prev, lastPartnerHandle])));
+      fetchFriends(currentUserId);
     } catch (e) {
       console.log('Add friend error:', e);
     }
@@ -509,6 +527,7 @@ export default function Home() {
         setActiveQuest(matchResult.quest_text);
         const pHandle = matchResult.partner_handle || 'Explorer';
         setLastPartnerHandle(pHandle);
+        setLastPartnerUserId(matchResult.partner_user_id || null);
         setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
         setIsSearching(false);
       } else if (matchResult && matchResult.queue_id) {
@@ -530,6 +549,7 @@ export default function Home() {
                 setActiveQuest(payload.new.quest_text);
                 const pHandle = payload.new.matched_with_handle || 'Explorer';
                 setLastPartnerHandle(pHandle);
+                setLastPartnerUserId(payload.new.matched_with_user_id || null);
                 setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
                 setIsSearching(false);
                 supabase.removeChannel(queueChannel);
@@ -1071,11 +1091,11 @@ export default function Home() {
                 friendsList.map((f, i) => (
                   <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
                     <div>
-                      <span className="font-bold text-rose-400">@{f}</span>
+                      <span className="font-bold text-rose-400">@{f.handle}</span>
                       <span className="block text-[9px] text-slate-500">Met IRL</span>
                     </div>
                     <button
-                      onClick={() => inviteFriendDirect(f)}
+                      onClick={() => inviteFriendDirect(f.handle)}
                       className="bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 active:scale-95 transition-all"
                     >
                       <span>⚡</span>
