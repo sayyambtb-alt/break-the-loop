@@ -223,17 +223,17 @@ export default function Home() {
           setHandle(data.handle);
           if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', data.handle);
         }
-        setStreak(data.streak);
-        setSavedMins(data.time_saved_mins);
+        setStreak(data.streak || 1);
+        setSavedMins(data.time_saved_mins || 15);
         if (data.badges) setBadges(data.badges);
         if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
           setShowHandleModal(true);
         }
       } else {
         const defaultHandle = email.split('@')[0] || 'Explorer';
-        await supabase.from('profiles').insert([
-          { device_id: userId, handle: defaultHandle, streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'], phone: email }
-        ]);
+        await supabase.from('profiles').upsert([
+          { device_id: userId, handle: defaultHandle, streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'] }
+        ], { onConflict: 'device_id' });
         setHandle(defaultHandle);
         if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', defaultHandle);
         if (email !== 'guest@breaktheloop.app') {
@@ -257,7 +257,10 @@ export default function Home() {
     const userId = session?.user?.id;
     if (userId) {
       try {
-        await supabase.from('profiles').update({ handle: cleaned }).eq('device_id', userId);
+        await supabase.from('profiles').upsert(
+          { device_id: userId, handle: cleaned },
+          { onConflict: 'device_id' }
+        );
       } catch (e) {
         console.log('Handle update error:', e);
       }
@@ -275,7 +278,10 @@ export default function Home() {
     const userId = session?.user?.id;
     if (userId) {
       try {
-        await supabase.from('profiles').update({ handle: cleaned }).eq('device_id', userId);
+        await supabase.from('profiles').upsert(
+          { device_id: userId, handle: cleaned },
+          { onConflict: 'device_id' }
+        );
       } catch (e) {
         console.log('Handle update error:', e);
       }
@@ -311,9 +317,10 @@ export default function Home() {
     const currentUserId = session?.user?.id || 'guest_user';
 
     try {
-      await supabase.from('friends').upsert([
-        { user_id: currentUserId, friend_user_id: lastPartnerUserId }
-      ]);
+      await supabase.from('friends').upsert(
+        { user_id: currentUserId, friend_user_id: lastPartnerUserId },
+        { onConflict: 'user_id, friend_user_id' }
+      );
       setIsFriendAdded(true);
       fetchFriends(currentUserId);
     } catch (e) {
@@ -946,7 +953,7 @@ export default function Home() {
               <span className="absolute left-4 top-3 text-rose-400 font-bold text-sm">@</span>
               <input
                 type="text"
-                placeholder="SS"
+                placeholder="ExplorerTag"
                 value={newHandleInput}
                 onChange={(e) => setNewHandleInput(e.target.value)}
                 maxLength={20}
