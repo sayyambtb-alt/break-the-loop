@@ -52,6 +52,7 @@ export default function Home() {
 
   // Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [isGuest, setIsGuest] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authModalReason, setAuthModalReason] = useState<string>('');
@@ -95,7 +96,6 @@ export default function Home() {
         setMatchedPartner('Joined Direct WhatsApp Lobby 🤝');
       }
 
-      // Check existing session
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session?.user) {
           const email = session.user.email;
@@ -104,8 +104,12 @@ export default function Home() {
             setIsGuest(false);
           } else {
             setIsGuest(true);
+            setUserEmail('guest@breaktheloop.app');
           }
+          setIsLoggedIn(true);
           loadOrCreateProfile(session.user.id, email || 'guest@breaktheloop.app');
+        } else {
+          setIsLoggedIn(false);
         }
       });
     }
@@ -133,6 +137,7 @@ export default function Home() {
     } else if (data.session?.user) {
       setUserEmail('guest@breaktheloop.app');
       setIsGuest(true);
+      setIsLoggedIn(true);
       setShowAuthModal(false);
       loadOrCreateProfile(data.session.user.id, 'guest@breaktheloop.app');
     }
@@ -165,6 +170,7 @@ export default function Home() {
     } else if (data.session?.user) {
       setUserEmail(emailInput);
       setIsGuest(false);
+      setIsLoggedIn(true);
       setShowAuthModal(false);
       loadOrCreateProfile(data.session.user.id, emailInput);
     }
@@ -178,6 +184,7 @@ export default function Home() {
     await supabase.auth.signOut();
     setUserEmail(null);
     setIsGuest(false);
+    setIsLoggedIn(false);
     setIsOtpSent(false);
     setOtpInput('');
     setEmailInput('');
@@ -213,7 +220,6 @@ export default function Home() {
     }
   };
 
-  // Mode Selection with Guest Gating
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
     if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
       setAuthModalReason(`Verify your email to match with other Mumbaikars in ${selectedMode.toUpperCase()} mode.`);
@@ -263,7 +269,6 @@ export default function Home() {
     }
   };
 
-  // Reporting Content
   const handleReport = async (type: 'chat' | 'feed', targetId: string) => {
     const reason = window.prompt('Please specify the reason for reporting this content:');
     if (!reason || !reason.trim()) return;
@@ -283,7 +288,6 @@ export default function Home() {
     }
   };
 
-  // Live Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -304,7 +308,6 @@ export default function Home() {
     };
   }, [activeQuest, mode, roomId]);
 
-  // Send Chat Message with 3-Second Rate Limit
   const sendMessage = async () => {
     const trimmed = newMessage.trim();
     if (!trimmed) return;
@@ -353,7 +356,6 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Matchmaking Flow
   const onStartMatchingClick = () => {
     if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
       setAuthModalReason(`Verify your email to match with other Mumbaikars in ${mode.toUpperCase()} mode.`);
@@ -718,20 +720,24 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Auth Modal (Gated for Duo/Squad or Sign In) */}
-      {showAuthModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+      {/* Main Authentication Gate (Shows if not logged in OR triggered via Gating) */}
+      {(!isLoggedIn || showAuthModal) && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
-            <button
-              onClick={() => setShowAuthModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
-            >
-              ✕
-            </button>
+            {isLoggedIn && (
+              <button
+                onClick={() => setShowAuthModal(false)}
+                className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+              >
+                ✕
+              </button>
+            )}
             <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-slate-100">EMAIL VERIFICATION</h2>
+            <h2 className="text-xl font-extrabold text-slate-100">
+              {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
+            </h2>
             <p className="text-xs text-slate-400">
-              {authModalReason || 'Enter your email to verify your account and save your streaks.'}
+              {authModalReason || 'Enter your email to save streaks or jump in immediately as a guest.'}
             </p>
 
             {authError && (
