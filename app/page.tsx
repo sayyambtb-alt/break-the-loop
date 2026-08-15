@@ -52,10 +52,16 @@ export default function Home() {
 
   // Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [isGuest, setIsGuest] = useState<boolean>(false);
+  const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
+  const [authModalReason, setAuthModalReason] = useState<string>('');
   const [emailInput, setEmailInput] = useState('');
   const [otpInput, setOtpInput] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [authError, setAuthError] = useState('');
+
+  // Safety Modal State
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
 
   // Notification State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -65,24 +71,17 @@ export default function Home() {
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
 
-  // Chat State
+  // Chat & Moderation State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [lastMessageSentTime, setLastMessageSentTime] = useState<number>(0);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Matchmaking channel ref (listens for the DB telling us we've been matched)
-  const matchChannelRef = useRef<any>(null);
-  const mySessionIdRef = useRef<string>('');
+  const queueSubscriptionRef = useRef<any>(null);
+  const myQueueEntryIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      let sessionKey = sessionStorage.getItem('btl_presence_key');
-      if (!sessionKey) {
-        sessionKey = `peer_${Math.random().toString(36).substring(2, 10)}`;
-        sessionStorage.setItem('btl_presence_key', sessionKey);
-      }
-      mySessionIdRef.current = sessionKey;
-
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
       const urlMode = params.get('mode');
@@ -95,16 +94,21 @@ export default function Home() {
         if (urlQuest) setActiveQuest(decodeURIComponent(urlQuest));
         setMatchedPartner('Joined Direct WhatsApp Lobby 🤝');
       }
-    }
-  }, []);
 
-  // Cleanup: drop any open matchmaking subscription if the page closes or unmounts
-  useEffect(() => {
-    return () => {
-      if (matchChannelRef.current) {
-        supabase.removeChannel(matchChannelRef.current);
-      }
-    };
+      // Check existing session
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          const email = session.user.email;
+          if (email && email !== 'guest@breaktheloop.app') {
+            setUserEmail(email);
+            setIsGuest(false);
+          } else {
+            setIsGuest(true);
+          }
+          loadOrCreateProfile(session.user.id, email || 'guest@breaktheloop.app');
+        }
+      });
+    }
   }, []);
 
   const requestNotificationPermission = async () => {
@@ -112,6 +116,10 @@ export default function Home() {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       setNotificationsEnabled(true);
+      new Notification('Break The Loop 🔥', {
+        body: 'Daily reminders active! Get ready to destroy boredom.',
+        icon: '/icon.png'
+      });
     }
   };
 
@@ -124,6 +132,8 @@ export default function Home() {
       setAuthError(error.message);
     } else if (data.session?.user) {
       setUserEmail('guest@breaktheloop.app');
+      setIsGuest(true);
+      setShowAuthModal(false);
       loadOrCreateProfile(data.session.user.id, 'guest@breaktheloop.app');
     }
   };
@@ -150,9 +160,12 @@ export default function Home() {
       token: otpInput.trim(),
       type: 'email'
     });
-    if (error) setAuthError(error.message);
-    else if (data.session?.user) {
+    if (error) {
+      setAuthError(error.message);
+    } else if (data.session?.user) {
       setUserEmail(emailInput);
+      setIsGuest(false);
+      setShowAuthModal(false);
       loadOrCreateProfile(data.session.user.id, emailInput);
     }
   };
@@ -164,6 +177,7 @@ export default function Home() {
     }
     await supabase.auth.signOut();
     setUserEmail(null);
+    setIsGuest(false);
     setIsOtpSent(false);
     setOtpInput('');
     setEmailInput('');
@@ -183,7 +197,7 @@ export default function Home() {
         ]);
       }
     } catch (e) {
-      console.log('Profile setup:', e);
+      console.log('Profile setup error:', e);
     }
   };
 
@@ -197,6 +211,21 @@ export default function Home() {
     } catch (e) {
       console.log('Handle update error:', e);
     }
+  };
+
+  // Mode Selection with Guest Gating
+  const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
+    if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
+      setAuthModalReason(`Verify your email to match with other Mumbaikars in ${selectedMode.toUpperCase()} mode.`);
+      setShowAuthModal(true);
+      return;
+    }
+
+    setMode(selectedMode);
+    setActiveQuest(null);
+    setProofImage(null);
+    setIsCompleted(false);
+    setIsInviteSession(false);
   };
 
   useEffect(() => {
@@ -234,7 +263,27 @@ export default function Home() {
     }
   };
 
-  // Realtime Live Chat Subscription
+  // Reporting Content
+  const handleReport = async (type: 'chat' | 'feed', targetId: string) => {
+    const reason = window.prompt('Please specify the reason for reporting this content:');
+    if (!reason || !reason.trim()) return;
+
+    try {
+      await supabase.from('reports').insert([
+        {
+          reporter_handle: handle,
+          reported_type: type,
+          target_id: targetId,
+          reason: reason.trim()
+        }
+      ]);
+      alert('Report submitted. Our team will review this shortly.');
+    } catch (e) {
+      console.log('Report error:', e);
+    }
+  };
+
+  // Live Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
@@ -255,13 +304,27 @@ export default function Home() {
     };
   }, [activeQuest, mode, roomId]);
 
+  // Send Chat Message with 3-Second Rate Limit
   const sendMessage = async () => {
-    if (!newMessage.trim()) return;
-    const msgText = newMessage.trim();
+    const trimmed = newMessage.trim();
+    if (!trimmed) return;
+
+    const now = Date.now();
+    if (now - lastMessageSentTime < 3000) {
+      alert('Please wait 3 seconds before sending another message.');
+      return;
+    }
+
+    if (trimmed.length > 300) {
+      alert('Message must be 300 characters or fewer.');
+      return;
+    }
+
+    setLastMessageSentTime(now);
     setNewMessage('');
     try {
       await supabase.from('mission_messages').insert([
-        { room_id: roomId, sender_handle: handle, message: msgText }
+        { room_id: roomId, sender_handle: handle, message: trimmed }
       ]);
     } catch (e) {
       console.log('Error sending message:', e);
@@ -290,8 +353,23 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ==================== DATABASE-ATOMIC MATCHMAKING ====================
-  const handleBreakLoop = async () => {
+  // Matchmaking Flow
+  const onStartMatchingClick = () => {
+    if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
+      setAuthModalReason(`Verify your email to match with other Mumbaikars in ${mode.toUpperCase()} mode.`);
+      setShowAuthModal(true);
+      return;
+    }
+
+    if (mode !== 'solo' && !isInviteSession) {
+      setShowSafetyModal(true);
+    } else {
+      executeMatchmaking();
+    }
+  };
+
+  const executeMatchmaking = async () => {
+    setShowSafetyModal(false);
     setIsSearching(true);
     setProofImage(null);
     setIsCompleted(false);
@@ -311,80 +389,73 @@ export default function Home() {
       return;
     }
 
-    let questForRoom = activeQuest;
-    if (!questForRoom) {
-      const { data: dbQuests } = await supabase
-        .from('quests')
-        .select('quest_text')
-        .eq('mode', mode)
-        .eq('city', 'mumbai')
-        .eq('is_active', true);
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUserId = session?.user?.id || 'guest_user';
 
-      questForRoom = dbQuests && dbQuests.length > 0
-        ? dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text
-        : "Rally at Shivaji Park outer circle and complete a micro-mission!";
-    }
+    try {
+      const { data: matchResult, error } = await supabase.rpc('find_or_create_match', {
+        p_user_id: currentUserId,
+        p_mode: mode,
+        p_handle: handle,
+        p_city: 'mumbai'
+      });
 
-    if (matchChannelRef.current) {
-      await supabase.removeChannel(matchChannelRef.current);
-      matchChannelRef.current = null;
-    }
+      if (error) {
+        console.error('Matchmaking error:', error);
+        await pickRandomQuest();
+        setIsSearching(false);
+        return;
+      }
 
-    const { data, error } = await supabase.rpc('find_or_create_match', {
-      p_session_key: mySessionIdRef.current,
-      p_mode: mode,
-      p_room_id: generatedRoom,
-      p_quest_text: questForRoom,
-      p_handle: handle
-    });
+      if (matchResult && matchResult.matched) {
+        setRoomId(matchResult.room_id);
+        setActiveQuest(matchResult.quest_text);
+        setMatchedPartner(`Matched: Local Partner (@${matchResult.partner_handle || 'Explorer'}) 🤝`);
+        setIsSearching(false);
+      } else if (matchResult && matchResult.queue_id) {
+        myQueueEntryIdRef.current = matchResult.queue_id;
 
-    if (error) {
-      console.log('Matchmaking error:', error);
+        const queueChannel = supabase
+          .channel(`queue_${matchResult.queue_id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'matchmaking_queue',
+              filter: `id=eq.${matchResult.queue_id}`
+            },
+            (payload: any) => {
+              if (payload.new && payload.new.status === 'matched') {
+                setRoomId(payload.new.room_id);
+                setActiveQuest(payload.new.quest_text);
+                setMatchedPartner(`Matched: Local Partner (@${payload.new.matched_with_handle || 'Explorer'}) 🤝`);
+                setIsSearching(false);
+                supabase.removeChannel(queueChannel);
+              }
+            }
+          )
+          .subscribe();
+
+        queueSubscriptionRef.current = queueChannel;
+      }
+    } catch (err) {
+      console.error('Catastrophic match error:', err);
+      await pickRandomQuest();
       setIsSearching(false);
-      return;
     }
-
-    const result = data && data[0];
-
-    if (result && result.matched) {
-      setRoomId(result.final_room_id);
-      setActiveQuest(result.final_quest_text);
-      setMatchedPartner(`Matched: Local Partner (@${result.partner_handle || 'Explorer'}) 🤝`);
-      setIsSearching(false);
-      return;
-    }
-
-    const channel = supabase
-      .channel(`match_wait_${mySessionIdRef.current}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'matchmaking_queue',
-          filter: `session_key=eq.${mySessionIdRef.current}`
-        },
-        (payload) => {
-          const row: any = payload.new;
-          if (row.status === 'matched') {
-            setRoomId(row.matched_room_id);
-            setActiveQuest(row.quest_text);
-            setMatchedPartner(`Matched: Local Partner (@${row.partner_handle || 'Explorer'}) 🤝`);
-            setIsSearching(false);
-            supabase.removeChannel(channel);
-            matchChannelRef.current = null;
-          }
-        }
-      )
-      .subscribe();
-
-    matchChannelRef.current = channel;
   };
 
-  const cancelSearch = () => {
-    if (matchChannelRef.current) {
-      supabase.removeChannel(matchChannelRef.current);
-      matchChannelRef.current = null;
+  const cancelSearch = async () => {
+    if (queueSubscriptionRef.current) {
+      supabase.removeChannel(queueSubscriptionRef.current);
+    }
+    if (myQueueEntryIdRef.current) {
+      try {
+        await supabase.from('matchmaking_queue').delete().eq('id', myQueueEntryIdRef.current);
+      } catch (e) {
+        console.log('Error cleaning queue entry:', e);
+      }
     }
     setIsSearching(false);
   };
@@ -401,10 +472,10 @@ export default function Home() {
       if (dbQuests && dbQuests.length > 0) {
         setActiveQuest(dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text);
       } else {
-        setActiveQuest("Rally at Shivaji Park outer circle and complete a micro-mission!");
+        setActiveQuest("Rally nearby and complete a micro-mission!");
       }
     } catch (e) {
-      setActiveQuest("Rally at Shivaji Park outer circle and complete a micro-mission!");
+      setActiveQuest("Rally nearby and complete a micro-mission!");
     }
   };
 
@@ -425,7 +496,6 @@ export default function Home() {
         });
 
       if (uploadError) {
-        console.error('Upload Error:', uploadError);
         const reader = new FileReader();
         reader.onloadend = () => setProofImage(reader.result as string);
         reader.readAsDataURL(file);
@@ -434,7 +504,7 @@ export default function Home() {
         setProofImage(data.publicUrl);
       }
     } catch (err) {
-      console.error('Catastrophic upload error:', err);
+      console.error('Upload error:', err);
     } finally {
       setUploading(false);
     }
@@ -442,20 +512,10 @@ export default function Home() {
 
   const evaluateBadges = (currentStreak: number, currentSavedMins: number, currentMode: string, existingBadges: string[]) => {
     const updated = [...existingBadges];
-
-    if (currentStreak >= 3 && !updated.includes('🔥 3-Day Streak')) {
-      updated.push('🔥 3-Day Streak');
-    }
-    if (currentSavedMins >= 60 && !updated.includes('⚡ 1 Hour Saved')) {
-      updated.push('⚡ 1 Hour Saved');
-    }
-    if (currentMode === 'duo' && !updated.includes('🤝 Duo Tactician')) {
-      updated.push('🤝 Duo Tactician');
-    }
-    if (currentMode === 'squad' && !updated.includes('👑 Squad Leader')) {
-      updated.push('👑 Squad Leader');
-    }
-
+    if (currentStreak >= 3 && !updated.includes('🔥 3-Day Streak')) updated.push('🔥 3-Day Streak');
+    if (currentSavedMins >= 60 && !updated.includes('⚡ 1 Hour Saved')) updated.push('⚡ 1 Hour Saved');
+    if (currentMode === 'duo' && !updated.includes('🤝 Duo Tactician')) updated.push('🤝 Duo Tactician');
+    if (currentMode === 'squad' && !updated.includes('👑 Squad Leader')) updated.push('👑 Squad Leader');
     return updated;
   };
 
@@ -613,7 +673,6 @@ export default function Home() {
         a.click();
       }
     } catch (e) {
-      console.log('Sharing failed, downloading fallback:', e);
       const a = document.createElement('a');
       a.href = cardDataUrl;
       a.download = 'break-the-loop-story.png';
@@ -659,12 +718,21 @@ export default function Home() {
         </div>
       </header>
 
-      {!userEmail && (
+      {/* Auth Modal (Gated for Duo/Squad or Sign In) */}
+      {showAuthModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
+            <button
+              onClick={() => setShowAuthModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
             <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-slate-100">JOIN BREAK THE LOOP</h2>
-            <p className="text-xs text-slate-400">Enter your email or continue as a guest to save your streaks.</p>
+            <h2 className="text-xl font-extrabold text-slate-100">EMAIL VERIFICATION</h2>
+            <p className="text-xs text-slate-400">
+              {authModalReason || 'Enter your email to verify your account and save your streaks.'}
+            </p>
 
             {authError && (
               <p className="text-xs text-rose-400 bg-rose-500/10 p-2 rounded-xl font-medium">{authError}</p>
@@ -695,7 +763,7 @@ export default function Home() {
                   onClick={handleGuestLogin}
                   className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
                 >
-                  ⚡ Continue as Guest
+                  ⚡ Continue as Guest (Solo Mode Only)
                 </button>
               </div>
             ) : (
@@ -725,20 +793,42 @@ export default function Home() {
         </div>
       )}
 
+      {/* Safety Disclaimer Modal */}
+      {showSafetyModal && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="text-3xl">🛡️</div>
+            <h2 className="text-lg font-extrabold text-slate-100">SAFETY FIRST</h2>
+            <div className="text-xs text-slate-300 text-left space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+              <p>• <strong>Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
+              <p>• <strong>Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
+              <p>• <strong>Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
+            </div>
+            <div className="flex space-x-2 pt-2">
+              <button
+                onClick={() => setShowSafetyModal(false)}
+                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl font-bold text-xs"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={executeMatchmaking}
+                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-rose-600/30"
+              >
+                I Agree & Search
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-6">
           <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
                 key={m}
-                onClick={() => {
-                  if (isSearching) cancelSearch();
-                  setMode(m);
-                  setActiveQuest(null);
-                  setProofImage(null);
-                  setIsCompleted(false);
-                  setIsInviteSession(false);
-                }}
+                onClick={() => handleSelectMode(m)}
                 className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
                   mode === m
                     ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
@@ -753,7 +843,7 @@ export default function Home() {
           {!activeQuest && !isCompleted && (
             <div className="flex flex-col items-center space-y-6">
               <button
-                onClick={handleBreakLoop}
+                onClick={onStartMatchingClick}
                 disabled={isSearching}
                 className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
                   isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
@@ -775,7 +865,7 @@ export default function Home() {
               <div className="text-center space-y-2 max-w-xs">
                 <p className="text-xs text-slate-500">
                   {isSearching
-                    ? `Live Realtime Presence Radar active for ${mode.toUpperCase()} partners...`
+                    ? `Searching live queue for nearby ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
                 </p>
 
@@ -836,16 +926,27 @@ export default function Home() {
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Tap "Invite Friend" above to bring a partner in!</p>
+                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
                     ) : (
-                      messages.map((m, i) => (
-                        <div key={i} className={`bg-slate-900 p-2 rounded-xl border ${m.sender_handle === 'System' ? 'border-emerald-500/30' : 'border-slate-800/80'}`}>
-                          <span className={`text-[10px] font-bold ${m.sender_handle === 'System' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {m.sender_handle === 'System' ? '🤖 System: ' : `@${m.sender_handle}: `}
-                          </span>
-                          <span className={m.sender_handle === 'System' ? 'text-emerald-200 font-semibold italic' : 'text-slate-300'}>
-                            {m.message}
-                          </span>
+                      messages.map((m) => (
+                        <div key={m.id || Math.random()} className="bg-slate-900 p-2 rounded-xl border border-slate-800/80 flex justify-between items-start">
+                          <div>
+                            <span className="text-[10px] font-bold text-rose-400">
+                              @{m.sender_handle}: 
+                            </span>
+                            <span className="text-slate-300 ml-1">
+                              {m.message}
+                            </span>
+                          </div>
+                          {m.sender_handle !== handle && (
+                            <button
+                              onClick={() => handleReport('chat', m.id || m.message)}
+                              className="text-[9px] text-slate-600 hover:text-rose-400 pl-2"
+                              title="Report message"
+                            >
+                              🚩
+                            </button>
+                          )}
                         </div>
                       ))
                     )}
@@ -854,7 +955,8 @@ export default function Home() {
                   <div className="flex space-x-2 pt-1">
                     <input
                       type="text"
-                      placeholder="Say something..."
+                      placeholder="Say something (max 300 chars)..."
+                      maxLength={300}
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
@@ -955,7 +1057,16 @@ export default function Home() {
                       <span className="text-xs font-bold text-rose-400">
                         @{item.user_id || 'Explorer'}
                       </span>
-                      <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
+                        <button
+                          onClick={() => handleReport('feed', item.id)}
+                          className="text-[10px] text-slate-600 hover:text-rose-400"
+                          title="Report post"
+                        >
+                          🚩
+                        </button>
+                      </div>
                     </div>
                     <p className="text-xs text-slate-200 italic font-medium">"{item.quest_text}"</p>
 
@@ -1008,13 +1119,25 @@ export default function Home() {
             </button>
           )}
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] text-slate-500">{userEmail ? `User: ${userEmail}` : 'Tap to edit handle'}</span>
-            {userEmail && (
+            <span className="text-[10px] text-slate-500">
+              {userEmail && userEmail !== 'guest@breaktheloop.app' ? `User: ${userEmail}` : 'Guest Mode'}
+            </span>
+            {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
                 onClick={handleSignOut}
                 className="text-[10px] text-rose-400 hover:underline font-semibold"
               >
                 Sign Out
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthModalReason('');
+                  setShowAuthModal(true);
+                }}
+                className="text-[10px] text-emerald-400 hover:underline font-semibold"
+              >
+                Verify Email
               </button>
             )}
           </div>
