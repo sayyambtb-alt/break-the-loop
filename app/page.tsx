@@ -64,6 +64,14 @@ export default function Home() {
   // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
+  // Friends & Wrapped State
+  const [lastPartnerHandle, setLastPartnerHandle] = useState<string | null>(null);
+  const [isFriendAdded, setIsFriendAdded] = useState(false);
+  const [friendsList, setFriendsList] = useState<string[]>([]);
+  const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [showWrappedModal, setShowWrappedModal] = useState(false);
+  const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
+
   // Notification State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
 
@@ -108,6 +116,7 @@ export default function Home() {
           }
           setIsLoggedIn(true);
           loadOrCreateProfile(session.user.id, email || 'guest@breaktheloop.app');
+          fetchFriends(session.user.id);
         } else {
           setIsLoggedIn(false);
         }
@@ -140,6 +149,7 @@ export default function Home() {
       setIsLoggedIn(true);
       setShowAuthModal(false);
       loadOrCreateProfile(data.session.user.id, 'guest@breaktheloop.app');
+      fetchFriends(data.session.user.id);
     }
   };
 
@@ -173,6 +183,7 @@ export default function Home() {
       setIsLoggedIn(true);
       setShowAuthModal(false);
       loadOrCreateProfile(data.session.user.id, emailInput);
+      fetchFriends(data.session.user.id);
     }
   };
 
@@ -205,6 +216,33 @@ export default function Home() {
       }
     } catch (e) {
       console.log('Profile setup error:', e);
+    }
+  };
+
+  const fetchFriends = async (userId: string) => {
+    try {
+      const { data } = await supabase.from('friends').select('friend_handle').eq('user_id', userId);
+      if (data) {
+        setFriendsList(data.map((f) => f.friend_handle));
+      }
+    } catch (e) {
+      console.log('Error fetching friends:', e);
+    }
+  };
+
+  const handleAddFriend = async () => {
+    if (!lastPartnerHandle) return;
+    const { data: { session } } = await supabase.auth.getSession();
+    const currentUserId = session?.user?.id || 'guest_user';
+
+    try {
+      await supabase.from('friends').insert([
+        { user_id: currentUserId, friend_handle: lastPartnerHandle }
+      ]);
+      setIsFriendAdded(true);
+      setFriendsList((prev) => Array.from(new Set([...prev, lastPartnerHandle])));
+    } catch (e) {
+      console.log('Add friend error:', e);
     }
   };
 
@@ -376,6 +414,7 @@ export default function Home() {
     setProofImage(null);
     setIsCompleted(false);
     setCardDataUrl(null);
+    setIsFriendAdded(false);
     setMessages([]);
     setTimeLeft(600);
 
@@ -412,7 +451,9 @@ export default function Home() {
       if (matchResult && matchResult.matched) {
         setRoomId(matchResult.room_id);
         setActiveQuest(matchResult.quest_text);
-        setMatchedPartner(`Matched: Local Partner (@${matchResult.partner_handle || 'Explorer'}) 🤝`);
+        const pHandle = matchResult.partner_handle || 'Explorer';
+        setLastPartnerHandle(pHandle);
+        setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
         setIsSearching(false);
       } else if (matchResult && matchResult.queue_id) {
         myQueueEntryIdRef.current = matchResult.queue_id;
@@ -431,7 +472,9 @@ export default function Home() {
               if (payload.new && payload.new.status === 'matched') {
                 setRoomId(payload.new.room_id);
                 setActiveQuest(payload.new.quest_text);
-                setMatchedPartner(`Matched: Local Partner (@${payload.new.matched_with_handle || 'Explorer'}) 🤝`);
+                const pHandle = payload.new.matched_with_handle || 'Explorer';
+                setLastPartnerHandle(pHandle);
+                setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
                 setIsSearching(false);
                 supabase.removeChannel(queueChannel);
               }
@@ -610,6 +653,109 @@ export default function Home() {
     setCardDataUrl(canvas.toDataURL('image/png'));
   };
 
+  const generateSpotifyWrappedCard = () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1080;
+    canvas.height = 1920;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Spotify-Wrapped Neon Gradient Background
+    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
+    bgGradient.addColorStop(0, '#0f172a');
+    bgGradient.addColorStop(0.3, '#1e1b4b');
+    bgGradient.addColorStop(0.7, '#881337');
+    bgGradient.addColorStop(1, '#020617');
+    ctx.fillStyle = bgGradient;
+    ctx.fillRect(0, 0, 1080, 1920);
+
+    // Decorative Neon Glows
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+    ctx.beginPath();
+    ctx.arc(200, 300, 250, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
+    ctx.beginPath();
+    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Top Header
+    ctx.fillStyle = '#f43f5e';
+    ctx.font = '900 48px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('BREAK THE LOOP', 540, 200);
+
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '700 32px sans-serif';
+    ctx.fillText('YOUR MONTHLY IRL RECAP 🎧', 540, 260);
+
+    // Big Headline Box
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.roundRect(100, 340, 880, 1250, 40);
+    ctx.fill();
+    ctx.stroke();
+
+    // Title
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '900 56px sans-serif';
+    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '500 30px sans-serif';
+    ctx.fillText('While Mumbai was stuck scrolling reels...', 540, 520);
+
+    // Stat 1: Time Saved
+    const hoursSaved = (savedMins / 60).toFixed(1);
+    ctx.fillStyle = '#f43f5e';
+    ctx.font = '900 90px sans-serif';
+    ctx.fillText(`${savedMins} MINS`, 540, 680);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 32px sans-serif';
+    ctx.fillText(`⚡ Approx ${hoursSaved} hrs reclaimed from screen addiction`, 540, 740);
+
+    // Stat 2: Streak
+    ctx.fillStyle = '#38bdf8';
+    ctx.font = '900 80px sans-serif';
+    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 32px sans-serif';
+    ctx.fillText('🔥 Top 5% Spontaneous Mumbaikar', 540, 960);
+
+    // Stat 3: Top Badge
+    const topBadge = badges[badges.length - 1] || '🌱 First Step';
+    ctx.fillStyle = '#fbbf24';
+    ctx.font = '900 64px sans-serif';
+    ctx.fillText(topBadge, 540, 1120);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 30px sans-serif';
+    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
+
+    // Stat 4: Squad Connections
+    ctx.fillStyle = '#a855f7';
+    ctx.font = '900 64px sans-serif';
+    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
+    ctx.fillStyle = '#cbd5e1';
+    ctx.font = '600 30px sans-serif';
+    ctx.fillText('🤝 Met IRL in the Real World', 540, 1400);
+
+    // Footer Attribution
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = '800 42px sans-serif';
+    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
+
+    ctx.fillStyle = '#64748b';
+    ctx.font = '600 30px sans-serif';
+    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
+
+    const url = canvas.toDataURL('image/png');
+    setWrappedCardDataUrl(url);
+    setShowWrappedModal(true);
+  };
+
   const handleCompleteMission = async () => {
     confetti({
       particleCount: 120,
@@ -655,11 +801,11 @@ export default function Home() {
     }
   };
 
-  const handleShareCard = async () => {
-    if (!cardDataUrl) return;
+  const handleShareCard = async (imgUrl: string | null) => {
+    if (!imgUrl) return;
 
     try {
-      const blob = await (await fetch(cardDataUrl)).blob();
+      const blob = await (await fetch(imgUrl)).blob();
       const file = new File([blob], 'break-the-loop.png', { type: 'image/png' });
 
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -670,14 +816,14 @@ export default function Home() {
         });
       } else {
         const a = document.createElement('a');
-        a.href = cardDataUrl;
-        a.download = 'break-the-loop-story.png';
+        a.href = imgUrl;
+        a.download = 'break-the-loop-card.png';
         a.click();
       }
     } catch (e) {
       const a = document.createElement('a');
-      a.href = cardDataUrl;
-      a.download = 'break-the-loop-story.png';
+      a.href = imgUrl;
+      a.download = 'break-the-loop-card.png';
       a.click();
     }
   };
@@ -720,7 +866,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Main Authentication Gate (Shows if not logged in OR triggered via Gating) */}
+      {/* Auth Modal */}
       {(!isLoggedIn || showAuthModal) && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
@@ -737,7 +883,7 @@ export default function Home() {
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
             <p className="text-xs text-slate-400">
-              {authModalReason || 'Enter your email to save streaks or jump in immediately as a guest.'}
+              {authModalReason || 'Enter your email to save streaks or continue as a guest for solo missions.'}
             </p>
 
             {authError && (
@@ -799,7 +945,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Safety Disclaimer Modal */}
+      {/* Safety Modal */}
       {showSafetyModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
@@ -824,6 +970,62 @@ export default function Home() {
                 I Agree & Search
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Friends List Modal */}
+      {showFriendsModal && (
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 className="text-sm font-bold text-slate-200">🤝 Raid Squad ({friendsList.length})</h2>
+              <button
+                onClick={() => setShowFriendsModal(false)}
+                className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+              {friendsList.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "Add as Friend"!</p>
+              ) : (
+                friendsList.map((f, i) => (
+                  <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                    <span className="font-bold text-rose-400">@{f}</span>
+                    <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">Met IRL ⚡</span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spotify-Wrapped Recap Modal */}
+      {showWrappedModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
+            <button
+              onClick={() => setShowWrappedModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
+            <h2 className="text-sm font-black text-rose-400 uppercase tracking-wider">🎧 Monthly Recap Card</h2>
+            {wrappedCardDataUrl && (
+              <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
+                <img src={wrappedCardDataUrl} alt="Wrapped" className="w-full h-80 object-contain mx-auto" />
+              </div>
+            )}
+            <button
+              onClick={() => handleShareCard(wrappedCardDataUrl)}
+              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-xs shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+            >
+              <span>📲</span>
+              <span>Share Recap to Story / WhatsApp</span>
+            </button>
           </div>
         </div>
       )}
@@ -1019,6 +1221,26 @@ export default function Home() {
                 You saved another 15 minutes from doomscrolling reels.
               </p>
 
+              {lastPartnerHandle && (mode === 'duo' || mode === 'squad') && (
+                <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
+                  <div className="text-left">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Raid Partner</p>
+                    <p className="text-xs font-bold text-rose-400">@{lastPartnerHandle}</p>
+                  </div>
+                  <button
+                    onClick={handleAddFriend}
+                    disabled={isFriendAdded}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      isFriendAdded
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 active:scale-95'
+                    }`}
+                  >
+                    {isFriendAdded ? '✓ Friend Added' : '+ Add as Friend'}
+                  </button>
+                </div>
+              )}
+
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
                   <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-slate-950">
@@ -1026,7 +1248,7 @@ export default function Home() {
                   </div>
 
                   <button
-                    onClick={handleShareCard}
+                    onClick={() => handleShareCard(cardDataUrl)}
                     className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
                   >
                     <span>📲</span>
@@ -1125,9 +1347,18 @@ export default function Home() {
             </button>
           )}
           <div className="flex items-center space-x-2">
-            <span className="text-[10px] text-slate-500">
-              {userEmail && userEmail !== 'guest@breaktheloop.app' ? `User: ${userEmail}` : 'Guest Mode'}
-            </span>
+            <button
+              onClick={() => setShowFriendsModal(true)}
+              className="text-[10px] text-rose-300 hover:underline font-semibold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
+            >
+              🤝 Squad ({friendsList.length})
+            </button>
+            <button
+              onClick={generateSpotifyWrappedCard}
+              className="text-[10px] text-amber-400 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
+            >
+              🎧 Wrapped
+            </button>
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
                 onClick={handleSignOut}
@@ -1143,7 +1374,7 @@ export default function Home() {
                 }}
                 className="text-[10px] text-emerald-400 hover:underline font-semibold"
               >
-                Verify Email
+                Verify
               </button>
             )}
           </div>
