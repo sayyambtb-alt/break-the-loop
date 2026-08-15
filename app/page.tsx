@@ -86,6 +86,10 @@ export default function Home() {
   // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
+  // Developer Modal State
+  const [showDevModal, setShowDevModal] = useState(false);
+  const devTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Squad Roster State
   const [squadRoster, setSquadRoster] = useState<SquadParticipant[]>([]);
   const [squadCapacity, setSquadCapacity] = useState<number>(2);
@@ -230,6 +234,22 @@ export default function Home() {
       .subscribe();
 
     invitesChannelRef.current = invitesChannel;
+  };
+
+  const handleDevPressStart = () => {
+    devTimerRef.current = setTimeout(() => {
+      setShowDevModal(true);
+      if (typeof window !== 'undefined' && navigator.vibrate) {
+        navigator.vibrate(100);
+      }
+    }, 2000);
+  };
+
+  const handleDevPressEnd = () => {
+    if (devTimerRef.current) {
+      clearTimeout(devTimerRef.current);
+      devTimerRef.current = null;
+    }
   };
 
   const acceptDirectInvite = async () => {
@@ -830,7 +850,7 @@ export default function Home() {
     }
   };
 
-  // Canvas-based client-side compression (Shrinks 4MB to ~50KB)
+  // Canvas-based compression (4MB down to ~50KB)
   const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1156,7 +1176,16 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
-        <h1 className="text-xl font-extrabold tracking-wider text-rose-500">BREAK THE LOOP</h1>
+        <h1
+          onMouseDown={handleDevPressStart}
+          onMouseUp={handleDevPressEnd}
+          onTouchStart={handleDevPressStart}
+          onTouchEnd={handleDevPressEnd}
+          className="text-xl font-extrabold tracking-wider text-rose-500 cursor-pointer select-none active:scale-95 transition-transform"
+          title="Hold for 2s for Developer Access"
+        >
+          BREAK THE LOOP
+        </h1>
         <div className="flex items-center space-x-2">
           <button
             onClick={requestNotificationPermission}
@@ -1214,6 +1243,75 @@ export default function Home() {
             >
               Accept Raid 🔥
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Developer Access Modal */}
+      {showDevModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+                🛠️ Developer Tools
+              </h2>
+              <button
+                onClick={() => setShowDevModal(false)}
+                className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="text-[10px] font-mono bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-slate-400 space-y-1">
+              <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
+              <p><strong>Session:</strong> {isGuest ? 'Guest' : userEmail || 'None'}</p>
+              <p><strong>Room:</strong> {roomId}</p>
+              <p><strong>Queue Ref:</strong> {myQueueEntryIdRef.current || 'None'}</p>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={async () => {
+                  const chosen = prompt('Enter manual streak value:', streak.toString());
+                  if (chosen && currentUserId) {
+                    const val = parseInt(chosen, 10);
+                    setStreak(val);
+                    await supabase.from('profiles').update({ streak: val }).eq('device_id', currentUserId);
+                  }
+                }}
+                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl text-xs font-mono font-bold border border-slate-700"
+              >
+                Override Streak
+              </button>
+
+              <button
+                onClick={async () => {
+                  if (myQueueEntryIdRef.current && currentUserId) {
+                    await supabase.rpc('leave_match_queue', {
+                      p_queue_id: myQueueEntryIdRef.current,
+                      p_user_id: currentUserId,
+                      p_is_creator: isQueueCreator
+                    });
+                    alert('Queue locks released.');
+                  }
+                }}
+                className="w-full bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 py-2 rounded-xl text-xs font-mono font-bold border border-rose-500/30"
+              >
+                Force Clear Queue Locks
+              </button>
+
+              <button
+                onClick={() => {
+                  localStorage.clear();
+                  sessionStorage.clear();
+                  window.location.reload();
+                }}
+                className="w-full bg-red-950/50 hover:bg-red-900/50 text-red-300 py-2 rounded-xl text-xs font-mono font-bold border border-red-500/30"
+              >
+                Hard Reset Local Storage & Reload
+              </button>
+            </div>
           </div>
         </div>
       )}
