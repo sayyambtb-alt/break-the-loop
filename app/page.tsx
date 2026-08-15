@@ -15,6 +15,8 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+const ADMIN_EMAIL = 'sayyambtb@gmail.com';
+
 interface FeedItem {
   id: string;
   user_id: string;
@@ -86,7 +88,7 @@ export default function Home() {
   // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
-  // Developer Modal State
+  // Developer Modal State (Protected)
   const [showDevModal, setShowDevModal] = useState(false);
   const devTimerRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -114,7 +116,7 @@ export default function Home() {
   const [lastMessageSentTime, setLastMessageSentTime] = useState<number>(0);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
-  // Channel Refs
+  // Channel Cleanup Refs
   const queueSubscriptionRef = useRef<any>(null);
   const participantsSubRef = useRef<any>(null);
   const presenceChannelRef = useRef<any>(null);
@@ -165,11 +167,11 @@ export default function Home() {
     }
 
     return () => {
-      cleanupUserChannels();
+      cleanupAllChannels();
     };
   }, []);
 
-  const cleanupUserChannels = () => {
+  const cleanupAllChannels = () => {
     if (presenceChannelRef.current) {
       supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
@@ -178,10 +180,18 @@ export default function Home() {
       supabase.removeChannel(invitesChannelRef.current);
       invitesChannelRef.current = null;
     }
+    if (queueSubscriptionRef.current) {
+      supabase.removeChannel(queueSubscriptionRef.current);
+      queueSubscriptionRef.current = null;
+    }
+    if (participantsSubRef.current) {
+      supabase.removeChannel(participantsSubRef.current);
+      participantsSubRef.current = null;
+    }
   };
 
   const setupUserChannels = (userId: string) => {
-    cleanupUserChannels();
+    cleanupAllChannels();
 
     const presenceChannel = supabase.channel('global_presence', {
       config: { presence: { key: userId } }
@@ -236,7 +246,10 @@ export default function Home() {
     invitesChannelRef.current = invitesChannel;
   };
 
+  // Secure Developer Modal Activation (Admin Email Verification Only)
   const handleDevPressStart = () => {
+    if (userEmail !== ADMIN_EMAIL) return;
+
     devTimerRef.current = setTimeout(() => {
       setShowDevModal(true);
       if (typeof window !== 'undefined' && navigator.vibrate) {
@@ -353,7 +366,7 @@ export default function Home() {
   const handleGuestLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
     setAuthError('');
-    cleanupUserChannels();
+    cleanupAllChannels();
     await supabase.auth.signOut();
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) {
@@ -395,7 +408,7 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else if (data.session?.user) {
-      cleanupUserChannels();
+      cleanupAllChannels();
       const uid = data.session.user.id;
       setCurrentUserId(uid);
       setUserEmail(emailInput);
@@ -409,7 +422,7 @@ export default function Home() {
   };
 
   const handleSignOut = async () => {
-    cleanupUserChannels();
+    cleanupAllChannels();
     if (typeof window !== 'undefined') {
       localStorage.clear();
       sessionStorage.clear();
@@ -452,9 +465,9 @@ export default function Home() {
         }
       } else {
         const defaultHandle = email.split('@')[0] || 'Explorer';
-        await supabase.from('profiles').upsert([
+        await supabase.from('profiles').insert([
           { device_id: userId, handle: defaultHandle, streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'] }
-        ], { onConflict: 'device_id' });
+        ]);
         setHandle(defaultHandle);
         if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', defaultHandle);
         if (email !== 'guest@breaktheloop.app') {
@@ -467,6 +480,7 @@ export default function Home() {
     }
   };
 
+  // Secure RPC handle update
   const saveHandleDirect = async (chosenHandle: string) => {
     const cleaned = chosenHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
     if (!cleaned) return;
@@ -474,15 +488,10 @@ export default function Home() {
     if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
     setShowHandleModal(false);
 
-    if (currentUserId) {
-      try {
-        await supabase.from('profiles').upsert(
-          { device_id: currentUserId, handle: cleaned },
-          { onConflict: 'device_id' }
-        );
-      } catch (e) {
-        console.log('Handle update error:', e);
-      }
+    try {
+      await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
+    } catch (e) {
+      console.log('Handle update error:', e);
     }
   };
 
@@ -493,15 +502,10 @@ export default function Home() {
     if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
     setIsEditingHandle(false);
 
-    if (currentUserId) {
-      try {
-        await supabase.from('profiles').upsert(
-          { device_id: currentUserId, handle: cleaned },
-          { onConflict: 'device_id' }
-        );
-      } catch (e) {
-        console.log('Handle update error:', e);
-      }
+    try {
+      await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
+    } catch (e) {
+      console.log('Handle update error:', e);
     }
   };
 
@@ -606,7 +610,7 @@ export default function Home() {
 
   const handleReact = async (logId: string, type: 'fire' | 'five') => {
     try {
-      await supabase.from('feed_reactions').upsert([
+      await supabase.from('feed_reactions').insert([
         { log_id: logId, user_handle: handle, reaction_type: type }
       ]);
       fetchGallery();
@@ -850,7 +854,7 @@ export default function Home() {
     }
   };
 
-  // Canvas-based compression (4MB down to ~50KB)
+  // Canvas compression (4MB down to ~50KB)
   const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -910,17 +914,17 @@ export default function Home() {
         });
 
       if (uploadError) {
-        console.error('Storage upload failed, falling back to local preview:', uploadError);
-        const reader = new FileReader();
-        reader.onloadend = () => setProofImage(reader.result as string);
-        reader.readAsDataURL(compressedBlob);
+        console.error('Storage upload error:', uploadError);
+        alert('Could not upload image to cloud. Please check connection and try again.');
+        setProofImage(null);
       } else {
         const { data } = supabase.storage.from('Proofs').getPublicUrl(fileName);
         setProofImage(data.publicUrl);
       }
     } catch (err) {
-      console.error('Compression/Upload error:', err);
+      console.error('Compression error:', err);
       alert('Failed to process image. Please try again.');
+      setProofImage(null);
     } finally {
       setUploading(false);
     }
@@ -1182,7 +1186,7 @@ export default function Home() {
           onTouchStart={handleDevPressStart}
           onTouchEnd={handleDevPressEnd}
           className="text-xl font-extrabold tracking-wider text-rose-500 cursor-pointer select-none active:scale-95 transition-transform"
-          title="Hold for 2s for Developer Access"
+          title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
         >
           BREAK THE LOOP
         </h1>
@@ -1247,13 +1251,13 @@ export default function Home() {
         </div>
       )}
 
-      {/* Developer Access Modal */}
-      {showDevModal && (
+      {/* Developer Access Modal (Admin Verified Only) */}
+      {showDevModal && userEmail === ADMIN_EMAIL && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
             <div className="flex justify-between items-center border-b border-slate-800 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
-                🛠️ Developer Tools
+                🛠️ Developer Tools ({userEmail})
               </h2>
               <button
                 onClick={() => setShowDevModal(false)}
@@ -1265,26 +1269,12 @@ export default function Home() {
 
             <div className="text-[10px] font-mono bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-slate-400 space-y-1">
               <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
-              <p><strong>Session:</strong> {isGuest ? 'Guest' : userEmail || 'None'}</p>
+              <p><strong>Session:</strong> {userEmail}</p>
               <p><strong>Room:</strong> {roomId}</p>
               <p><strong>Queue Ref:</strong> {myQueueEntryIdRef.current || 'None'}</p>
             </div>
 
             <div className="space-y-2">
-              <button
-                onClick={async () => {
-                  const chosen = prompt('Enter manual streak value:', streak.toString());
-                  if (chosen && currentUserId) {
-                    const val = parseInt(chosen, 10);
-                    setStreak(val);
-                    await supabase.from('profiles').update({ streak: val }).eq('device_id', currentUserId);
-                  }
-                }}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-2 rounded-xl text-xs font-mono font-bold border border-slate-700"
-              >
-                Override Streak
-              </button>
-
               <button
                 onClick={async () => {
                   if (myQueueEntryIdRef.current && currentUserId) {
