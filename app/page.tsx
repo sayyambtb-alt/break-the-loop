@@ -74,8 +74,6 @@ export default function Home() {
 
   // Notification State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-
-  const [locationStatus, setLocationStatus] = useState<string>('');
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(600);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
@@ -270,6 +268,7 @@ export default function Home() {
     setProofImage(null);
     setIsCompleted(false);
     setIsInviteSession(false);
+    setIsSearching(false);
   };
 
   useEffect(() => {
@@ -411,6 +410,7 @@ export default function Home() {
   const executeMatchmaking = async () => {
     setShowSafetyModal(false);
     setIsSearching(true);
+    setActiveQuest(null);
     setProofImage(null);
     setIsCompleted(false);
     setCardDataUrl(null);
@@ -443,7 +443,7 @@ export default function Home() {
 
       if (error) {
         console.error('Matchmaking error:', error);
-        await pickRandomQuest();
+        alert('Matchmaking error. Please try again.');
         setIsSearching(false);
         return;
       }
@@ -456,6 +456,7 @@ export default function Home() {
         setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
         setIsSearching(false);
       } else if (matchResult && matchResult.queue_id) {
+        // KEEP SEARCHING = TRUE! Do NOT reveal the quest until matched.
         myQueueEntryIdRef.current = matchResult.queue_id;
 
         const queueChannel = supabase
@@ -486,7 +487,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Catastrophic match error:', err);
-      await pickRandomQuest();
+      alert('Connection error. Please try again.');
       setIsSearching(false);
     }
   };
@@ -503,6 +504,7 @@ export default function Home() {
       }
     }
     setIsSearching(false);
+    setActiveQuest(null);
   };
 
   const pickRandomQuest = async () => {
@@ -660,7 +662,6 @@ export default function Home() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Spotify-Wrapped Neon Gradient Background
     const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
     bgGradient.addColorStop(0, '#0f172a');
     bgGradient.addColorStop(0.3, '#1e1b4b');
@@ -669,7 +670,6 @@ export default function Home() {
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    // Decorative Neon Glows
     ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
     ctx.beginPath();
     ctx.arc(200, 300, 250, 0, Math.PI * 2);
@@ -680,7 +680,6 @@ export default function Home() {
     ctx.arc(880, 1400, 350, 0, Math.PI * 2);
     ctx.fill();
 
-    // Top Header
     ctx.fillStyle = '#f43f5e';
     ctx.font = '900 48px sans-serif';
     ctx.textAlign = 'center';
@@ -690,7 +689,6 @@ export default function Home() {
     ctx.font = '700 32px sans-serif';
     ctx.fillText('YOUR MONTHLY IRL RECAP 🎧', 540, 260);
 
-    // Big Headline Box
     ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
     ctx.strokeStyle = '#f43f5e';
     ctx.lineWidth = 4;
@@ -699,7 +697,6 @@ export default function Home() {
     ctx.fill();
     ctx.stroke();
 
-    // Title
     ctx.fillStyle = '#f8fafc';
     ctx.font = '900 56px sans-serif';
     ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
@@ -708,7 +705,6 @@ export default function Home() {
     ctx.font = '500 30px sans-serif';
     ctx.fillText('While Mumbai was stuck scrolling reels...', 540, 520);
 
-    // Stat 1: Time Saved
     const hoursSaved = (savedMins / 60).toFixed(1);
     ctx.fillStyle = '#f43f5e';
     ctx.font = '900 90px sans-serif';
@@ -717,7 +713,6 @@ export default function Home() {
     ctx.font = '600 32px sans-serif';
     ctx.fillText(`⚡ Approx ${hoursSaved} hrs reclaimed from screen addiction`, 540, 740);
 
-    // Stat 2: Streak
     ctx.fillStyle = '#38bdf8';
     ctx.font = '900 80px sans-serif';
     ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
@@ -725,7 +720,6 @@ export default function Home() {
     ctx.font = '600 32px sans-serif';
     ctx.fillText('🔥 Top 5% Spontaneous Mumbaikar', 540, 960);
 
-    // Stat 3: Top Badge
     const topBadge = badges[badges.length - 1] || '🌱 First Step';
     ctx.fillStyle = '#fbbf24';
     ctx.font = '900 64px sans-serif';
@@ -734,7 +728,6 @@ export default function Home() {
     ctx.font = '600 30px sans-serif';
     ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
 
-    // Stat 4: Squad Connections
     ctx.fillStyle = '#a855f7';
     ctx.font = '900 64px sans-serif';
     ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
@@ -742,7 +735,6 @@ export default function Home() {
     ctx.font = '600 30px sans-serif';
     ctx.fillText('🤝 Met IRL in the Real World', 540, 1400);
 
-    // Footer Attribution
     ctx.fillStyle = '#f8fafc';
     ctx.font = '800 42px sans-serif';
     ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
