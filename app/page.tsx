@@ -442,8 +442,8 @@ export default function Home() {
       });
 
       if (error) {
-        console.error('Matchmaking error:', error);
-        alert('Matchmaking error. Please try again.');
+        console.error('Matchmaking error detail:', error);
+        alert(`Matchmaking error: ${error.message || JSON.stringify(error)}`);
         setIsSearching(false);
         return;
       }
@@ -456,7 +456,6 @@ export default function Home() {
         setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
         setIsSearching(false);
       } else if (matchResult && matchResult.queue_id) {
-        // KEEP SEARCHING = TRUE! Do NOT reveal the quest until matched.
         myQueueEntryIdRef.current = matchResult.queue_id;
 
         const queueChannel = supabase
@@ -485,9 +484,9 @@ export default function Home() {
 
         queueSubscriptionRef.current = queueChannel;
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Catastrophic match error:', err);
-      alert('Connection error. Please try again.');
+      alert(`Connection error: ${err.message || err}`);
       setIsSearching(false);
     }
   };
