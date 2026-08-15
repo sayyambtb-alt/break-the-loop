@@ -96,7 +96,6 @@ export default function Home() {
   // Notification State
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState<number>(600);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
 
   // Chat & Moderation State
@@ -223,7 +222,6 @@ export default function Home() {
       setIsSearching(false);
       setIncomingInvite(null);
       setShowFriendsModal(false);
-      setTimeLeft(600);
       setMessages([]);
     } catch (e) {
       console.log('Error accepting raid invite:', e);
@@ -279,8 +277,8 @@ export default function Home() {
       setIsInviteSession(true);
       setIsSearching(false);
       setShowFriendsModal(false);
-      setTimeLeft(600);
       setMessages([]);
+      alert(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`);
     } catch (e) {
       console.log('Error sending direct raid invite:', e);
       alert('Could not send raid invite. Please try again.');
@@ -504,6 +502,18 @@ export default function Home() {
     setIsSearching(false);
   };
 
+  const handleAbandonMission = () => {
+    if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
+      setActiveQuest(null);
+      setProofImage(null);
+      setIsCompleted(false);
+      setIsInviteSession(false);
+      setIsSearching(false);
+      setMessages([]);
+      setMatchedPartner(null);
+    }
+  };
+
   useEffect(() => {
     if (tab === 'feed') fetchGallery();
   }, [tab]);
@@ -612,20 +622,6 @@ export default function Home() {
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
-  useEffect(() => {
-    if (!activeQuest || isCompleted) return;
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [activeQuest, isCompleted]);
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-
   const onStartMatchingClick = () => {
     if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
       setAuthModalReason(`Verify your email to match with other Mumbaikars in ${mode.toUpperCase()} mode.`);
@@ -649,7 +645,6 @@ export default function Home() {
     setCardDataUrl(null);
     setIsFriendAdded(false);
     setMessages([]);
-    setTimeLeft(600);
 
     const generatedRoom = isInviteSession ? roomId : `room_${Math.random().toString(36).substring(2, 9)}`;
     if (!isInviteSession) {
@@ -1409,8 +1404,9 @@ export default function Home() {
                 <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {mode} Mission Assigned
                 </span>
-                <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold">
-                  ⏱️ Rally: {formatTime(timeLeft)}
+                <span className="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-bold flex items-center space-x-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Active Mission</span>
                 </span>
               </div>
 
@@ -1508,13 +1504,21 @@ export default function Home() {
                 )}
               </div>
 
-              <button
-                onClick={handleCompleteMission}
-                disabled={uploading}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
-              >
-                Complete & Log Proof
-              </button>
+              <div className="flex flex-col space-y-2 pt-1">
+                <button
+                  onClick={handleCompleteMission}
+                  disabled={uploading}
+                  className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  Complete & Log Proof
+                </button>
+                <button
+                  onClick={handleAbandonMission}
+                  className="text-xs text-slate-500 hover:text-slate-400 py-1 transition-colors"
+                >
+                  Abandon Mission
+                </button>
+              </div>
             </div>
           )}
 
