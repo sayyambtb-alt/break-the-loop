@@ -38,6 +38,11 @@ interface FriendProfile {
   handle: string;
 }
 
+interface SquadParticipant {
+  user_id: string;
+  handle: string;
+}
+
 interface IncomingInvite {
   id: string;
   sender_handle: string;
@@ -81,10 +86,12 @@ export default function Home() {
   // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
 
-  // Friends, Wrapped & Direct Raid State
-  const [lastPartnerHandle, setLastPartnerHandle] = useState<string | null>(null);
-  const [lastPartnerUserId, setLastPartnerUserId] = useState<string | null>(null);
-  const [isFriendAdded, setIsFriendAdded] = useState(false);
+  // Squad Roster State
+  const [squadRoster, setSquadRoster] = useState<SquadParticipant[]>([]);
+  const [squadCapacity, setSquadCapacity] = useState<number>(2);
+  const [isQueueCreator, setIsQueueCreator] = useState<boolean>(false);
+
+  // Friends & Recap State
   const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [showFriendsModal, setShowFriendsModal] = useState(false);
@@ -93,26 +100,27 @@ export default function Home() {
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
   const [sendingInviteTo, setSendingInviteTo] = useState<string | null>(null);
 
-  // Notification State
+  // Notifications & Feed
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
-  const [matchedPartner, setMatchedPartner] = useState<string | null>(null);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
 
-  // Chat & Moderation State
+  // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [lastMessageSentTime, setLastMessageSentTime] = useState<number>(0);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
+  // Channel Refs
   const queueSubscriptionRef = useRef<any>(null);
+  const participantsSubRef = useRef<any>(null);
+  const presenceChannelRef = useRef<any>(null);
+  const invitesChannelRef = useRef<any>(null);
   const myQueueEntryIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const cachedHandle = localStorage.getItem('btl_user_handle');
-      if (cachedHandle) {
-        setHandle(cachedHandle);
-      }
+      if (cachedHandle) setHandle(cachedHandle);
 
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
@@ -124,14 +132,19 @@ export default function Home() {
         setIsInviteSession(true);
         if (urlMode) setMode(urlMode as 'duo' | 'squad');
         if (urlQuest) setActiveQuest(decodeURIComponent(urlQuest));
-        setMatchedPartner('Joined Direct Duo Lobby 🤝');
       }
 
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session?.user) {
-          const email = session.user.email;
-          const uid = session.user.id;
+      supabase.auth.getSession().then(async ({ data: { session } }) => {
+        let activeUser = session?.user;
+        if (!activeUser) {
+          const { data: anonData } = await supabase.auth.signInAnonymously();
+          activeUser = anonData?.session?.user;
+        }
+
+        if (activeUser) {
+          const uid = activeUser.id;
           setCurrentUserId(uid);
+          const email = activeUser.email;
           if (email && email !== 'guest@breaktheloop.app') {
             setUserEmail(email);
             setIsGuest(false);
@@ -142,17 +155,30 @@ export default function Home() {
           setIsLoggedIn(true);
           loadOrCreateProfile(uid, email || 'guest@breaktheloop.app');
           fetchFriends(uid);
-          listenForDirectInvites(uid);
-          initPresence(uid);
-        } else {
-          setIsLoggedIn(false);
+          setupUserChannels(uid);
         }
       });
     }
+
+    return () => {
+      cleanupUserChannels();
+    };
   }, []);
 
-  // Supabase Realtime Presence (Live Online/Offline Tracking)
-  const initPresence = (userId: string) => {
+  const cleanupUserChannels = () => {
+    if (presenceChannelRef.current) {
+      supabase.removeChannel(presenceChannelRef.current);
+      presenceChannelRef.current = null;
+    }
+    if (invitesChannelRef.current) {
+      supabase.removeChannel(invitesChannelRef.current);
+      invitesChannelRef.current = null;
+    }
+  };
+
+  const setupUserChannels = (userId: string) => {
+    cleanupUserChannels();
+
     const presenceChannel = supabase.channel('global_presence', {
       config: { presence: { key: userId } }
     });
@@ -160,8 +186,7 @@ export default function Home() {
     presenceChannel
       .on('presence', { event: 'sync' }, () => {
         const state = presenceChannel.presenceState();
-        const activeIds = new Set<string>(Object.keys(state));
-        setOnlineUserIds(activeIds);
+        setOnlineUserIds(new Set<string>(Object.keys(state)));
       })
       .on('presence', { event: 'join' }, ({ key }) => {
         setOnlineUserIds((prev) => new Set([...Array.from(prev), key]));
@@ -178,11 +203,10 @@ export default function Home() {
           await presenceChannel.track({ online_at: new Date().toISOString() });
         }
       });
-  };
 
-  // Listen for Live In-App Raid Invites
-  const listenForDirectInvites = (userId: string) => {
-    supabase
+    presenceChannelRef.current = presenceChannel;
+
+    const invitesChannel = supabase
       .channel(`invites_${userId}`)
       .on(
         'postgres_changes',
@@ -204,19 +228,26 @@ export default function Home() {
         }
       )
       .subscribe();
+
+    invitesChannelRef.current = invitesChannel;
   };
 
   const acceptDirectInvite = async () => {
     if (!incomingInvite) return;
     try {
-      await supabase
+      const { error } = await supabase
         .from('raid_invites')
         .update({ status: 'accepted' })
         .eq('id', incomingInvite.id);
 
+      if (error) {
+        console.error('Failed to accept raid invite:', error);
+        return;
+      }
+
       setRoomId(incomingInvite.room_id);
       setActiveQuest(incomingInvite.quest_text);
-      setMatchedPartner(`Direct Raid with @${incomingInvite.sender_handle} 🤝`);
+      setSquadRoster([{ user_id: currentUserId || '', handle }]);
       setMode('duo');
       setIsInviteSession(true);
       setIsSearching(false);
@@ -272,7 +303,7 @@ export default function Home() {
 
       setRoomId(newRoomId);
       setActiveQuest(chosenQuest);
-      setMatchedPartner(`Challenged @${friend.handle} ⚡`);
+      setSquadRoster([{ user_id: currentUserId, handle }]);
       setMode('duo');
       setIsInviteSession(true);
       setIsSearching(false);
@@ -293,7 +324,7 @@ export default function Home() {
     if (permission === 'granted') {
       setNotificationsEnabled(true);
       new Notification('Break The Loop 🔥', {
-        body: 'Daily reminders active! Get ready to destroy boredom.',
+        body: 'In-app raid notifications are now active!',
         icon: '/icon.png'
       });
     }
@@ -302,6 +333,7 @@ export default function Home() {
   const handleGuestLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
     setAuthError('');
+    cleanupUserChannels();
     await supabase.auth.signOut();
     const { data, error } = await supabase.auth.signInAnonymously();
     if (error) {
@@ -315,8 +347,7 @@ export default function Home() {
       setShowAuthModal(false);
       loadOrCreateProfile(uid, 'guest@breaktheloop.app');
       fetchFriends(uid);
-      listenForDirectInvites(uid);
-      initPresence(uid);
+      setupUserChannels(uid);
     }
   };
 
@@ -324,7 +355,6 @@ export default function Home() {
     e.preventDefault();
     setAuthError('');
     if (!emailInput.includes('@')) return setAuthError('Please enter a valid email address');
-    await supabase.auth.signOut();
     const { error } = await supabase.auth.signInWithOtp({
       email: emailInput,
       options: { shouldCreateUser: true }
@@ -345,6 +375,7 @@ export default function Home() {
     if (error) {
       setAuthError(error.message);
     } else if (data.session?.user) {
+      cleanupUserChannels();
       const uid = data.session.user.id;
       setCurrentUserId(uid);
       setUserEmail(emailInput);
@@ -353,25 +384,36 @@ export default function Home() {
       setShowAuthModal(false);
       loadOrCreateProfile(uid, emailInput);
       fetchFriends(uid);
-      listenForDirectInvites(uid);
-      initPresence(uid);
+      setupUserChannels(uid);
     }
   };
 
   const handleSignOut = async () => {
+    cleanupUserChannels();
     if (typeof window !== 'undefined') {
       localStorage.clear();
       sessionStorage.clear();
     }
     await supabase.auth.signOut();
-    setUserEmail(null);
-    setCurrentUserId(null);
-    setIsGuest(false);
-    setIsLoggedIn(false);
+    const { data } = await supabase.auth.signInAnonymously();
+    const uid = data.session?.user.id || null;
+    setCurrentUserId(uid);
+    setUserEmail('guest@breaktheloop.app');
+    setIsGuest(true);
+    setIsLoggedIn(true);
     setIsOtpSent(false);
     setOtpInput('');
     setEmailInput('');
     setHandle('Explorer');
+    setStreak(1);
+    setSavedMins(15);
+    setBadges(['🌱 First Step']);
+    setFriendsList([]);
+    if (uid) {
+      loadOrCreateProfile(uid, 'guest@breaktheloop.app');
+      fetchFriends(uid);
+      setupUserChannels(uid);
+    }
   };
 
   const loadOrCreateProfile = async (userId: string, email: string) => {
@@ -411,13 +453,11 @@ export default function Home() {
     setHandle(cleaned);
     if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
     setShowHandleModal(false);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (userId) {
+
+    if (currentUserId) {
       try {
         await supabase.from('profiles').upsert(
-          { device_id: userId, handle: cleaned },
+          { device_id: currentUserId, handle: cleaned },
           { onConflict: 'device_id' }
         );
       } catch (e) {
@@ -432,13 +472,11 @@ export default function Home() {
     setHandle(cleaned);
     if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
     setIsEditingHandle(false);
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    const userId = session?.user?.id;
-    if (userId) {
+
+    if (currentUserId) {
       try {
         await supabase.from('profiles').upsert(
-          { device_id: userId, handle: cleaned },
+          { device_id: currentUserId, handle: cleaned },
           { onConflict: 'device_id' }
         );
       } catch (e) {
@@ -449,15 +487,24 @@ export default function Home() {
 
   const fetchFriends = async (userId: string) => {
     try {
-      const { data: friendsRows } = await supabase.from('friends').select('friend_user_id').eq('user_id', userId);
+      const { data: friendsRows } = await supabase
+        .from('friends')
+        .select('user_id, friend_user_id')
+        .or(`user_id.eq.${userId},friend_user_id.eq.${userId}`);
+
       if (friendsRows && friendsRows.length > 0) {
-        const friendIds = friendsRows.map((f) => f.friend_user_id);
-        const { data: profiles } = await supabase.from('profiles').select('device_id, handle').in('device_id', friendIds);
-        
-        const mappedList: FriendProfile[] = friendsRows.map((f) => {
-          const match = profiles?.find((p) => p.device_id === f.friend_user_id);
+        const friendIds = friendsRows.map((f) => (f.user_id === userId ? f.friend_user_id : f.user_id));
+        const uniqueFriendIds = Array.from(new Set(friendIds));
+
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('device_id, handle')
+          .in('device_id', uniqueFriendIds);
+
+        const mappedList: FriendProfile[] = uniqueFriendIds.map((id) => {
+          const match = profiles?.find((p) => p.device_id === id);
           return {
-            friend_user_id: f.friend_user_id,
+            friend_user_id: id,
             handle: match?.handle || 'Explorer'
           };
         });
@@ -470,18 +517,15 @@ export default function Home() {
     }
   };
 
-  const handleAddFriend = async () => {
-    if (!lastPartnerUserId) return;
-    const { data: { session } } = await supabase.auth.getSession();
-    const currentUserId = session?.user?.id || 'guest_user';
-
+  const handleAddFriend = async (targetUserId: string) => {
+    if (!currentUserId || !targetUserId) return;
     try {
       await supabase.from('friends').upsert(
-        { user_id: currentUserId, friend_user_id: lastPartnerUserId },
+        { user_id: currentUserId, friend_user_id: targetUserId },
         { onConflict: 'user_id, friend_user_id' }
       );
-      setIsFriendAdded(true);
       fetchFriends(currentUserId);
+      alert('Squad friend added!');
     } catch (e) {
       console.log('Add friend error:', e);
     }
@@ -489,7 +533,7 @@ export default function Home() {
 
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
     if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbaikars in ${selectedMode.toUpperCase()} mode.`);
+      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${selectedMode.toUpperCase()} mode.`);
       setShowAuthModal(true);
       return;
     }
@@ -500,17 +544,19 @@ export default function Home() {
     setIsCompleted(false);
     setIsInviteSession(false);
     setIsSearching(false);
+    setSquadRoster([]);
   };
 
-  const handleAbandonMission = () => {
+  const handleAbandonMission = async () => {
     if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
+      await cancelSearch();
       setActiveQuest(null);
       setProofImage(null);
       setIsCompleted(false);
       setIsInviteSession(false);
       setIsSearching(false);
       setMessages([]);
-      setMatchedPartner(null);
+      setSquadRoster([]);
     }
   };
 
@@ -568,11 +614,12 @@ export default function Home() {
     }
   };
 
+  // Realtime Live Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo') return;
 
     const channel = supabase
-      .channel(roomId)
+      .channel(`chat_${roomId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: `room_id=eq.${roomId}` },
@@ -624,7 +671,7 @@ export default function Home() {
 
   const onStartMatchingClick = () => {
     if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbaikars in ${mode.toUpperCase()} mode.`);
+      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
       setShowAuthModal(true);
       return;
     }
@@ -643,14 +690,8 @@ export default function Home() {
     setProofImage(null);
     setIsCompleted(false);
     setCardDataUrl(null);
-    setIsFriendAdded(false);
     setMessages([]);
-
-    const generatedRoom = isInviteSession ? roomId : `room_${Math.random().toString(36).substring(2, 9)}`;
-    if (!isInviteSession) {
-      setRoomId(generatedRoom);
-      setMatchedPartner(null);
-    }
+    setSquadRoster([]);
 
     if (mode === 'solo' || isInviteSession) {
       await pickRandomQuest();
@@ -658,8 +699,10 @@ export default function Home() {
       return;
     }
 
-    const { data: { session } } = await supabase.auth.getSession();
-    const currentUserId = session?.user?.id || 'guest_user';
+    if (!currentUserId) {
+      setIsSearching(false);
+      return;
+    }
 
     try {
       const { data: matchResult, error } = await supabase.rpc('find_or_create_match', {
@@ -676,43 +719,66 @@ export default function Home() {
         return;
       }
 
-      if (matchResult && matchResult.matched) {
+      if (matchResult) {
         setRoomId(matchResult.room_id);
         setActiveQuest(matchResult.quest_text);
-        const pHandle = matchResult.partner_handle || 'Explorer';
-        setLastPartnerHandle(pHandle);
-        setLastPartnerUserId(matchResult.partner_user_id || null);
-        setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
-        setIsSearching(false);
-      } else if (matchResult && matchResult.queue_id) {
-        myQueueEntryIdRef.current = matchResult.queue_id;
+        setSquadCapacity(matchResult.max_players || 2);
+        setIsQueueCreator(matchResult.is_creator || false);
+        if (matchResult.roster) setSquadRoster(matchResult.roster);
 
-        const queueChannel = supabase
-          .channel(`queue_${matchResult.queue_id}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'matchmaking_queue',
-              filter: `id=eq.${matchResult.queue_id}`
-            },
-            (payload: any) => {
-              if (payload.new && payload.new.status === 'matched') {
-                setRoomId(payload.new.room_id);
-                setActiveQuest(payload.new.quest_text);
-                const pHandle = payload.new.matched_with_handle || 'Explorer';
-                setLastPartnerHandle(pHandle);
-                setLastPartnerUserId(payload.new.matched_with_user_id || null);
-                setMatchedPartner(`Matched: Local Partner (@${pHandle}) 🤝`);
-                setIsSearching(false);
-                supabase.removeChannel(queueChannel);
+        if (matchResult.queue_id) {
+          myQueueEntryIdRef.current = matchResult.queue_id;
+        }
+
+        if (matchResult.matched) {
+          setIsSearching(false);
+        } else if (matchResult.queue_id) {
+          const queueChannel = supabase
+            .channel(`queue_${matchResult.queue_id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'matchmaking_queue',
+                filter: `id=eq.${matchResult.queue_id}`
+              },
+              (payload: any) => {
+                if (payload.new && payload.new.status === 'matched') {
+                  setRoomId(payload.new.room_id);
+                  setActiveQuest(payload.new.quest_text);
+                  setIsSearching(false);
+                  supabase.removeChannel(queueChannel);
+                }
               }
-            }
-          )
-          .subscribe();
+            )
+            .subscribe();
 
-        queueSubscriptionRef.current = queueChannel;
+          queueSubscriptionRef.current = queueChannel;
+
+          const rosterChannel = supabase
+            .channel(`roster_${matchResult.room_id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'matchmaking_participants',
+                filter: `room_id=eq.${matchResult.room_id}`
+              },
+              (payload: any) => {
+                if (payload.new) {
+                  setSquadRoster((prev) => {
+                    if (prev.some((p) => p.user_id === payload.new.user_id)) return prev;
+                    return [...prev, { user_id: payload.new.user_id, handle: payload.new.handle }];
+                  });
+                }
+              }
+            )
+            .subscribe();
+
+          participantsSubRef.current = rosterChannel;
+        }
       }
     } catch (err: any) {
       console.error('Catastrophic match error:', err);
@@ -724,10 +790,20 @@ export default function Home() {
   const cancelSearch = async () => {
     if (queueSubscriptionRef.current) {
       supabase.removeChannel(queueSubscriptionRef.current);
+      queueSubscriptionRef.current = null;
     }
-    if (myQueueEntryIdRef.current) {
+    if (participantsSubRef.current) {
+      supabase.removeChannel(participantsSubRef.current);
+      participantsSubRef.current = null;
+    }
+
+    if (myQueueEntryIdRef.current && currentUserId) {
       try {
-        await supabase.from('matchmaking_queue').delete().eq('id', myQueueEntryIdRef.current);
+        await supabase.rpc('leave_match_queue', {
+          p_queue_id: myQueueEntryIdRef.current,
+          p_user_id: currentUserId,
+          p_is_creator: isQueueCreator
+        });
       } catch (e) {
         console.log('Error cleaning queue entry:', e);
       }
@@ -754,44 +830,80 @@ export default function Home() {
     }
   };
 
+  // Canvas-based client-side compression (Shrinks 4MB to ~50KB)
+  const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = (event) => {
+        const img = new Image();
+        img.src = event.target?.result as string;
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Canvas context not available'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+          canvas.toBlob(
+            (blob) => {
+              if (blob) resolve(blob);
+              else reject(new Error('Canvas compression failed'));
+            },
+            'image/jpeg',
+            quality
+          );
+        };
+        img.onerror = (err) => reject(err);
+      };
+      reader.onerror = (err) => reject(err);
+    });
+  };
+
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploading(true);
     try {
-      const fileName = `${Date.now()}.jpg`;
+      const compressedBlob = await compressImage(file, 800, 0.6);
+      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
 
       const { error: uploadError } = await supabase.storage
         .from('Proofs')
-        .upload(fileName, file, {
+        .upload(fileName, compressedBlob, {
           cacheControl: '3600',
           upsert: true,
-          contentType: file.type || 'image/jpeg'
+          contentType: 'image/jpeg'
         });
 
       if (uploadError) {
+        console.error('Storage upload failed, falling back to local preview:', uploadError);
         const reader = new FileReader();
         reader.onloadend = () => setProofImage(reader.result as string);
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(compressedBlob);
       } else {
         const { data } = supabase.storage.from('Proofs').getPublicUrl(fileName);
         setProofImage(data.publicUrl);
       }
     } catch (err) {
-      console.error('Upload error:', err);
+      console.error('Compression/Upload error:', err);
+      alert('Failed to process image. Please try again.');
     } finally {
       setUploading(false);
     }
-  };
-
-  const evaluateBadges = (currentStreak: number, currentSavedMins: number, currentMode: string, existingBadges: string[]) => {
-    const updated = [...existingBadges];
-    if (currentStreak >= 3 && !updated.includes('🔥 3-Day Streak')) updated.push('🔥 3-Day Streak');
-    if (currentSavedMins >= 60 && !updated.includes('⚡ 1 Hour Saved')) updated.push('⚡ 1 Hour Saved');
-    if (currentMode === 'duo' && !updated.includes('🤝 Duo Tactician')) updated.push('🤝 Duo Tactician');
-    if (currentMode === 'squad' && !updated.includes('👑 Squad Leader')) updated.push('👑 Squad Leader');
-    return updated;
   };
 
   const generateShareCard = (newStreak: number, newSavedMins: number) => {
@@ -915,7 +1027,7 @@ export default function Home() {
 
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR MONTHLY IRL RECAP 🎧', 540, 260);
+    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
 
     ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
     ctx.strokeStyle = '#f43f5e';
@@ -931,7 +1043,7 @@ export default function Home() {
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '500 30px sans-serif';
-    ctx.fillText('While Mumbai was stuck scrolling reels...', 540, 520);
+    ctx.fillText('Real-world time reclaimed from scrolling...', 540, 520);
 
     const hoursSaved = (savedMins / 60).toFixed(1);
     ctx.fillStyle = '#f43f5e';
@@ -946,7 +1058,7 @@ export default function Home() {
     ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Top 5% Spontaneous Mumbaikar', 540, 960);
+    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
 
     const topBadge = badges[badges.length - 1] || '🌱 First Step';
     ctx.fillStyle = '#fbbf24';
@@ -961,7 +1073,7 @@ export default function Home() {
     ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Met IRL in the Real World', 540, 1400);
+    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
 
     ctx.fillStyle = '#f8fafc';
     ctx.font = '800 42px sans-serif';
@@ -976,54 +1088,47 @@ export default function Home() {
     setShowWrappedModal(true);
   };
 
+  // Server-Authoritative Mission Completion Flow
   const handleCompleteMission = async () => {
-    confetti({
-      particleCount: 120,
-      spread: 70,
-      origin: { y: 0.6 },
-      colors: ['#f43f5e', '#10b981', '#f59e0b', '#8b5cf6'],
-    });
-
-    setIsCompleted(true);
-    const newStreak = streak + 1;
-    const newSavedMins = savedMins + 15;
-    const updatedBadges = evaluateBadges(newStreak, newSavedMins, mode, badges);
-
-    setStreak(newStreak);
-    setSavedMins(newSavedMins);
-    setBadges(updatedBadges);
-
-    generateShareCard(newStreak, newSavedMins);
+    if (!proofImage) {
+      alert('Please capture a photo proof to complete your mission!');
+      return;
+    }
 
     try {
-      await supabase.from('mission_logs').insert([
-        {
-          user_id: handle,
-          mode: mode,
-          quest_text: activeQuest || 'Micro Mission Completed',
-          photo_url: proofImage
-        }
-      ]);
+      const { data, error } = await supabase.rpc('complete_mission', {
+        p_quest_text: activeQuest || 'Micro Mission Completed',
+        p_photo_url: proofImage,
+        p_mode: mode
+      });
 
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        await supabase
-          .from('profiles')
-          .update({
-            streak: newStreak,
-            time_saved_mins: newSavedMins,
-            badges: updatedBadges
-          })
-          .eq('device_id', session.user.id);
+      if (error) {
+        alert(`Mission error: ${error.message}`);
+        return;
       }
-    } catch (e) {
-      console.log('Failed to log mission:', e);
+
+      if (data && data.success) {
+        confetti({
+          particleCount: 120,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ['#f43f5e', '#10b981', '#f59e0b', '#8b5cf6'],
+        });
+
+        setIsCompleted(true);
+        setStreak(data.new_streak);
+        setSavedMins(data.new_saved_mins);
+        setBadges(data.badges);
+        generateShareCard(data.new_streak, data.new_saved_mins);
+      }
+    } catch (e: any) {
+      console.log('Failed to complete mission:', e);
+      alert('Failed to log mission completion. Please try again.');
     }
   };
 
   const handleShareCard = async (imgUrl: string | null) => {
     if (!imgUrl) return;
-
     try {
       const blob = await (await fetch(imgUrl)).blob();
       const file = new File([blob], 'break-the-loop.png', { type: 'image/png' });
@@ -1086,7 +1191,7 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Incoming Live In-App Raid Invite Notification Banner */}
+      {/* Incoming Live Raid Invite Banner */}
       {incomingInvite && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-rose-950 border-2 border-rose-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(244,63,94,0.5)] animate-bounce text-center space-y-2">
           <div className="text-2xl">⚡</div>
@@ -1113,14 +1218,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* Choose Handle Modal */}
+      {/* Handle Setup Modal */}
       {showHandleModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-rose-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🏷️</div>
             <h2 className="text-lg font-extrabold text-slate-100">CHOOSE YOUR EXPLORER TAG</h2>
             <p className="text-xs text-slate-400">
-              Pick a unique handle so other Mumbaikars can recognize and add you to their squad!
+              Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
               <span className="absolute left-4 top-3 text-rose-400 font-bold text-sm">@</span>
@@ -1160,7 +1265,7 @@ export default function Home() {
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
             <p className="text-xs text-slate-400">
-              {authModalReason || 'Enter your email to save streaks or continue as a guest for solo missions.'}
+              {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
 
             {authError && (
@@ -1182,7 +1287,7 @@ export default function Home() {
                 >
                   Send 6-Digit Code
                 </button>
-                
+
                 <div className="relative py-1">
                   <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
                   <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-slate-900 px-2 text-slate-500">Or</span></div>
@@ -1251,7 +1356,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Friends List Modal with Realtime Online/Offline Status */}
+      {/* Friends List Modal */}
       {showFriendsModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl relative">
@@ -1266,7 +1371,7 @@ export default function Home() {
             </div>
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {friendsList.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "Add as Friend"!</p>
+                <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
               ) : (
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
@@ -1289,7 +1394,6 @@ export default function Home() {
                             ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 active:scale-95'
                             : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
                         }`}
-                        title={isOnline ? 'Send Instant Raid Challenge' : 'User is currently offline'}
                       >
                         <span>⚡</span>
                         <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Direct Raid' : 'Offline'}</span>
@@ -1303,7 +1407,7 @@ export default function Home() {
         </div>
       )}
 
-      {/* Spotify-Wrapped Recap Modal */}
+      {/* Journey Recap Modal */}
       {showWrappedModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
@@ -1313,10 +1417,10 @@ export default function Home() {
             >
               ✕
             </button>
-            <h2 className="text-sm font-black text-rose-400 uppercase tracking-wider">🎧 Monthly Recap Card</h2>
+            <h2 className="text-sm font-black text-rose-400 uppercase tracking-wider">🎧 Your IRL Recap</h2>
             {wrappedCardDataUrl && (
               <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
-                <img src={wrappedCardDataUrl} alt="Wrapped" className="w-full h-80 object-contain mx-auto" />
+                <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
               </div>
             )}
             <button
@@ -1343,7 +1447,7 @@ export default function Home() {
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {m === 'squad' ? 'Squad (3-6)' : m}
+                {m === 'squad' ? 'Squad (3-4)' : m}
               </button>
             ))}
           </div>
@@ -1360,7 +1464,9 @@ export default function Home() {
                 {isSearching ? (
                   <div className="flex flex-col items-center space-y-1">
                     <span className="text-2xl animate-spin">🌀</span>
-                    <span className="text-xs text-rose-200 font-mono font-normal">SEARCHING...</span>
+                    <span className="text-xs text-rose-200 font-mono font-normal">
+                      {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
+                    </span>
                   </div>
                 ) : (
                   <>
@@ -1373,7 +1479,7 @@ export default function Home() {
               <div className="text-center space-y-2 max-w-xs">
                 <p className="text-xs text-slate-500">
                   {isSearching
-                    ? `Searching live queue for nearby ${mode.toUpperCase()} partners...`
+                    ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
                 </p>
 
@@ -1410,10 +1516,29 @@ export default function Home() {
                 </span>
               </div>
 
-              {matchedPartner && (
-                <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl flex items-center justify-center space-x-2 text-xs text-rose-300 font-semibold">
-                  <span>🤝</span>
-                  <span>{matchedPartner}</span>
+              {/* Multi-Player Squad Roster */}
+              {squadRoster.length > 0 && (
+                <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-left space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase">
+                    <span>👑 Active Squad Roster ({squadRoster.length})</span>
+                    <span className="text-emerald-400 font-mono">Live Lobby</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {squadRoster.map((p, idx) => (
+                      <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg text-xs">
+                        <span className="text-rose-400 font-bold">@{p.handle}</span>
+                        {p.user_id !== currentUserId && (
+                          <button
+                            onClick={() => handleAddFriend(p.user_id)}
+                            className="text-[10px] text-slate-400 hover:text-rose-400 pl-1"
+                            title="Add as Friend"
+                          >
+                            +🤝
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 
@@ -1485,14 +1610,14 @@ export default function Home() {
                 {uploading ? (
                   <div className="py-4 flex flex-col items-center space-y-1">
                     <span className="animate-spin text-xl">☁️</span>
-                    <span className="text-xs text-rose-400 font-semibold">Uploading photo to Supabase Cloud...</span>
+                    <span className="text-xs text-rose-400 font-semibold">Compressing & Uploading (~50KB)...</span>
                   </div>
                 ) : proofImage ? (
                   <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
                 ) : (
                   <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
                     <span className="text-xl">📸</span>
-                    <span className="text-xs text-slate-400 font-semibold">Take Live Photo Proof</span>
+                    <span className="text-xs text-slate-400 font-semibold">Take Live Photo Proof (Mandatory)</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -1507,10 +1632,14 @@ export default function Home() {
               <div className="flex flex-col space-y-2 pt-1">
                 <button
                   onClick={handleCompleteMission}
-                  disabled={uploading}
-                  className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 disabled:opacity-50"
+                  disabled={uploading || !proofImage}
+                  className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
+                    proofImage && !uploading
+                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 cursor-pointer'
+                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                  }`}
                 >
-                  Complete & Log Proof
+                  {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
                 </button>
                 <button
                   onClick={handleAbandonMission}
@@ -1529,26 +1658,6 @@ export default function Home() {
               <p className="text-xs text-slate-300">
                 You saved another 15 minutes from doomscrolling reels.
               </p>
-
-              {lastPartnerHandle && (mode === 'duo' || mode === 'squad') && (
-                <div className="bg-slate-950 border border-slate-800 p-3 rounded-2xl flex items-center justify-between">
-                  <div className="text-left">
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">Raid Partner</p>
-                    <p className="text-xs font-bold text-rose-400">@{lastPartnerHandle}</p>
-                  </div>
-                  <button
-                    onClick={handleAddFriend}
-                    disabled={isFriendAdded}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                      isFriendAdded
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
-                        : 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 active:scale-95'
-                    }`}
-                  >
-                    {isFriendAdded ? '✓ Friend Added' : '+ Add as Friend'}
-                  </button>
-                </div>
-              )}
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
@@ -1666,7 +1775,7 @@ export default function Home() {
               onClick={generateSpotifyWrappedCard}
               className="text-[10px] text-amber-400 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
             >
-              🎧 Wrapped
+              🎧 Recap
             </button>
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
