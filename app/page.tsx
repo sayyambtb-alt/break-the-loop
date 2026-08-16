@@ -57,7 +57,7 @@ export default function Home() {
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
-  const [roomId, setRoomId] = useState<string>('room_goregaon');
+  const [roomId, setRoomId] = useState<string>('');
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -246,7 +246,6 @@ export default function Home() {
     invitesChannelRef.current = invitesChannel;
   };
 
-  // Secure Developer Modal Activation (Admin Email Verification Only)
   const handleDevPressStart = () => {
     if (userEmail !== ADMIN_EMAIL) return;
 
@@ -273,10 +272,7 @@ export default function Home() {
         .update({ status: 'accepted' })
         .eq('id', incomingInvite.id);
 
-      if (error) {
-        console.error('Failed to accept raid invite:', error);
-        return;
-      }
+      if (error) return;
 
       setRoomId(incomingInvite.room_id);
       setActiveQuest(incomingInvite.quest_text);
@@ -480,7 +476,6 @@ export default function Home() {
     }
   };
 
-  // Secure RPC handle update
   const saveHandleDirect = async (chosenHandle: string) => {
     const cleaned = chosenHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
     if (!cleaned) return;
@@ -564,6 +559,7 @@ export default function Home() {
 
     setMode(selectedMode);
     setActiveQuest(null);
+    setRoomId('');
     setProofImage(null);
     setIsCompleted(false);
     setIsInviteSession(false);
@@ -575,6 +571,7 @@ export default function Home() {
     if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
       await cancelSearch();
       setActiveQuest(null);
+      setRoomId('');
       setProofImage(null);
       setIsCompleted(false);
       setIsInviteSession(false);
@@ -640,7 +637,7 @@ export default function Home() {
 
   // Realtime Live Chat Subscription
   useEffect(() => {
-    if (!activeQuest || mode === 'solo') return;
+    if (!activeQuest || mode === 'solo' || !roomId) return;
 
     const channel = supabase
       .channel(`chat_${roomId}`)
@@ -661,7 +658,7 @@ export default function Home() {
 
   const sendMessage = async () => {
     const trimmed = newMessage.trim();
-    if (!trimmed) return;
+    if (!trimmed || !roomId) return;
 
     const now = Date.now();
     if (now - lastMessageSentTime < 3000) {
@@ -745,7 +742,6 @@ export default function Home() {
 
       if (matchResult) {
         setRoomId(matchResult.room_id);
-        setActiveQuest(matchResult.quest_text);
         setSquadCapacity(matchResult.max_players || 2);
         setIsQueueCreator(matchResult.is_creator || false);
         if (matchResult.roster) setSquadRoster(matchResult.roster);
@@ -754,9 +750,12 @@ export default function Home() {
           myQueueEntryIdRef.current = matchResult.queue_id;
         }
 
+        // IF MATCHED: Show Mission Assigned
         if (matchResult.matched) {
+          setActiveQuest(matchResult.quest_text);
           setIsSearching(false);
         } else if (matchResult.queue_id) {
+          // IF WAITING: Keep in searching state and listen for match event
           const queueChannel = supabase
             .channel(`queue_${matchResult.queue_id}`)
             .on(
@@ -834,6 +833,7 @@ export default function Home() {
     }
     setIsSearching(false);
     setActiveQuest(null);
+    setRoomId('');
   };
 
   const pickRandomQuest = async () => {
@@ -854,7 +854,6 @@ export default function Home() {
     }
   };
 
-  // Canvas compression (4MB down to ~50KB)
   const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -1270,7 +1269,7 @@ export default function Home() {
             <div className="text-[10px] font-mono bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-slate-400 space-y-1">
               <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
               <p><strong>Session:</strong> {userEmail}</p>
-              <p><strong>Room:</strong> {roomId}</p>
+              <p><strong>Room:</strong> {roomId || 'None'}</p>
               <p><strong>Queue Ref:</strong> {myQueueEntryIdRef.current || 'None'}</p>
             </div>
 
@@ -1604,7 +1603,6 @@ export default function Home() {
                 </span>
               </div>
 
-              {/* Multi-Player Squad Roster */}
               {squadRoster.length > 0 && (
                 <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-left space-y-1.5">
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase">
