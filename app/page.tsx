@@ -704,6 +704,16 @@ export default function Home() {
     }
   };
 
+  const fetchRoster = async (rId: string) => {
+    const { data } = await supabase
+      .from('matchmaking_participants')
+      .select('user_id, handle')
+      .eq('room_id', rId);
+    if (data && data.length > 0) {
+      setSquadRoster(data);
+    }
+  };
+
   const executeMatchmaking = async () => {
     setShowSafetyModal(false);
     setIsSearching(true);
@@ -750,12 +760,12 @@ export default function Home() {
           myQueueEntryIdRef.current = matchResult.queue_id;
         }
 
-        // IF MATCHED: Show Mission Assigned
+        // IF ALREADY MATCHED: Jump straight in
         if (matchResult.matched) {
           setActiveQuest(matchResult.quest_text);
           setIsSearching(false);
         } else if (matchResult.queue_id) {
-          // IF WAITING: Keep in searching state and listen for match event
+          // IF WAITING: Subscribe to queue updates and roster broadcasts
           const queueChannel = supabase
             .channel(`queue_${matchResult.queue_id}`)
             .on(
@@ -766,11 +776,12 @@ export default function Home() {
                 table: 'matchmaking_queue',
                 filter: `id=eq.${matchResult.queue_id}`
               },
-              (payload: any) => {
+              async (payload: any) => {
                 if (payload.new && payload.new.status === 'matched') {
                   setRoomId(payload.new.room_id);
                   setActiveQuest(payload.new.quest_text);
                   setIsSearching(false);
+                  await fetchRoster(payload.new.room_id);
                   supabase.removeChannel(queueChannel);
                 }
               }
@@ -779,18 +790,18 @@ export default function Home() {
 
           queueSubscriptionRef.current = queueChannel;
 
+          // Universal Roster Realtime Listener
           const rosterChannel = supabase
             .channel(`roster_${matchResult.room_id}`)
             .on(
               'postgres_changes',
               {
-                event: 'INSERT',
+                event: '*',
                 schema: 'public',
-                table: 'matchmaking_participants',
-                filter: `room_id=eq.${matchResult.room_id}`
+                table: 'matchmaking_participants'
               },
               (payload: any) => {
-                if (payload.new) {
+                if (payload.new && payload.new.room_id === matchResult.room_id) {
                   setSquadRoster((prev) => {
                     if (prev.some((p) => p.user_id === payload.new.user_id)) return prev;
                     return [...prev, { user_id: payload.new.user_id, handle: payload.new.handle }];
