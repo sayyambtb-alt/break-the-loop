@@ -52,6 +52,31 @@ interface IncomingInvite {
   quest_text: string;
 }
 
+interface ReportItem {
+  id: string;
+  reporter_handle: string;
+  reported_type: string;
+  target_id: string;
+  reason: string;
+  created_at: string;
+}
+
+interface PublicProfileData {
+  found: boolean;
+  handle?: string;
+  streak?: number;
+  time_saved_mins?: number;
+  badges?: string[];
+  member_since?: string;
+  history?: Array<{
+    id: string;
+    mode: string;
+    quest_text: string;
+    photo_url: string;
+    created_at: string;
+  }>;
+}
+
 export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -81,23 +106,28 @@ export default function Home() {
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [authError, setAuthError] = useState('');
 
-  // Handle Setup Modal
+  // Modals & Inspection States
   const [showHandleModal, setShowHandleModal] = useState(false);
   const [newHandleInput, setNewHandleInput] = useState('');
-
-  // Safety Modal State
   const [showSafetyModal, setShowSafetyModal] = useState(false);
-
-  // Developer Modal State (Protected)
   const [showDevModal, setShowDevModal] = useState(false);
   const devTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Admin Reports Modal
+  const [showReportsModal, setShowReportsModal] = useState(false);
+  const [adminReports, setAdminReports] = useState<ReportItem[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
+
+  // Explorer Profile Modal
+  const [selectedProfile, setSelectedProfile] = useState<PublicProfileData | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(false);
 
   // Squad Roster State
   const [squadRoster, setSquadRoster] = useState<SquadParticipant[]>([]);
   const [squadCapacity, setSquadCapacity] = useState<number>(2);
   const [isQueueCreator, setIsQueueCreator] = useState<boolean>(false);
 
-  // Friends & Recap State
+  // Friends & Wrapped State
   const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [showFriendsModal, setShowFriendsModal] = useState(false);
@@ -264,6 +294,69 @@ export default function Home() {
     }
   };
 
+  const inspectProfile = async (targetHandle: string) => {
+    const cleanHandle = targetHandle.replace('@', '').trim();
+    if (!cleanHandle) return;
+    setLoadingProfile(true);
+    try {
+      const { data, error } = await supabase.rpc('get_explorer_public_profile', {
+        p_handle: cleanHandle
+      });
+      if (data && data.found) {
+        setSelectedProfile(data);
+      } else {
+        alert(`Could not find an active profile for @${cleanHandle}`);
+      }
+    } catch (e) {
+      console.log('Error inspecting profile:', e);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
+
+  const fetchAdminReports = async () => {
+    if (userEmail !== ADMIN_EMAIL) return;
+    setLoadingReports(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_reports');
+      if (data) {
+        setAdminReports(data);
+        setShowReportsModal(true);
+      }
+    } catch (e) {
+      console.log('Error fetching reports:', e);
+    } finally {
+      setLoadingReports(false);
+    }
+  };
+
+  const handleResolveReport = async (reportId: string) => {
+    try {
+      await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
+      setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
+    } catch (e) {
+      console.log('Error resolving report:', e);
+    }
+  };
+
+  const handleAdminDeleteFeedPost = async (logId: string) => {
+    if (!window.confirm('ADMIN: Are you sure you want to permanently remove this post from the community feed?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('admin_delete_feed_post', { p_log_id: logId });
+      if (!error) {
+        setFeedItems((prev) => prev.filter((item) => item.id !== logId));
+        alert('Post removed successfully.');
+      } else {
+        alert(`Failed to delete post: ${error.message}`);
+      }
+    } catch (e) {
+      console.log('Admin delete error:', e);
+    }
+  };
+
   const acceptDirectInvite = async () => {
     if (!incomingInvite) return;
     try {
@@ -353,7 +446,7 @@ export default function Home() {
     if (permission === 'granted') {
       setNotificationsEnabled(true);
       new Notification('Break The Loop 🔥', {
-        body: 'In-app raid notifications are now active!',
+        body: 'In-app notifications are active!',
         icon: '/icon.png'
       });
     }
@@ -629,7 +722,7 @@ export default function Home() {
           reason: reason.trim()
         }
       ]);
-      alert('Report submitted. Our team will review this shortly.');
+      alert('Report submitted. Our moderation team will review this shortly.');
     } catch (e) {
       console.log('Report error:', e);
     }
@@ -760,12 +853,10 @@ export default function Home() {
           myQueueEntryIdRef.current = matchResult.queue_id;
         }
 
-        // IF ALREADY MATCHED: Jump straight in
         if (matchResult.matched) {
           setActiveQuest(matchResult.quest_text);
           setIsSearching(false);
         } else if (matchResult.queue_id) {
-          // IF WAITING: Subscribe to queue updates and roster broadcasts
           const queueChannel = supabase
             .channel(`queue_${matchResult.queue_id}`)
             .on(
@@ -790,7 +881,6 @@ export default function Home() {
 
           queueSubscriptionRef.current = queueChannel;
 
-          // Universal Roster Realtime Listener
           const rosterChannel = supabase
             .channel(`roster_${matchResult.room_id}`)
             .on(
@@ -1009,14 +1099,14 @@ export default function Home() {
     ctx.fillStyle = '#64748b';
     ctx.font = '600 32px sans-serif';
     ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('TIME SAVED', 760, statsY);
+    ctx.fillText('IRL XP GAINED', 760, statsY);
 
     ctx.fillStyle = '#f8fafc';
     ctx.font = '900 64px sans-serif';
     ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
 
     ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`${newSavedMins} Mins ⚡`, 760, statsY + 80);
+    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
 
     ctx.fillStyle = '#e2e8f0';
     ctx.font = '700 40px sans-serif';
@@ -1077,15 +1167,14 @@ export default function Home() {
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world time reclaimed from scrolling...', 540, 520);
+    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
 
-    const hoursSaved = (savedMins / 60).toFixed(1);
     ctx.fillStyle = '#f43f5e';
     ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} MINS`, 540, 680);
+    ctx.fillText(`${savedMins} XP`, 540, 680);
     ctx.fillStyle = '#cbd5e1';
     ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Approx ${hoursSaved} hrs reclaimed from screen addiction`, 540, 740);
+    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
 
     ctx.fillStyle = '#38bdf8';
     ctx.font = '900 80px sans-serif';
@@ -1122,7 +1211,6 @@ export default function Home() {
     setShowWrappedModal(true);
   };
 
-  // Server-Authoritative Mission Completion Flow
   const handleCompleteMission = async () => {
     if (!proofImage) {
       alert('Please capture a photo proof to complete your mission!');
@@ -1201,6 +1289,16 @@ export default function Home() {
           BREAK THE LOOP
         </h1>
         <div className="flex items-center space-x-2">
+          {userEmail === ADMIN_EMAIL && (
+            <button
+              onClick={fetchAdminReports}
+              className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
+              title="Admin Moderation Queue"
+            >
+              🚩 Reports
+            </button>
+          )}
+
           <button
             onClick={requestNotificationPermission}
             className={`p-2 rounded-xl text-xs font-bold border transition-all ${
@@ -1261,7 +1359,132 @@ export default function Home() {
         </div>
       )}
 
-      {/* Developer Access Modal (Admin Verified Only) */}
+      {/* Explorer Public Profile Modal */}
+      {selectedProfile && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setSelectedProfile(null)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
+
+            <div className="text-center space-y-1">
+              <div className="text-3xl">👤</div>
+              <h2 className="text-base font-extrabold text-rose-400">@{selectedProfile.handle}</h2>
+              <p className="text-[10px] text-slate-500">
+                Explorer • Active Mumbai Loop Destroyer
+              </p>
+            </div>
+
+            <div className="flex justify-around bg-slate-950 p-3 rounded-2xl border border-slate-800 text-center">
+              <div>
+                <p className="text-[10px] text-slate-500 font-semibold">STREAK</p>
+                <p className="text-sm font-black text-slate-200">{selectedProfile.streak} Days 🔥</p>
+              </div>
+              <div className="w-px bg-slate-800" />
+              <div>
+                <p className="text-[10px] text-slate-500 font-semibold">IRL XP</p>
+                <p className="text-sm font-black text-rose-400">{selectedProfile.time_saved_mins} ⚡</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Unlocked Badges</span>
+              <div className="flex flex-wrap gap-1">
+                {selectedProfile.badges?.map((b, i) => (
+                  <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                    {b}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase">Recent Missions Conquered</span>
+              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+                {selectedProfile.history && selectedProfile.history.length > 0 ? (
+                  selectedProfile.history.map((h) => (
+                    <div key={h.id} className="bg-slate-950 p-2 rounded-xl border border-slate-800 flex space-x-2 items-center">
+                      {h.photo_url && (
+                        <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
+                      )}
+                      <div className="text-left overflow-hidden">
+                        <p className="text-[10px] text-slate-300 truncate font-medium">"{h.quest_text}"</p>
+                        <span className="text-[9px] text-rose-400/80 uppercase font-mono font-bold">{h.mode} Mission</span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[10px] text-slate-600 text-center py-2">No public missions logged yet.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Moderation Queue Modal */}
+      {showReportsModal && userEmail === ADMIN_EMAIL && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+                🛡️ Moderation Reports Queue ({adminReports.length})
+              </h2>
+              <button
+                onClick={() => setShowReportsModal(false)}
+                className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {adminReports.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-8">Queue clear! Zero reported content.</p>
+              ) : (
+                adminReports.map((r) => (
+                  <div key={r.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="text-rose-400 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
+                      <span className="text-[9px] text-slate-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px]">
+                      <strong>Reason:</strong> "{r.reason}"
+                    </p>
+                    <p className="text-slate-500 text-[10px]">
+                      Reported by @{r.reporter_handle} • Target ID: {r.target_id.substring(0, 16)}...
+                    </p>
+                    <div className="flex space-x-2 pt-1 border-t border-slate-900">
+                      {r.reported_type === 'feed' && (
+                        <button
+                          onClick={() => {
+                            handleAdminDeleteFeedPost(r.target_id);
+                            handleResolveReport(r.id);
+                          }}
+                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                        >
+                          Delete Post
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleResolveReport(r.id)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                      >
+                        Dismiss Flag
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
@@ -1478,24 +1701,37 @@ export default function Home() {
                       <div>
                         <div className="flex items-center space-x-1.5">
                           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-600'}`} />
-                          <span className="font-bold text-rose-400">@{f.handle}</span>
+                          <button
+                            onClick={() => inspectProfile(f.handle)}
+                            className="font-bold text-rose-400 hover:underline"
+                          >
+                            @{f.handle}
+                          </button>
                         </div>
                         <span className="block text-[9px] text-slate-500 pl-3.5">
                           {isOnline ? 'Online in App' : 'Offline'}
                         </span>
                       </div>
-                      <button
-                        onClick={() => sendDirectRaidInvite(f)}
-                        disabled={!isOnline || sendingInviteTo === f.handle}
-                        className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
-                          isOnline
-                            ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 active:scale-95'
-                            : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
-                        }`}
-                      >
-                        <span>⚡</span>
-                        <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Direct Raid' : 'Offline'}</span>
-                      </button>
+                      <div className="flex space-x-1.5">
+                        <button
+                          onClick={() => inspectProfile(f.handle)}
+                          className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] px-2 py-1 rounded-lg border border-slate-800 font-bold"
+                        >
+                          Profile
+                        </button>
+                        <button
+                          onClick={() => sendDirectRaidInvite(f)}
+                          disabled={!isOnline || sendingInviteTo === f.handle}
+                          className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
+                            isOnline
+                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 active:scale-95'
+                              : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                          }`}
+                        >
+                          <span>⚡</span>
+                          <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Raid' : 'Offline'}</span>
+                        </button>
+                      </div>
                     </div>
                   );
                 })
@@ -1623,7 +1859,12 @@ export default function Home() {
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
                       <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg text-xs">
-                        <span className="text-rose-400 font-bold">@{p.handle}</span>
+                        <button
+                          onClick={() => inspectProfile(p.handle)}
+                          className="text-rose-400 font-bold hover:underline"
+                        >
+                          @{p.handle}
+                        </button>
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
@@ -1662,9 +1903,12 @@ export default function Home() {
                       messages.map((m) => (
                         <div key={m.id || Math.random()} className="bg-slate-900 p-2 rounded-xl border border-slate-800/80 flex justify-between items-start">
                           <div>
-                            <span className="text-[10px] font-bold text-rose-400">
+                            <button
+                              onClick={() => inspectProfile(m.sender_handle)}
+                              className="text-[10px] font-bold text-rose-400 hover:underline"
+                            >
                               @{m.sender_handle}: 
-                            </span>
+                            </button>
                             <span className="text-slate-300 ml-1">
                               {m.message}
                             </span>
@@ -1753,7 +1997,7 @@ export default function Home() {
               <div className="text-4xl">🎉</div>
               <h2 className="text-xl font-extrabold text-emerald-400">LOOP BROKEN!</h2>
               <p className="text-xs text-slate-300">
-                You saved another 15 minutes from doomscrolling reels.
+                You broke routine and gained real-world experience today.
               </p>
 
               {cardDataUrl && (
@@ -1797,11 +2041,22 @@ export default function Home() {
                   )}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-xs font-bold text-rose-400">
+                      <button
+                        onClick={() => inspectProfile(item.user_id)}
+                        className="text-xs font-bold text-rose-400 hover:underline"
+                      >
                         @{item.user_id || 'Explorer'}
-                      </span>
+                      </button>
                       <div className="flex items-center space-x-2">
-                        <span className="text-[10px] text-emerald-400 font-semibold">🔥 Loop Broken</span>
+                        {userEmail === ADMIN_EMAIL && (
+                          <button
+                            onClick={() => handleAdminDeleteFeedPost(item.id)}
+                            className="text-[10px] bg-red-950/80 border border-red-500/40 text-red-300 px-2 py-0.5 rounded-lg font-bold hover:bg-red-900"
+                            title="Admin: Delete post"
+                          >
+                            🗑️ Delete
+                          </button>
+                        )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
                           className="text-[10px] text-slate-600 hover:text-rose-400"
@@ -1911,8 +2166,8 @@ export default function Home() {
           </div>
           <div className="w-px bg-slate-800" />
           <div>
-            <p className="text-xs text-slate-500">Reel Time Saved</p>
-            <p className="text-lg font-bold text-rose-400">{savedMins} Mins ⚡</p>
+            <p className="text-xs text-slate-500">Total IRL XP</p>
+            <p className="text-lg font-bold text-rose-400">{savedMins} XP ⚡</p>
           </div>
         </div>
       </footer>
