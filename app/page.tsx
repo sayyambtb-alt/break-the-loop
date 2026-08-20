@@ -1883,11 +1883,10 @@ export default function Home() {
 
               <div className="my-4 flex justify-center">
                 {(() => {
-                  // Determine rarity based on a simple hash of the activeQuest string
                   const charSum = activeQuest.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
                   const rarityRoll = charSum % 100;
                   
-                  let rarity = "common";
+                  let rarity: "common" | "rare" | "legendary" = "common";
                   let xp = 15;
 
                   if (rarityRoll > 85) {
