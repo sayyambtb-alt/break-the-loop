@@ -1235,14 +1235,22 @@ export default function Home() {
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
-          colors: ['#f43f5e', '#10b981', '#f59e0b', '#8b5cf6'],
+          colors: ["#f43f5e", "#10b981", "#f59e0b", "#8b5cf6"],
         });
 
         setIsCompleted(true);
-        setStreak(data.new_streak);
-        setSavedMins(data.new_saved_mins);
-        setBadges(data.badges);
-        generateShareCard(data.new_streak, data.new_saved_mins);
+        
+        // Safely check for data before setting state so the page does not crash
+        if (data.new_streak !== undefined) setStreak(data.new_streak);
+        if (data.new_saved_mins !== undefined) setSavedMins(data.new_saved_mins);
+        if (data.badges !== undefined) setBadges(data.badges);
+        
+        // Wrap card generation in try/catch and provide fallback 0 values
+        try {
+          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+        } catch(err) {
+          console.log("Share card skipped:", err);
+        }
       }
     } catch (e: any) {
       console.log('Failed to complete mission:', e);
