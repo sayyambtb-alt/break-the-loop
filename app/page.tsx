@@ -1890,14 +1890,8 @@ export default function Home() {
                     rarity: "common",
                     xp_reward: 15
                   }}
-                  userXp={timeSaved}
-                  onReroll={() => {
-                    if (typeof handleDestroyBoredom === "function") {
-                      handleDestroyBoredom();
-                    } else {
-                      window.location.reload();
-                    }
-                  }}
+                  userXp={0}
+                  onReroll={() => setActiveQuest(null)}
                   onAcceptMission={() => {
                     const cameraInput = document.getElementById("camera-input");
                     if (cameraInput) cameraInput.click();
