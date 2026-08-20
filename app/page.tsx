@@ -1882,23 +1882,42 @@ export default function Home() {
               )}
 
               <div className="my-4 flex justify-center">
-                <SuspenseMissionCard
-                  quest={{
-                    id: "active-quest",
-                    quest_text: activeQuest,
-                    mode: mode,
-                    rarity: "common",
-                    xp_reward: 15
-                  }}
-                  userXp={0}
-                  onReroll={() => setActiveQuest(null)}
-                  onAcceptMission={() => {
-                    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
-                    if (fileInput) {
-                      fileInput.click();
-                    }
-                  }}
-                />
+                {(() => {
+                  // Determine rarity based on a simple hash of the activeQuest string
+                  const charSum = activeQuest.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                  const rarityRoll = charSum % 100;
+                  
+                  let rarity = "common";
+                  let xp = 15;
+
+                  if (rarityRoll > 85) {
+                    rarity = "legendary";
+                    xp = 75;
+                  } else if (rarityRoll > 60) {
+                    rarity = "rare";
+                    xp = 35;
+                  }
+
+                  return (
+                    <SuspenseMissionCard
+                      quest={{
+                        id: "active-quest",
+                        quest_text: activeQuest,
+                        mode: mode,
+                        rarity: rarity,
+                        xp_reward: xp
+                      }}
+                      userXp={0}
+                      onReroll={() => setActiveQuest(null)}
+                      onAcceptMission={() => {
+                        const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+                        if (fileInput) {
+                          fileInput.click();
+                        }
+                      }}
+                    />
+                  );
+                })()}
               </div>
 
               {(mode === 'duo' || mode === 'squad') && (
