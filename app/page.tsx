@@ -1,8 +1,7 @@
 "use client";
-import SuspenseMissionCard from "./components/SuspenseMissionCard";
-"use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import SuspenseMissionCard from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
