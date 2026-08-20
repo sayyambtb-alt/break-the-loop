@@ -1881,9 +1881,44 @@ export default function Home() {
                 </div>
               )}
 
-              <p className="text-base font-medium text-slate-200 leading-relaxed">
-                "{activeQuest}"
-              </p>
+              <div className="my-4 flex justify-center">
+                {(() => {
+                  const charSum = activeQuest.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+                  const rarityRoll = charSum % 100;
+                  
+                  let rarity: "common" | "rare" | "legendary" = "common";
+                  let xp = 15;
+
+                  if (rarityRoll > 85) {
+                    rarity = "legendary";
+                    xp = 75;
+                  } else if (rarityRoll > 60) {
+                    rarity = "rare";
+                    xp = 35;
+                  }
+
+                  return (
+                    <SuspenseMissionCard
+                      key={activeQuest}
+                      quest={{
+                        id: "active-quest",
+                        quest_text: activeQuest,
+                        mode: mode,
+                        rarity: rarity,
+                        xp_reward: xp
+                      }}
+                      userXp={0}
+                      onReroll={() => setActiveQuest(null)}
+                      onAcceptMission={() => {
+                        const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+                        if (fileInput) {
+                          fileInput.click();
+                        }
+                      }}
+                    />
+                  );
+                })()}
+              </div>
 
               {(mode === 'duo' || mode === 'squad') && (
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
