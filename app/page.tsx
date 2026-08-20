@@ -681,21 +681,28 @@ export default function Home() {
 
   const fetchGallery = async () => {
     try {
-      const { data: logs, error } = await supabase.from('mission_logs').select('*').order('created_at', { ascending: false }).limit(20);
+      const { data: logs, error } = await supabase.from("mission_logs").select("*").order("created_at", { ascending: false }).limit(20);
       if (logs && !error) {
-        const { data: reactions } = await supabase.from('feed_reactions').select('*');
+        const { data: profiles } = await supabase.from("profiles").select("device_id, handle");
+        const { data: reactions } = await supabase.from("feed_reactions").select("*");
+
+        const profileMap = new Map((profiles || []).map(p => [p.device_id, p.handle]));
+
         const logsWithReactions = logs.map((log) => {
           const logReactions = reactions?.filter((r) => r.log_id === log.id) || [];
+          const userHandle = profileMap.get(log.user_id) || (log.user_id ? log.user_id.substring(0, 8) : "Anonymous");
           return {
             ...log,
-            fire_count: logReactions.filter((r) => r.reaction_type === 'fire').length,
-            five_count: logReactions.filter((r) => r.reaction_type === 'five').length
+            handle: userHandle,
+            fire_count: logReactions.filter((r) => r.reaction_type === "fire").length,
+            five_count: logReactions.filter((r) => r.reaction_type === "five").length
           };
         });
+
         setFeedItems(logsWithReactions);
       }
-    } catch (e) {
-      console.log('Error fetching gallery:', e);
+    } catch (err) {
+      console.error("Error fetching gallery:", err);
     }
   };
 
