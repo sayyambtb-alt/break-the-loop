@@ -1893,8 +1893,12 @@ export default function Home() {
                   userXp={0}
                   onReroll={() => setActiveQuest(null)}
                   onAcceptMission={() => {
-                    const cameraInput = document.getElementById("camera-input");
-                    if (cameraInput) cameraInput.click();
+                    const fileInput = document.querySelector("input[type='file']");
+                    if (fileInput) {
+                      fileInput.click();
+                    } else {
+                      alert("Opening camera...");
+                    }
                   }}
                 />
               </div>
