@@ -1840,32 +1840,72 @@ export default function Home() {
           )}
 
           {activeQuest && !isCompleted && (
-            <div className="w-full flex justify-center my-4">
-              <SuspenseMissionCard
-                quest={{
-                  id: "active-quest",
-                  quest_text: activeQuest,
-                  mode: mode,
-                  rarity: "common",
-                  xp_reward: 15
-                }}
-                userXp={timeSaved}
-                onReroll={() => {
-                  if (typeof handleDestroyBoredom === "function") {
-                    handleDestroyBoredom();
-                  } else {
-                    window.location.reload();
-                  }
-                }}
-                onAcceptMission={() => {
-                  const cameraInput = document.getElementById("camera-input");
-                  if (cameraInput) cameraInput.click();
-                }}
-              />
-            </div>
-          )}
+            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+              <div className="flex justify-between items-center">
+                <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                  {mode} Mission Assigned
+                </span>
+                <span className="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-bold flex items-center space-x-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  <span>Active Mission</span>
+                </span>
+              </div>
 
-          {(mode === 'duo' || mode === 'squad') && (
+              {squadRoster.length > 0 && (
+                <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-left space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase">
+                    <span>👑 Active Squad Roster ({squadRoster.length})</span>
+                    <span className="text-emerald-400 font-mono">Live Lobby</span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {squadRoster.map((p, idx) => (
+                      <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg text-xs">
+                        <button
+                          onClick={() => inspectProfile(p.handle)}
+                          className="text-rose-400 font-bold hover:underline"
+                        >
+                          @{p.handle}
+                        </button>
+                        {p.user_id !== currentUserId && (
+                          <button
+                            onClick={() => handleAddFriend(p.user_id)}
+                            className="text-[10px] text-slate-400 hover:text-rose-400 pl-1"
+                            title="Add as Friend"
+                          >
+                            +🤝
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="my-4 flex justify-center">
+                <SuspenseMissionCard
+                  quest={{
+                    id: "active-quest",
+                    quest_text: activeQuest,
+                    mode: mode,
+                    rarity: "common",
+                    xp_reward: 15
+                  }}
+                  userXp={timeSaved}
+                  onReroll={() => {
+                    if (typeof handleDestroyBoredom === "function") {
+                      handleDestroyBoredom();
+                    } else {
+                      window.location.reload();
+                    }
+                  }}
+                  onAcceptMission={() => {
+                    const cameraInput = document.getElementById("camera-input");
+                    if (cameraInput) cameraInput.click();
+                  }}
+                />
+              </div>
+
+              {(mode === 'duo' || mode === 'squad') && (
                 <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
                   <div className="flex justify-between items-center border-b border-slate-800 pb-1">
                     <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
