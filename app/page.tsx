@@ -1,3 +1,4 @@
+"use client";
 import SuspenseMissionCard from "./components/SuspenseMissionCard";
 "use client";
 
