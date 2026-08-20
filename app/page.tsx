@@ -1893,11 +1893,9 @@ export default function Home() {
                   userXp={0}
                   onReroll={() => setActiveQuest(null)}
                   onAcceptMission={() => {
-                    const fileInput = document.querySelector("input[type='file']");
+                    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
                     if (fileInput) {
                       fileInput.click();
-                    } else {
-                      alert("Opening camera...");
                     }
                   }}
                 />
