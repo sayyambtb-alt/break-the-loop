@@ -709,7 +709,7 @@ export default function Home() {
   const handleReact = async (logId: string, type: 'fire' | 'five') => {
     try {
       await supabase.from('feed_reactions').insert([
-        { log_id: logId, user_handle: handle, reaction_type: type }
+        { log_id: logId, user_handle: handle, user_id: currentUserId, reaction_type: type }
       ]);
       fetchGallery();
     } catch (e) {
@@ -776,7 +776,7 @@ export default function Home() {
     setNewMessage('');
     try {
       await supabase.from('mission_messages').insert([
-        { room_id: roomId, sender_handle: handle, message: trimmed }
+        { room_id: roomId, sender_handle: handle, sender_id: currentUserId, message: trimmed }
       ]);
     } catch (e) {
       console.log('Error sending message:', e);
