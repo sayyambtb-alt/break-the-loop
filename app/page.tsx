@@ -11,8 +11,8 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publish
 const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
-    autoRefreshToken: false,
-    detectSessionInUrl: false
+    autoRefreshToken: true,
+    detectSessionInUrl: true
   }
 });
 
@@ -106,6 +106,12 @@ export default function Home() {
   const [otpInput, setOtpInput] = useState('');
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
+  const [saveProgressEmail, setSaveProgressEmail] = useState('');
+  const [showRecoverModal, setShowRecoverModal] = useState(false);
+  const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverOtpInput, setRecoverOtpInput] = useState('');
+  const [isRecoverOtpSent, setIsRecoverOtpSent] = useState(false);
 
   // Modals & Inspection States
   const [showHandleModal, setShowHandleModal] = useState(false);
@@ -506,6 +512,65 @@ export default function Home() {
       setIsLoggedIn(true);
       setShowAuthModal(false);
       loadOrCreateProfile(uid, emailInput);
+      fetchFriends(uid);
+      setupUserChannels(uid);
+    }
+  };
+
+  const handleSaveProgress = async (email: string) => {
+    if (!email.includes('@')) {
+      alert('Please enter a valid email address');
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ email });
+    if (error) {
+      alert(`Couldn't save progress: ${error.message}`);
+      return;
+    }
+    setShowSaveProgressModal(false);
+    setSaveProgressEmail('');
+    alert('Check your email and click the confirmation link to save your progress!');
+  };
+
+  const handleRecoverAccount = async (email: string) => {
+    if (!email.includes('@')) {
+      alert('Please enter a valid email address');
+      return;
+    }
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false }
+    });
+    if (error) {
+      alert(`Couldn't find an account with that email, or something went wrong: ${error.message}`);
+      return;
+    }
+    setIsRecoverOtpSent(true);
+    alert('Check your email for a 6-digit code!');
+  };
+
+  const handleVerifyRecoverOtp = async () => {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: recoverEmail,
+      token: recoverOtpInput.trim(),
+      type: 'email'
+    });
+    if (error) {
+      alert(`Couldn't verify that code: ${error.message}`);
+      return;
+    }
+    if (data.session?.user) {
+      cleanupAllChannels();
+      const uid = data.session.user.id;
+      setCurrentUserId(uid);
+      setUserEmail(recoverEmail);
+      setIsGuest(false);
+      setIsLoggedIn(true);
+      setShowRecoverModal(false);
+      setIsRecoverOtpSent(false);
+      setRecoverEmail('');
+      setRecoverOtpInput('');
+      loadOrCreateProfile(uid, recoverEmail);
       fetchFriends(uid);
       setupUserChannels(uid);
     }
@@ -1664,6 +1729,108 @@ export default function Home() {
         </div>
       )}
 
+      {/* Save My Progress Modal */}
+      {showSaveProgressModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setShowSaveProgressModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
+            <div className="text-3xl">💾</div>
+            <h2 className="text-lg font-extrabold text-slate-100">SAVE MY PROGRESS</h2>
+            <p className="text-xs text-slate-400">
+              Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
+            </p>
+            <div className="space-y-3">
+              <input
+                type="email"
+                placeholder="yourname@gmail.com"
+                value={saveProgressEmail}
+                onChange={(e) => setSaveProgressEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+              />
+              <button
+                onClick={() => handleSaveProgress(saveProgressEmail.trim())}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+              >
+                Send Confirmation Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sign In / Recover Account Modal */}
+      {showRecoverModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setShowRecoverModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
+            <div className="text-3xl">🔑</div>
+            <h2 className="text-lg font-extrabold text-slate-100">SIGN IN ON THIS DEVICE</h2>
+            {!isRecoverOtpSent ? (
+              <>
+                <p className="text-xs text-slate-400">
+                  Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="email"
+                    placeholder="yourname@gmail.com"
+                    value={recoverEmail}
+                    onChange={(e) => setRecoverEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    onClick={() => handleRecoverAccount(recoverEmail.trim())}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
+                  >
+                    Send Sign-In Code
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400">
+                  Enter the 6-digit code we emailed to {recoverEmail}.
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit Email Code"
+                    value={recoverOtpInput}
+                    onChange={(e) => setRecoverOtpInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono text-center focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    onClick={handleVerifyRecoverOtp}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                  >
+                    Verify & Sign In
+                  </button>
+                  <button
+                    onClick={() => setIsRecoverOtpSent(false)}
+                    className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
+                  >
+                    Change Email
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Safety Modal */}
       {showSafetyModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
@@ -2221,6 +2388,23 @@ export default function Home() {
             <p className="text-lg font-bold text-rose-400">{savedMins} XP ⚡</p>
           </div>
         </div>
+
+        {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
+          <div className="flex flex-col items-center space-y-1.5 border-t border-slate-800/60 pt-2">
+            <button
+              onClick={() => setShowSaveProgressModal(true)}
+              className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+            >
+              💾 Save My Progress
+            </button>
+            <button
+              onClick={() => setShowRecoverModal(true)}
+              className="text-[10px] text-slate-500 hover:underline"
+            >
+              Already have an account? Sign in
+            </button>
+          </div>
+        )}
       </footer>
     </main>
   );
