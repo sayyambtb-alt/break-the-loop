@@ -110,6 +110,8 @@ export default function Home() {
   const [saveProgressEmail, setSaveProgressEmail] = useState('');
   const [showRecoverModal, setShowRecoverModal] = useState(false);
   const [recoverEmail, setRecoverEmail] = useState('');
+  const [recoverOtpInput, setRecoverOtpInput] = useState('');
+  const [isRecoverOtpSent, setIsRecoverOtpSent] = useState(false);
 
   // Modals & Inspection States
   const [showHandleModal, setShowHandleModal] = useState(false);
@@ -543,9 +545,35 @@ export default function Home() {
       alert(`Couldn't find an account with that email, or something went wrong: ${error.message}`);
       return;
     }
-    setShowRecoverModal(false);
-    setRecoverEmail('');
-    alert('Check your email for a sign-in link!');
+    setIsRecoverOtpSent(true);
+    alert('Check your email for a 6-digit code!');
+  };
+
+  const handleVerifyRecoverOtp = async () => {
+    const { data, error } = await supabase.auth.verifyOtp({
+      email: recoverEmail,
+      token: recoverOtpInput.trim(),
+      type: 'email'
+    });
+    if (error) {
+      alert(`Couldn't verify that code: ${error.message}`);
+      return;
+    }
+    if (data.session?.user) {
+      cleanupAllChannels();
+      const uid = data.session.user.id;
+      setCurrentUserId(uid);
+      setUserEmail(recoverEmail);
+      setIsGuest(false);
+      setIsLoggedIn(true);
+      setShowRecoverModal(false);
+      setIsRecoverOtpSent(false);
+      setRecoverEmail('');
+      setRecoverOtpInput('');
+      loadOrCreateProfile(uid, recoverEmail);
+      fetchFriends(uid);
+      setupUserChannels(uid);
+    }
   };
 
   const handleSignOut = async () => {
@@ -1748,25 +1776,57 @@ export default function Home() {
             </button>
             <div className="text-3xl">🔑</div>
             <h2 className="text-lg font-extrabold text-slate-100">SIGN IN ON THIS DEVICE</h2>
-            <p className="text-xs text-slate-400">
-              Enter the email you previously saved your progress with, and we'll send you a sign-in link.
-            </p>
-            <div className="space-y-3">
-              <input
-                type="email"
-                placeholder="yourname@gmail.com"
-                value={recoverEmail}
-                onChange={(e) => setRecoverEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
-              />
-              <button
-                onClick={() => handleRecoverAccount(recoverEmail.trim())}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
-              >
-                Send Sign-In Link
-              </button>
-            </div>
+            {!isRecoverOtpSent ? (
+              <>
+                <p className="text-xs text-slate-400">
+                  Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="email"
+                    placeholder="yourname@gmail.com"
+                    value={recoverEmail}
+                    onChange={(e) => setRecoverEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    onClick={() => handleRecoverAccount(recoverEmail.trim())}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
+                  >
+                    Send Sign-In Code
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-400">
+                  Enter the 6-digit code we emailed to {recoverEmail}.
+                </p>
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Enter 6-digit Email Code"
+                    value={recoverOtpInput}
+                    onChange={(e) => setRecoverOtpInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono text-center focus:outline-none focus:border-rose-500"
+                  />
+                  <button
+                    onClick={handleVerifyRecoverOtp}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                  >
+                    Verify & Sign In
+                  </button>
+                  <button
+                    onClick={() => setIsRecoverOtpSent(false)}
+                    className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
+                  >
+                    Change Email
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
