@@ -2329,7 +2329,7 @@ export default function Home() {
           </div>
         </div>
 
-        {isGuest && (
+        {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
           <div className="flex flex-col items-center space-y-1.5 border-t border-slate-800/60 pt-2">
             <button
               onClick={() => setShowSaveProgressModal(true)}
