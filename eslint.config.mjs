@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Test mocks intentionally use `any` to stand in for the Supabase
+    // client's API surface; they're type-checked by vitest, not next lint.
+    "test/**",
   ]),
 ]);
 

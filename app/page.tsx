@@ -159,6 +159,57 @@ export default function Home() {
   const presenceChannelRef = useRef<any>(null);
   const invitesChannelRef = useRef<any>(null);
   const myQueueEntryIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(null);
+  const isQueueCreatorRef = useRef<boolean>(false);
+  const accessTokenRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    currentUserIdRef.current = currentUserId;
+  }, [currentUserId]);
+
+  useEffect(() => {
+    isQueueCreatorRef.current = isQueueCreator;
+  }, [isQueueCreator]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      accessTokenRef.current = session?.access_token || null;
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  // Best-effort cleanup so a closed tab / dropped connection doesn't leave an
+  // orphaned matchmaking_queue row behind — React's unmount cleanup never
+  // runs on a real tab close, only pagehide does.
+  useEffect(() => {
+    const releaseQueueOnUnload = () => {
+      const queueId = myQueueEntryIdRef.current;
+      const userId = currentUserIdRef.current;
+      const token = accessTokenRef.current;
+      if (!queueId || !userId || !token) return;
+
+      fetch(`${supabaseUrl}/rest/v1/rpc/leave_match_queue`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: supabaseAnonKey,
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          p_queue_id: queueId,
+          p_user_id: userId,
+          p_is_creator: isQueueCreatorRef.current
+        }),
+        keepalive: true
+      }).catch(() => {});
+    };
+
+    window.addEventListener('pagehide', releaseQueueOnUnload);
+    return () => {
+      window.removeEventListener('pagehide', releaseQueueOnUnload);
+      releaseQueueOnUnload();
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1004,6 +1055,7 @@ export default function Home() {
       } catch (e) {
         console.log('Error cleaning queue entry:', e);
       }
+      myQueueEntryIdRef.current = null;
     }
     setIsSearching(false);
     setActiveQuest(null);
