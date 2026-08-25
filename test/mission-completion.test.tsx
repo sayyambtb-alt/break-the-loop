@@ -73,6 +73,38 @@ describe('mission completion end-to-end', () => {
     expect(screen.getByText('30 XP ⚡')).toBeInTheDocument();
   });
 
+  it('pays out the XP that matches the rarity shown on the card', async () => {
+    const user = userEvent.setup();
+    // Force rollRarity() (and the quest-index pick, harmlessly, since only
+    // one quest is mocked) to roll a legendary result: Math.random() * 100 = 90 > 85.
+    vi.spyOn(Math, 'random').mockReturnValue(0.9);
+    mockState.rpcResponses['complete_mission'] = {
+      data: { success: true, new_streak: 1, new_saved_mins: 90, badges: [] },
+      error: null
+    };
+
+    await renderApp();
+
+    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await waitFor(
+      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      { timeout: 3000 }
+    );
+    expect(screen.getByText('⚡ LEGENDARY QUEST')).toBeInTheDocument();
+    expect(screen.getByText('+75 IRL XP')).toBeInTheDocument();
+
+    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
+
+    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+
+    const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_mission');
+    expect(rpcCall?.args[0]).toMatchObject({ p_xp_earned: 75 });
+  });
+
   it('shows an error and does not mark the mission complete when the RPC fails', async () => {
     const user = userEvent.setup();
     mockState.rpcResponses['complete_mission'] = {
