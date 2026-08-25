@@ -78,7 +78,24 @@ interface PublicProfileData {
   }>;
 }
 
+interface ToastItem {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
 export default function Home() {
+  const [toasts, setToasts] = useState<ToastItem[]>([]);
+  const toastIdRef = useRef(0);
+
+  const showToast = (message: string, type: ToastItem['type'] = 'info') => {
+    const id = ++toastIdRef.current;
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4000);
+  };
+
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
@@ -363,10 +380,9 @@ export default function Home() {
       if (data && data.found) {
         setSelectedProfile(data);
       } else {
-        alert(`Could not find an active profile for @${cleanHandle}`);
+        showToast(`Could not find an active profile for @${cleanHandle}`, 'error');
       }
-    } catch (e) {
-      console.log('Error inspecting profile:', e);
+    } catch {
     } finally {
       setLoadingProfile(false);
     }
@@ -381,8 +397,7 @@ export default function Home() {
         setAdminReports(data);
         setShowReportsModal(true);
       }
-    } catch (e) {
-      console.log('Error fetching reports:', e);
+    } catch {
     } finally {
       setLoadingReports(false);
     }
@@ -392,8 +407,7 @@ export default function Home() {
     try {
       await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
       setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
-    } catch (e) {
-      console.log('Error resolving report:', e);
+    } catch {
     }
   };
 
@@ -406,12 +420,11 @@ export default function Home() {
       const { error } = await supabase.rpc('admin_delete_feed_post', { p_log_id: logId });
       if (!error) {
         setFeedItems((prev) => prev.filter((item) => item.id !== logId));
-        alert('Post removed successfully.');
+        showToast('Post removed successfully.', 'success');
       } else {
-        alert(`Failed to delete post: ${error.message}`);
+        showToast(`Failed to delete post: ${error.message}`, 'error');
       }
-    } catch (e) {
-      console.log('Admin delete error:', e);
+    } catch {
     }
   };
 
@@ -434,8 +447,7 @@ export default function Home() {
       setIncomingInvite(null);
       setShowFriendsModal(false);
       setMessages([]);
-    } catch (e) {
-      console.log('Error accepting raid invite:', e);
+    } catch {
     }
   };
 
@@ -447,8 +459,7 @@ export default function Home() {
         .update({ status: 'declined' })
         .eq('id', incomingInvite.id);
       setIncomingInvite(null);
-    } catch (e) {
-      console.log('Error declining raid invite:', e);
+    } catch {
     }
   };
 
@@ -489,10 +500,9 @@ export default function Home() {
       setIsSearching(false);
       setShowFriendsModal(false);
       setMessages([]);
-      alert(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`);
-    } catch (e) {
-      console.log('Error sending direct raid invite:', e);
-      alert('Could not send raid invite. Please try again.');
+      showToast(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`, 'success');
+    } catch {
+      showToast('Could not send raid invite. Please try again.', 'error');
     } finally {
       setSendingInviteTo(null);
     }
@@ -570,22 +580,22 @@ export default function Home() {
 
   const handleSaveProgress = async (email: string) => {
     if (!email.includes('@')) {
-      alert('Please enter a valid email address');
+      showToast('Please enter a valid email address', 'error');
       return;
     }
     const { error } = await supabase.auth.updateUser({ email });
     if (error) {
-      alert(`Couldn't save progress: ${error.message}`);
+      showToast(`Couldn't save progress: ${error.message}`, 'error');
       return;
     }
     setShowSaveProgressModal(false);
     setSaveProgressEmail('');
-    alert('Check your email and click the confirmation link to save your progress!');
+    showToast('Check your email and click the confirmation link to save your progress!', 'success');
   };
 
   const handleRecoverAccount = async (email: string) => {
     if (!email.includes('@')) {
-      alert('Please enter a valid email address');
+      showToast('Please enter a valid email address', 'error');
       return;
     }
     const { error } = await supabase.auth.signInWithOtp({
@@ -593,11 +603,11 @@ export default function Home() {
       options: { shouldCreateUser: false }
     });
     if (error) {
-      alert(`Couldn't find an account with that email, or something went wrong: ${error.message}`);
+      showToast(`Couldn't find an account with that email, or something went wrong: ${error.message}`, 'error');
       return;
     }
     setIsRecoverOtpSent(true);
-    alert('Check your email for a 6-digit code!');
+    showToast('Check your email for a 6-digit code!', 'success');
   };
 
   const handleVerifyRecoverOtp = async () => {
@@ -607,7 +617,7 @@ export default function Home() {
       type: 'email'
     });
     if (error) {
-      alert(`Couldn't verify that code: ${error.message}`);
+      showToast(`Couldn't verify that code: ${error.message}`, 'error');
       return;
     }
     if (data.session?.user) {
@@ -681,36 +691,40 @@ export default function Home() {
           setShowHandleModal(true);
         }
       }
-    } catch (e) {
-      console.log('Profile setup error:', e);
+    } catch {
     }
   };
 
   const saveHandleDirect = async (chosenHandle: string) => {
     const cleaned = chosenHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
     if (!cleaned) return;
+    const previousHandle = handle;
     setHandle(cleaned);
     if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
     setShowHandleModal(false);
 
-    try {
-      await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
-    } catch (e) {
-      console.log('Handle update error:', e);
+    const { error } = await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
+    if (error) {
+      setHandle(previousHandle);
+      if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', previousHandle);
+      setShowHandleModal(true);
+      showToast(`Couldn't save that handle: ${error.message}`, 'error');
     }
   };
 
   const saveHandle = async (newHandle: string) => {
     const cleaned = newHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
     if (!cleaned) return;
+    const previousHandle = handle;
     setHandle(cleaned);
     if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
     setIsEditingHandle(false);
 
-    try {
-      await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
-    } catch (e) {
-      console.log('Handle update error:', e);
+    const { error } = await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
+    if (error) {
+      setHandle(previousHandle);
+      if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', previousHandle);
+      showToast(`Couldn't save that handle: ${error.message}`, 'error');
     }
   };
 
@@ -741,8 +755,7 @@ export default function Home() {
       } else {
         setFriendsList([]);
       }
-    } catch (e) {
-      console.log('Error fetching friends:', e);
+    } catch {
     }
   };
 
@@ -754,9 +767,8 @@ export default function Home() {
         { onConflict: 'user_id, friend_user_id' }
       );
       fetchFriends(currentUserId);
-      alert('Squad friend added!');
-    } catch (e) {
-      console.log('Add friend error:', e);
+      showToast('Squad friend added!', 'success');
+    } catch {
     }
   };
 
@@ -828,8 +840,7 @@ export default function Home() {
         { log_id: logId, user_handle: handle, user_id: currentUserId, reaction_type: type }
       ]);
       fetchGallery();
-    } catch (e) {
-      console.log('Reaction error:', e);
+    } catch {
     }
   };
 
@@ -846,9 +857,8 @@ export default function Home() {
           reason: reason.trim()
         }
       ]);
-      alert('Report submitted. Our moderation team will review this shortly.');
-    } catch (e) {
-      console.log('Report error:', e);
+      showToast('Report submitted. Our moderation team will review this shortly.', 'success');
+    } catch {
     }
   };
 
@@ -879,12 +889,12 @@ export default function Home() {
 
     const now = Date.now();
     if (now - lastMessageSentTime < 3000) {
-      alert('Please wait 3 seconds before sending another message.');
+      showToast('Please wait 3 seconds before sending another message.', 'info');
       return;
     }
 
     if (trimmed.length > 300) {
-      alert('Message must be 300 characters or fewer.');
+      showToast('Message must be 300 characters or fewer.', 'error');
       return;
     }
 
@@ -894,8 +904,7 @@ export default function Home() {
       await supabase.from('mission_messages').insert([
         { room_id: roomId, sender_handle: handle, sender_id: currentUserId, message: trimmed }
       ]);
-    } catch (e) {
-      console.log('Error sending message:', e);
+    } catch {
     }
   };
 
@@ -962,7 +971,7 @@ export default function Home() {
 
       if (error) {
         console.error('Matchmaking error:', error);
-        alert(`Matchmaking error: ${error.message || JSON.stringify(error)}`);
+        showToast(`Matchmaking error: ${error.message || JSON.stringify(error)}`, 'error');
         setIsSearching(false);
         return;
       }
@@ -1030,7 +1039,7 @@ export default function Home() {
       }
     } catch (err: any) {
       console.error('Catastrophic match error:', err);
-      alert(`Connection error: ${err.message || err}`);
+      showToast(`Connection error: ${err.message || err}`, 'error');
       setIsSearching(false);
     }
   };
@@ -1052,8 +1061,7 @@ export default function Home() {
           p_user_id: currentUserId,
           p_is_creator: isQueueCreator
         });
-      } catch (e) {
-        console.log('Error cleaning queue entry:', e);
+      } catch {
       }
       myQueueEntryIdRef.current = null;
     }
@@ -1140,7 +1148,7 @@ export default function Home() {
 
       if (uploadError) {
         console.error('Storage upload error:', uploadError);
-        alert('Could not upload image to cloud. Please check connection and try again.');
+        showToast('Could not upload image to cloud. Please check connection and try again.', 'error');
         setProofImage(null);
       } else {
         const { data } = supabase.storage.from('Proofs').getPublicUrl(fileName);
@@ -1148,7 +1156,7 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Compression error:', err);
-      alert('Failed to process image. Please try again.');
+      showToast('Failed to process image. Please try again.', 'error');
       setProofImage(null);
     } finally {
       setUploading(false);
@@ -1338,7 +1346,7 @@ export default function Home() {
 
   const handleCompleteMission = async () => {
     if (!proofImage) {
-      alert('Please capture a photo proof to complete your mission!');
+      showToast('Please capture a photo proof to complete your mission!', 'error');
       return;
     }
 
@@ -1350,7 +1358,7 @@ export default function Home() {
       });
 
       if (error) {
-        alert(`Mission error: ${error.message}`);
+        showToast(`Mission error: ${error.message}`, 'error');
         return;
       }
 
@@ -1372,13 +1380,11 @@ export default function Home() {
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
           generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
-        } catch(err) {
-          console.log("Share card skipped:", err);
+        } catch {
         }
       }
-    } catch (e: any) {
-      console.log('Failed to complete mission:', e);
-      alert('Failed to log mission completion. Please try again.');
+    } catch {
+      showToast('Failed to log mission completion. Please try again.', 'error');
     }
   };
 
@@ -1400,7 +1406,7 @@ export default function Home() {
         a.download = 'break-the-loop-card.png';
         a.click();
       }
-    } catch (e) {
+    } catch {
       const a = document.createElement('a');
       a.href = imgUrl;
       a.download = 'break-the-loop-card.png';
@@ -1410,6 +1416,24 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
+      {/* Toast Stack */}
+      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
+              t.type === 'error'
+                ? 'bg-rose-950/95 border-rose-500/40 text-rose-200'
+                : t.type === 'success'
+                ? 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200'
+                : 'bg-slate-900/95 border-slate-700 text-slate-200'
+            }`}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
+
       <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
         <h1
           onMouseDown={handleDevPressStart}
@@ -1649,7 +1673,7 @@ export default function Home() {
                       p_user_id: currentUserId,
                       p_is_creator: isQueueCreator
                     });
-                    alert('Queue locks released.');
+                    showToast('Queue locks released.', 'success');
                   }
                 }}
                 className="w-full bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 py-2 rounded-xl text-xs font-mono font-bold border border-rose-500/30"
@@ -2141,8 +2165,7 @@ export default function Home() {
                         rarity: rarity,
                         xp_reward: xp
                       }}
-                      userXp={0}
-                      onReroll={() => setActiveQuest(null)}
+                      onReroll={() => pickRandomQuest()}
                       onAcceptMission={() => {
                         const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
                         if (fileInput) {

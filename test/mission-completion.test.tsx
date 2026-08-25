@@ -95,7 +95,7 @@ describe('mission completion end-to-end', () => {
 
     await user.click(screen.getByText('Complete & Log Proof 🔥'));
 
-    await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Unauthorized')));
+    await screen.findByText(/Unauthorized/);
     expect(screen.queryByText('LOOP BROKEN!')).not.toBeInTheDocument();
   });
 });

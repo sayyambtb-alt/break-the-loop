@@ -12,20 +12,17 @@ export interface Quest {
 
 interface MissionCardProps {
   quest: Quest;
-  userXp: number;
-  onReroll: (cost: number) => void;
+  onReroll: () => void;
   onAcceptMission: () => void;
 }
 
 export default function SuspenseMissionCard({
   quest,
-  userXp,
   onReroll,
   onAcceptMission,
 }: MissionCardProps) {
   const [isRevealing, setIsRevealing] = useState<boolean>(true);
   const [displayText, setDisplayText] = useState<string>("DECRYPTING LOCAL MISSION...");
-  const [rerollCount, setRerollCount] = useState<number>(0);
 
   const currentRarity = quest.rarity || "common";
   const currentXp = quest.xp_reward || 15;
@@ -56,16 +53,6 @@ export default function SuspenseMissionCard({
       clearTimeout(revealTimer);
     };
   }, [quest]);
-
-  const handleRerollClick = () => {
-    const cost = rerollCount === 0 ? 0 : 10;
-    if (cost > 0 && userXp < cost) {
-      alert("Not enough IRL XP for additional rerolls!");
-      return;
-    }
-    setRerollCount((prev) => prev + 1);
-    onReroll(cost);
-  };
 
   const getRarityBadge = () => {
     switch (currentRarity) {
@@ -130,15 +117,10 @@ export default function SuspenseMissionCard({
           </button>
 
           <button
-            onClick={handleRerollClick}
+            onClick={onReroll}
             className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/50 transition-all flex items-center justify-center gap-2"
           >
             <span>🔄 Reroll Quest</span>
-            {rerollCount === 0 ? (
-              <span className="text-emerald-400 font-bold">(1st Free)</span>
-            ) : (
-              <span className="text-amber-400 font-bold">(-10 XP)</span>
-            )}
           </button>
         </div>
       )}

@@ -71,7 +71,7 @@ describe('save my progress (email linking, no real email sent)', () => {
       const call = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'updateUser');
       expect(call?.args[0]).toMatchObject({ email: 'save-me@example.com' });
     });
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Check your email'));
+    await screen.findByText(/Check your email/);
     // updateUser never sends a real email in tests -- it's a mocked resolver,
     // so no network call to Supabase's auth API happens here at all.
     expect(screen.queryByText('SAVE MY PROGRESS')).not.toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('save my progress (email linking, no real email sent)', () => {
     await user.type(screen.getByPlaceholderText('yourname@gmail.com'), 'taken@example.com');
     await user.click(screen.getByText('Send Confirmation Link'));
 
-    await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Email already in use')));
+    await screen.findByText(/Email already in use/);
     expect(screen.getByText('SAVE MY PROGRESS')).toBeInTheDocument();
   });
 });
@@ -133,7 +133,7 @@ describe('recover account on this device (OTP code, not a magic link)', () => {
 
     const sentCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'signInWithOtp');
     expect(sentCall?.args[0]).toMatchObject({ options: { shouldCreateUser: false } });
-    await waitFor(() => expect(window.alert).toHaveBeenCalledWith(expect.stringContaining("Couldn't find an account")));
+    await screen.findByText(/Couldn't find an account/);
     expect(screen.queryByPlaceholderText('Enter 6-digit Email Code')).not.toBeInTheDocument();
   });
 });

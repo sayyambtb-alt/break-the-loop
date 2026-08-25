@@ -49,7 +49,7 @@ describe('report flow (non-admin)', () => {
       target_id: 'log-1',
       reason: 'Not appropriate for this app'
     });
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('Report submitted'));
+    await screen.findByText(/Report submitted/);
   });
 
   it('does not submit a report when the user cancels the reason prompt', async () => {
