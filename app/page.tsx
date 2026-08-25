@@ -100,6 +100,8 @@ export default function Home() {
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
+  const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
+  const [activeQuestXp, setActiveQuestXp] = useState(15);
   const [roomId, setRoomId] = useState<string>('');
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
@@ -1070,6 +1072,13 @@ export default function Home() {
     setRoomId('');
   };
 
+  const rollRarity = (): { rarity: 'common' | 'rare' | 'legendary'; xp: number } => {
+    const roll = Math.random() * 100;
+    if (roll > 85) return { rarity: 'legendary', xp: 75 };
+    if (roll > 60) return { rarity: 'rare', xp: 35 };
+    return { rarity: 'common', xp: 15 };
+  };
+
   const pickRandomQuest = async () => {
     try {
       const { data: dbQuests } = await supabase
@@ -1079,11 +1088,20 @@ export default function Home() {
         .eq('is_active', true);
 
       if (dbQuests && dbQuests.length > 0) {
+        const { rarity, xp } = rollRarity();
+        setActiveQuestRarity(rarity);
+        setActiveQuestXp(xp);
         setActiveQuest(dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text);
       } else {
+        const { rarity, xp } = rollRarity();
+        setActiveQuestRarity(rarity);
+        setActiveQuestXp(xp);
         setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
       }
     } catch (e) {
+      const { rarity, xp } = rollRarity();
+      setActiveQuestRarity(rarity);
+      setActiveQuestXp(xp);
       setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
     }
   };
@@ -1354,7 +1372,8 @@ export default function Home() {
       const { data, error } = await supabase.rpc('complete_mission', {
         p_quest_text: activeQuest || 'Micro Mission Completed',
         p_photo_url: proofImage,
-        p_mode: mode
+        p_mode: mode,
+        p_xp_earned: activeQuestXp
       });
 
       if (error) {
@@ -2140,41 +2159,23 @@ export default function Home() {
               )}
 
               <div className="my-4 flex justify-center">
-                {(() => {
-                  const charSum = activeQuest.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-                  const rarityRoll = charSum % 100;
-                  
-                  let rarity: "common" | "rare" | "legendary" = "common";
-                  let xp = 15;
-
-                  if (rarityRoll > 85) {
-                    rarity = "legendary";
-                    xp = 75;
-                  } else if (rarityRoll > 60) {
-                    rarity = "rare";
-                    xp = 35;
-                  }
-
-                  return (
-                    <SuspenseMissionCard
-                      key={activeQuest}
-                      quest={{
-                        id: "active-quest",
-                        quest_text: activeQuest,
-                        mode: mode,
-                        rarity: rarity,
-                        xp_reward: xp
-                      }}
-                      onReroll={() => pickRandomQuest()}
-                      onAcceptMission={() => {
-                        const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
-                        if (fileInput) {
-                          fileInput.click();
-                        }
-                      }}
-                    />
-                  );
-                })()}
+                <SuspenseMissionCard
+                  key={activeQuest}
+                  quest={{
+                    id: "active-quest",
+                    quest_text: activeQuest,
+                    mode: mode,
+                    rarity: activeQuestRarity,
+                    xp_reward: activeQuestXp
+                  }}
+                  onReroll={() => pickRandomQuest()}
+                  onAcceptMission={() => {
+                    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+                    if (fileInput) {
+                      fileInput.click();
+                    }
+                  }}
+                />
               </div>
 
               {(mode === 'duo' || mode === 'squad') && (
