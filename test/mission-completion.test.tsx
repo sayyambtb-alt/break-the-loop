@@ -73,6 +73,41 @@ describe('mission completion end-to-end', () => {
     expect(screen.getByText('30 XP ⚡')).toBeInTheDocument();
   });
 
+  it('auto-surfaces the Recap card when a new badge is earned', async () => {
+    const user = userEvent.setup();
+    mockState.rpcResponses['complete_mission'] = {
+      data: {
+        success: true,
+        new_streak: 3,
+        new_saved_mins: 45,
+        badges: ['🌱 First Step', '🔥 Warm Up']
+      },
+      error: null
+    };
+
+    await renderApp();
+
+    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await waitFor(
+      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      { timeout: 3000 }
+    );
+    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
+
+    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+
+    await waitFor(
+      () => expect(screen.getByText('🎧 Your IRL Recap')).toBeInTheDocument(),
+      { timeout: 4000 }
+    );
+    expect(screen.getByAltText('Recap')).toBeInTheDocument();
+  });
+
   it('pays out the XP that matches the rarity shown on the card', async () => {
     const user = userEvent.setup();
     // Force rollRarity() (and the quest-index pick, harmlessly, since only

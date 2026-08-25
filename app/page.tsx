@@ -1390,16 +1390,27 @@ export default function Home() {
         });
 
         setIsCompleted(true);
-        
+
+        const justEarnedNewBadge = Array.isArray(data.badges) && data.badges.some((b: string) => !badges.includes(b));
+        const wasLegendary = activeQuestRarity === 'legendary';
+
         // Safely check for data before setting state so the page does not crash
         if (data.new_streak !== undefined) setStreak(data.new_streak);
         if (data.new_saved_mins !== undefined) setSavedMins(data.new_saved_mins);
         if (data.badges !== undefined) setBadges(data.badges);
-        
+
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
           generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
         } catch {
+        }
+
+        // Auto-surface the Recap at a genuine peak moment, after the completion
+        // animation has had time to play rather than instantly on top of it.
+        if (justEarnedNewBadge || wasLegendary) {
+          setTimeout(() => {
+            generateSpotifyWrappedCard();
+          }, 2500);
         }
       }
     } catch {
