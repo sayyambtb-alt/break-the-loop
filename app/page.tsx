@@ -423,11 +423,12 @@ export default function Home() {
   };
 
   const handleResolveReport = async (reportId: string) => {
-    try {
-      await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
-      setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
-    } catch {
+    const { error } = await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
+    if (error) {
+      showToast(`Couldn't resolve report: ${error.message}`, 'error');
+      return;
     }
+    setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
   };
 
   const handleSubmitQuestSuggestion = async () => {
@@ -468,19 +469,21 @@ export default function Home() {
   };
 
   const handleApproveQuest = async (questId: string) => {
-    try {
-      await supabase.rpc('admin_approve_quest', { p_quest_id: questId });
-      setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
-    } catch {
+    const { error } = await supabase.rpc('admin_approve_quest', { p_quest_id: questId });
+    if (error) {
+      showToast(`Couldn't approve quest: ${error.message}`, 'error');
+      return;
     }
+    setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
   };
 
   const handleRejectQuest = async (questId: string) => {
-    try {
-      await supabase.rpc('admin_reject_quest', { p_quest_id: questId });
-      setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
-    } catch {
+    const { error } = await supabase.rpc('admin_reject_quest', { p_quest_id: questId });
+    if (error) {
+      showToast(`Couldn't reject quest: ${error.message}`, 'error');
+      return;
     }
+    setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
   };
 
   const handleAdminDeleteFeedPost = async (logId: string) => {
