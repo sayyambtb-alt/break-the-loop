@@ -62,6 +62,14 @@ interface ReportItem {
   created_at: string;
 }
 
+interface PendingQuest {
+  id: string;
+  mode: string;
+  quest_text: string;
+  submitted_by_handle: string;
+  created_at: string;
+}
+
 interface PublicProfileData {
   found: boolean;
   handle?: string;
@@ -102,6 +110,7 @@ export default function Home() {
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
   const [activeQuestXp, setActiveQuestXp] = useState(15);
+  const [activeQuestCredit, setActiveQuestCredit] = useState<string | null>(null);
   const [roomId, setRoomId] = useState<string>('');
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
@@ -143,6 +152,14 @@ export default function Home() {
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [adminReports, setAdminReports] = useState<ReportItem[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
+
+  // Quest Suggestions
+  const [showSuggestQuestModal, setShowSuggestQuestModal] = useState(false);
+  const [suggestQuestMode, setSuggestQuestMode] = useState<'solo' | 'duo' | 'squad'>('solo');
+  const [suggestQuestText, setSuggestQuestText] = useState('');
+  const [showPendingQuestsModal, setShowPendingQuestsModal] = useState(false);
+  const [pendingQuests, setPendingQuests] = useState<PendingQuest[]>([]);
+  const [loadingPendingQuests, setLoadingPendingQuests] = useState(false);
 
   // Explorer Profile Modal
   const [selectedProfile, setSelectedProfile] = useState<PublicProfileData | null>(null);
@@ -409,6 +426,59 @@ export default function Home() {
     try {
       await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
       setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
+    } catch {
+    }
+  };
+
+  const handleSubmitQuestSuggestion = async () => {
+    const trimmed = suggestQuestText.trim();
+    if (trimmed.length < 15 || trimmed.length > 300) {
+      showToast('Quest text must be between 15 and 300 characters', 'error');
+      return;
+    }
+
+    const { error } = await supabase.rpc('submit_quest_suggestion', {
+      p_quest_text: trimmed,
+      p_mode: suggestQuestMode
+    });
+
+    if (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+
+    setShowSuggestQuestModal(false);
+    setSuggestQuestText('');
+    showToast('Thanks! Your quest is awaiting review.', 'success');
+  };
+
+  const fetchPendingQuests = async () => {
+    if (userEmail !== ADMIN_EMAIL) return;
+    setLoadingPendingQuests(true);
+    try {
+      const { data, error } = await supabase.rpc('admin_get_pending_quests');
+      if (data) {
+        setPendingQuests(data);
+        setShowPendingQuestsModal(true);
+      }
+    } catch {
+    } finally {
+      setLoadingPendingQuests(false);
+    }
+  };
+
+  const handleApproveQuest = async (questId: string) => {
+    try {
+      await supabase.rpc('admin_approve_quest', { p_quest_id: questId });
+      setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
+    } catch {
+    }
+  };
+
+  const handleRejectQuest = async (questId: string) => {
+    try {
+      await supabase.rpc('admin_reject_quest', { p_quest_id: questId });
+      setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
     } catch {
     }
   };
@@ -1083,7 +1153,7 @@ export default function Home() {
     try {
       const { data: dbQuests } = await supabase
         .from('quests')
-        .select('quest_text')
+        .select('quest_text, submitted_by_handle')
         .eq('mode', mode)
         .eq('is_active', true);
 
@@ -1091,17 +1161,21 @@ export default function Home() {
         const { rarity, xp } = rollRarity();
         setActiveQuestRarity(rarity);
         setActiveQuestXp(xp);
-        setActiveQuest(dbQuests[Math.floor(Math.random() * dbQuests.length)].quest_text);
+        const chosen = dbQuests[Math.floor(Math.random() * dbQuests.length)];
+        setActiveQuestCredit(chosen.submitted_by_handle || null);
+        setActiveQuest(chosen.quest_text);
       } else {
         const { rarity, xp } = rollRarity();
         setActiveQuestRarity(rarity);
         setActiveQuestXp(xp);
+        setActiveQuestCredit(null);
         setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
       }
     } catch (e) {
       const { rarity, xp } = rollRarity();
       setActiveQuestRarity(rarity);
       setActiveQuestXp(xp);
+      setActiveQuestCredit(null);
       setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
     }
   };
@@ -1486,6 +1560,16 @@ export default function Home() {
             </button>
           )}
 
+          {userEmail === ADMIN_EMAIL && (
+            <button
+              onClick={fetchPendingQuests}
+              className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
+              title="Pending Quest Suggestions"
+            >
+              📝 Quests
+            </button>
+          )}
+
           <button
             onClick={requestNotificationPermission}
             className={`p-2 rounded-xl text-xs font-bold border transition-all ${
@@ -1661,6 +1745,69 @@ export default function Home() {
                         className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                       >
                         Dismiss Flag
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Admin Pending Quest Suggestions Modal */}
+      {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+                📝 Pending Quest Suggestions ({pendingQuests.length})
+              </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={fetchPendingQuests}
+                  className="text-slate-500 hover:text-slate-300 text-[10px] font-bold"
+                  title="Refresh"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={() => setShowPendingQuestsModal(false)}
+                  className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {loadingPendingQuests ? (
+                <p className="text-xs text-slate-500 text-center py-8">Loading...</p>
+              ) : pendingQuests.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-8">No quests awaiting review.</p>
+              ) : (
+                pendingQuests.map((q) => (
+                  <div key={q.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                        {q.mode}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <p className="text-slate-300 text-[11px]">"{q.quest_text}"</p>
+                    <p className="text-slate-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
+                    <div className="flex space-x-2 pt-1 border-t border-slate-900">
+                      <button
+                        onClick={() => handleApproveQuest(q.id)}
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectQuest(q.id)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                      >
+                        Reject
                       </button>
                     </div>
                   </div>
@@ -1864,6 +2011,56 @@ export default function Home() {
                 className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
               >
                 Send Confirmation Link
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Suggest a Quest Modal */}
+      {showSuggestQuestModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setShowSuggestQuestModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
+            <div className="text-3xl">✍️</div>
+            <h2 className="text-lg font-extrabold text-slate-100">SUGGEST A QUEST</h2>
+            <p className="text-xs text-slate-400">
+              Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
+            </p>
+            <div className="space-y-3">
+              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 w-full justify-between">
+                {(['solo', 'duo', 'squad'] as const).map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setSuggestQuestMode(m)}
+                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+                      suggestQuestMode === m
+                        ? 'bg-rose-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {m}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                placeholder="Describe the mission (15-300 characters)..."
+                value={suggestQuestText}
+                onChange={(e) => setSuggestQuestText(e.target.value)}
+                maxLength={300}
+                rows={4}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-rose-500 resize-none"
+              />
+              <button
+                onClick={handleSubmitQuestSuggestion}
+                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+              >
+                Submit for Review
               </button>
             </div>
           </div>
@@ -2179,6 +2376,7 @@ export default function Home() {
                     rarity: activeQuestRarity,
                     xp_reward: activeQuestXp
                   }}
+                  credit={activeQuestCredit}
                   onReroll={() => pickRandomQuest()}
                   onAcceptMission={() => {
                     const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
@@ -2433,6 +2631,15 @@ export default function Home() {
               className="text-[10px] text-amber-400 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
             >
               🎧 Recap
+            </button>
+            <button
+              onClick={() => {
+                setSuggestQuestMode(mode);
+                setShowSuggestQuestModal(true);
+              }}
+              className="text-[10px] text-emerald-300 hover:underline font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg"
+            >
+              ✍️ Suggest Quest
             </button>
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button

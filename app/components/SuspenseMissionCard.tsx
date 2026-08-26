@@ -12,12 +12,14 @@ export interface Quest {
 
 interface MissionCardProps {
   quest: Quest;
+  credit?: string | null;
   onReroll: () => void;
   onAcceptMission: () => void;
 }
 
 export default function SuspenseMissionCard({
   quest,
+  credit,
   onReroll,
   onAcceptMission,
 }: MissionCardProps) {
@@ -106,6 +108,12 @@ export default function SuspenseMissionCard({
           "{displayText}"
         </p>
       </div>
+
+      {!isRevealing && credit && (
+        <p className="text-center text-[10px] text-zinc-500 -mt-2 mb-2">
+          Suggested by @{credit}
+        </p>
+      )}
 
       {!isRevealing && (
         <div className="mt-6 flex flex-col gap-3">
