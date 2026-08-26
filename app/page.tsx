@@ -18,6 +18,22 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 const ADMIN_EMAIL = 'sayyambtb@gmail.com';
 
+const RANK_TIERS: { minXp: number; title: string }[] = [
+  { minXp: 0, title: 'Fresh Escapee' },
+  { minXp: 100, title: 'Chaos Local' },
+  { minXp: 300, title: 'Boredom Slayer' },
+  { minXp: 700, title: 'Street Legend' },
+  { minXp: 1500, title: 'Mumbai Made' },
+];
+
+const getRankTitle = (totalXp: number): string => {
+  let title = RANK_TIERS[0].title;
+  for (const tier of RANK_TIERS) {
+    if (totalXp >= tier.minXp) title = tier.title;
+  }
+  return title;
+};
+
 interface FeedItem {
   id: string;
   user_id: string;
@@ -76,6 +92,7 @@ interface PublicProfileData {
   streak?: number;
   time_saved_mins?: number;
   badges?: string[];
+  total_xp?: number;
   member_since?: string;
   history?: Array<{
     id: string;
@@ -117,6 +134,7 @@ export default function Home() {
   const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(1);
   const [savedMins, setSavedMins] = useState(15);
+  const [totalXp, setTotalXp] = useState(0);
   const [handle, setHandle] = useState('Explorer');
   const [badges, setBadges] = useState<string[]>(['🌱 First Step']);
   const [isEditingHandle, setIsEditingHandle] = useState(false);
@@ -750,6 +768,7 @@ export default function Home() {
         }
         setStreak(data.streak || 1);
         setSavedMins(data.time_saved_mins || 15);
+        setTotalXp(data.total_xp || 0);
         if (data.badges) setBadges(data.badges);
         if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
           setShowHandleModal(true);
@@ -1476,11 +1495,20 @@ export default function Home() {
 
         const justEarnedNewBadge = Array.isArray(data.badges) && data.badges.some((b: string) => !badges.includes(b));
         const wasLegendary = activeQuestRarity === 'legendary';
+        const oldRankTitle = getRankTitle(totalXp);
 
         // Safely check for data before setting state so the page does not crash
         if (data.new_streak !== undefined) setStreak(data.new_streak);
         if (data.new_saved_mins !== undefined) setSavedMins(data.new_saved_mins);
         if (data.badges !== undefined) setBadges(data.badges);
+        if (data.new_total_xp !== undefined) setTotalXp(data.new_total_xp);
+
+        if (data.new_total_xp !== undefined) {
+          const newRankTitle = getRankTitle(data.new_total_xp);
+          if (newRankTitle !== oldRankTitle) {
+            showToast(`🎖️ Rank up! You're now a ${newRankTitle}.`, 'success');
+          }
+        }
 
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
@@ -1652,7 +1680,10 @@ export default function Home() {
 
             <div className="text-center space-y-1">
               <div className="text-3xl">👤</div>
-              <h2 className="text-base font-extrabold text-rose-400">@{selectedProfile.handle}</h2>
+              <h2 className="text-base font-extrabold text-rose-400">
+                @{selectedProfile.handle}{' '}
+                <span className="text-slate-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
+              </h2>
               <p className="text-[10px] text-slate-500">
                 Explorer • Active Mumbai Loop Destroyer
               </p>
@@ -2625,6 +2656,7 @@ export default function Home() {
               className="text-xs font-bold text-rose-400 hover:underline flex items-center space-x-1"
             >
               <span>@{handle}</span>
+              <span className="text-[10px] text-slate-500 font-medium">· {getRankTitle(totalXp)}</span>
               <span className="text-[10px] text-slate-500">✏️</span>
             </button>
           )}
