@@ -140,6 +140,35 @@ describe('mission completion end-to-end', () => {
     expect(rpcCall?.args[0]).toMatchObject({ p_xp_earned: 75 });
   });
 
+  it('shows a rank-up toast when completing a mission crosses a rank threshold', async () => {
+    const user = userEvent.setup();
+    // Keep the rolled rarity common (no legendary/Recap interference) so this
+    // test only exercises the rank-up path.
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    mockState.rpcResponses['complete_mission'] = {
+      data: { success: true, new_streak: 2, new_saved_mins: 30, new_total_xp: 150, badges: ['🌱 First Step'] },
+      error: null
+    };
+
+    await renderApp();
+
+    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await waitFor(
+      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      { timeout: 3000 }
+    );
+    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
+
+    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+
+    await screen.findByText(/Rank up! You're now a Chaos Local/);
+  });
+
   it('shows an error and does not mark the mission complete when the RPC fails', async () => {
     const user = userEvent.setup();
     mockState.rpcResponses['complete_mission'] = {
