@@ -1065,6 +1065,7 @@ export default function Home() {
           setActiveQuest(matchResult.quest_text);
           setActiveQuestRarity(matchResult.rarity);
           setActiveQuestXp(matchResult.xp_reward);
+          setActiveQuestCredit(null);
           setIsSearching(false);
         } else if (matchResult.queue_id) {
           const queueChannel = supabase
@@ -1083,6 +1084,7 @@ export default function Home() {
                   setActiveQuest(payload.new.quest_text);
                   setActiveQuestRarity(payload.new.rarity);
                   setActiveQuestXp(payload.new.xp_reward);
+                  setActiveQuestCredit(null);
                   setIsSearching(false);
                   await fetchRoster(payload.new.room_id);
                   supabase.removeChannel(queueChannel);
