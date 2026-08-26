@@ -37,6 +37,7 @@ const getRankTitle = (totalXp: number): string => {
 interface FeedItem {
   id: string;
   user_id: string;
+  handle: string;
   mode: string;
   quest_text: string;
   photo_url: string;
@@ -2599,10 +2600,10 @@ export default function Home() {
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <button
-                        onClick={() => inspectProfile(item.user_id)}
+                        onClick={() => inspectProfile(item.handle)}
                         className="text-xs font-bold text-rose-400 hover:underline"
                       >
-                        @{item.user_id || 'Explorer'}
+                        @{item.handle || 'Explorer'}
                       </button>
                       <div className="flex items-center space-x-2">
                         {userEmail === ADMIN_EMAIL && (
