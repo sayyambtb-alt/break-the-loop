@@ -128,6 +128,7 @@ export default function Home() {
   const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
   const [activeQuestXp, setActiveQuestXp] = useState(15);
   const [activeQuestCredit, setActiveQuestCredit] = useState<string | null>(null);
+  const [isMissionAccepted, setIsMissionAccepted] = useState(false);
   const [roomId, setRoomId] = useState<string>('');
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
@@ -1085,6 +1086,7 @@ export default function Home() {
           setActiveQuestRarity(matchResult.rarity);
           setActiveQuestXp(matchResult.xp_reward);
           setActiveQuestCredit(null);
+          setIsMissionAccepted(false);
           setIsSearching(false);
         } else if (matchResult.queue_id) {
           const queueChannel = supabase
@@ -1104,6 +1106,7 @@ export default function Home() {
                   setActiveQuestRarity(payload.new.rarity);
                   setActiveQuestXp(payload.new.xp_reward);
                   setActiveQuestCredit(null);
+                  setIsMissionAccepted(false);
                   setIsSearching(false);
                   await fetchRoster(payload.new.room_id);
                   supabase.removeChannel(queueChannel);
@@ -1191,12 +1194,14 @@ export default function Home() {
         setActiveQuestXp(xp);
         const chosen = dbQuests[Math.floor(Math.random() * dbQuests.length)];
         setActiveQuestCredit(chosen.submitted_by_handle || null);
+        setIsMissionAccepted(false);
         setActiveQuest(chosen.quest_text);
       } else {
         const { rarity, xp } = rollRarity();
         setActiveQuestRarity(rarity);
         setActiveQuestXp(xp);
         setActiveQuestCredit(null);
+        setIsMissionAccepted(false);
         setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
       }
     } catch (e) {
@@ -1204,6 +1209,7 @@ export default function Home() {
       setActiveQuestRarity(rarity);
       setActiveQuestXp(xp);
       setActiveQuestCredit(null);
+      setIsMissionAccepted(false);
       setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
     }
   };
@@ -2419,10 +2425,16 @@ export default function Home() {
                   credit={activeQuestCredit}
                   onReroll={() => pickRandomQuest()}
                   onAcceptMission={() => {
-                    const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
-                    if (fileInput) {
-                      fileInput.click();
-                    }
+                    setIsMissionAccepted(true);
+                    // The upload box (and its file input) only mounts once
+                    // isMissionAccepted flips, so defer the click until after
+                    // that render commits.
+                    setTimeout(() => {
+                      const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+                      if (fileInput) {
+                        fileInput.click();
+                      }
+                    }, 0);
                   }}
                 />
               </div>
@@ -2490,28 +2502,30 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="border-2 border-dashed border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center bg-slate-950/50 space-y-1">
-                {uploading ? (
-                  <div className="py-4 flex flex-col items-center space-y-1">
-                    <span className="animate-spin text-xl">☁️</span>
-                    <span className="text-xs text-rose-400 font-semibold">Compressing & Uploading (~50KB)...</span>
-                  </div>
-                ) : proofImage ? (
-                  <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
-                ) : (
-                  <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
-                    <span className="text-xl">📸</span>
-                    <span className="text-xs text-slate-400 font-semibold"></span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                    />
-                  </label>
-                )}
-              </div>
+              {isMissionAccepted && (
+                <div className="border-2 border-dashed border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center bg-slate-950/50 space-y-1">
+                  {uploading ? (
+                    <div className="py-4 flex flex-col items-center space-y-1">
+                      <span className="animate-spin text-xl">☁️</span>
+                      <span className="text-xs text-rose-400 font-semibold">Compressing & Uploading (~50KB)...</span>
+                    </div>
+                  ) : proofImage ? (
+                    <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
+                  ) : (
+                    <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
+                      <span className="text-xl">📸</span>
+                      <span className="text-xs text-slate-400 font-semibold"></span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </div>
+              )}
 
               <div className="flex flex-col space-y-2 pt-1">
                 <button
