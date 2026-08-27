@@ -1051,6 +1051,42 @@ export default function Home() {
     }
   };
 
+  // Kept open for the lifetime of a Duo/Squad match (not just until matching
+  // completes) so both the initial match AND every later shared reroll keep
+  // syncing to every participant, not just whoever triggered it.
+  const subscribeToQueueUpdates = (queueId: string) => {
+    const queueChannel = supabase
+      .channel(`queue_${queueId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'matchmaking_queue',
+          filter: `id=eq.${queueId}`
+        },
+        async (payload: any) => {
+          if (!payload.new) return;
+
+          const justMatched = payload.old?.status !== 'matched' && payload.new.status === 'matched';
+          if (justMatched) {
+            setRoomId(payload.new.room_id);
+            setIsSearching(false);
+            await fetchRoster(payload.new.room_id);
+          }
+
+          setActiveQuest(payload.new.quest_text);
+          setActiveQuestRarity(payload.new.rarity);
+          setActiveQuestXp(payload.new.xp_reward);
+          setActiveQuestCredit(null);
+          setIsMissionAccepted(false);
+        }
+      )
+      .subscribe();
+
+    queueSubscriptionRef.current = queueChannel;
+  };
+
   const executeMatchmaking = async () => {
     setShowSafetyModal(false);
     setIsSearching(true);
@@ -1104,34 +1140,11 @@ export default function Home() {
           setActiveQuestCredit(null);
           setIsMissionAccepted(false);
           setIsSearching(false);
+          if (matchResult.queue_id) {
+            subscribeToQueueUpdates(matchResult.queue_id);
+          }
         } else if (matchResult.queue_id) {
-          const queueChannel = supabase
-            .channel(`queue_${matchResult.queue_id}`)
-            .on(
-              'postgres_changes',
-              {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'matchmaking_queue',
-                filter: `id=eq.${matchResult.queue_id}`
-              },
-              async (payload: any) => {
-                if (payload.new && payload.new.status === 'matched') {
-                  setRoomId(payload.new.room_id);
-                  setActiveQuest(payload.new.quest_text);
-                  setActiveQuestRarity(payload.new.rarity);
-                  setActiveQuestXp(payload.new.xp_reward);
-                  setActiveQuestCredit(null);
-                  setIsMissionAccepted(false);
-                  setIsSearching(false);
-                  await fetchRoster(payload.new.room_id);
-                  supabase.removeChannel(queueChannel);
-                }
-              }
-            )
-            .subscribe();
-
-          queueSubscriptionRef.current = queueChannel;
+          subscribeToQueueUpdates(matchResult.queue_id);
 
           const rosterChannel = supabase
             .channel(`roster_${matchResult.room_id}`)
@@ -1228,6 +1241,19 @@ export default function Home() {
       setIsMissionAccepted(false);
       setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
     }
+  };
+
+  const handleSharedReroll = async () => {
+    const { error } = await supabase.rpc('reroll_shared_quest', {
+      p_queue_id: myQueueEntryIdRef.current
+    });
+    if (error) {
+      showToast(`Couldn't reroll: ${error.message}`, 'error');
+    }
+    // No need to setActiveQuest here directly — the realtime subscription from
+    // subscribeToQueueUpdates will deliver the update to this client too, the
+    // same way it delivers it to the partner. Single source of truth, no
+    // duplicate logic.
   };
 
   const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
@@ -1514,6 +1540,18 @@ export default function Home() {
         });
 
         setIsCompleted(true);
+
+        // The match is over — tear down the persistent Duo/Squad channels
+        // (same cleanup cancelSearch does when backing out early) so they
+        // don't keep delivering reroll/roster updates after this point.
+        if (queueSubscriptionRef.current) {
+          supabase.removeChannel(queueSubscriptionRef.current);
+          queueSubscriptionRef.current = null;
+        }
+        if (participantsSubRef.current) {
+          supabase.removeChannel(participantsSubRef.current);
+          participantsSubRef.current = null;
+        }
 
         const justEarnedNewBadge = Array.isArray(data.badges) && data.badges.some((b: string) => !badges.includes(b));
         const wasLegendary = activeQuestRarity === 'legendary';
@@ -2488,7 +2526,7 @@ export default function Home() {
                     xp_reward: activeQuestXp
                   }}
                   credit={activeQuestCredit}
-                  onReroll={() => pickRandomQuest()}
+                  onReroll={() => mode === 'solo' ? pickRandomQuest() : handleSharedReroll()}
                   onAcceptMission={() => {
                     setIsMissionAccepted(true);
                     // The upload box (and its file input) only mounts once
