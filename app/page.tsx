@@ -194,6 +194,8 @@ export default function Home() {
   const [friendsList, setFriendsList] = useState<FriendProfile[]>([]);
   const [onlineUserIds, setOnlineUserIds] = useState<Set<string>>(new Set());
   const [showFriendsModal, setShowFriendsModal] = useState(false);
+  const [leaderboardTab, setLeaderboardTab] = useState<'squad' | 'leaderboard'>('squad');
+  const [leaderboard, setLeaderboard] = useState<{ handle: string; total_xp: number; streak: number; is_self: boolean }[]>([]);
   const [showWrappedModal, setShowWrappedModal] = useState(false);
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
@@ -903,6 +905,10 @@ export default function Home() {
     if (tab === 'feed') fetchGallery();
   }, [tab]);
 
+  useEffect(() => {
+    if (showFriendsModal && leaderboardTab === 'leaderboard') fetchLeaderboard();
+  }, [showFriendsModal, leaderboardTab]);
+
   const fetchGallery = async () => {
     try {
       const { data: logs, error } = await supabase.from("mission_logs").select("*").order("created_at", { ascending: false }).limit(20);
@@ -928,6 +934,15 @@ export default function Home() {
     } catch (err) {
       console.error("Error fetching gallery:", err);
     }
+  };
+
+  const fetchLeaderboard = async () => {
+    const { data, error } = await supabase.rpc('get_friends_leaderboard');
+    if (error) {
+      showToast(`Couldn't load leaderboard: ${error.message}`, 'error');
+      return;
+    }
+    setLeaderboard(data || []);
   };
 
   const handleReact = async (logId: string, type: 'fire' | 'five') => {
@@ -2223,6 +2238,54 @@ export default function Home() {
                 ✕
               </button>
             </div>
+
+            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 w-full justify-between">
+              {(['squad', 'leaderboard'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setLeaderboardTab(t)}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+                    leaderboardTab === t
+                      ? 'bg-rose-600 text-white'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  {t === 'squad' ? 'Squad' : 'Leaderboard'}
+                </button>
+              ))}
+            </div>
+
+            {leaderboardTab === 'leaderboard' ? (
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {leaderboard.map((entry, i) => (
+                  <div
+                    key={entry.handle}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                      entry.is_self
+                        ? 'bg-rose-500/10 border-rose-500/40'
+                        : 'bg-slate-950 border-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2">
+                      <span className="text-slate-500 font-bold w-4 text-center">{i + 1}</span>
+                      <div>
+                        <button
+                          onClick={() => inspectProfile(entry.handle)}
+                          className="font-bold text-rose-400 hover:underline"
+                        >
+                          @{entry.handle}
+                        </button>
+                        <span className="block text-[9px] text-slate-500">{getRankTitle(entry.total_xp)}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-slate-200">{entry.total_xp} XP</p>
+                      <p className="text-[9px] text-slate-500">{entry.streak} Days 🔥</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {friendsList.length === 0 ? (
                 <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
@@ -2270,6 +2333,7 @@ export default function Home() {
                 })
               )}
             </div>
+            )}
           </div>
         </div>
       )}
