@@ -877,6 +877,18 @@ export default function Home() {
       return;
     }
 
+    // Switching mode tabs mid-match would otherwise leave the old match's
+    // realtime connection open in the background — same cleanup
+    // handleCompleteMission does once a mission genuinely ends.
+    if (queueSubscriptionRef.current) {
+      supabase.removeChannel(queueSubscriptionRef.current);
+      queueSubscriptionRef.current = null;
+    }
+    if (participantsSubRef.current) {
+      supabase.removeChannel(participantsSubRef.current);
+      participantsSubRef.current = null;
+    }
+
     setMode(selectedMode);
     setActiveQuest(null);
     setRoomId('');
