@@ -50,11 +50,23 @@ export class MockQueryBuilder {
   }
 }
 
+export interface MockChannelHandler {
+  event: string;
+  config: any;
+  callback: (payload: any) => void | Promise<void>;
+}
+
+export interface MockChannelEntry {
+  name: string;
+  channel: { _handlers: MockChannelHandler[]; [key: string]: any };
+}
+
 export interface MockState {
   session: any;
   responses: Record<string, ResponseResolver>;
   rpcResponses: Record<string, MockResponse | ((params: any) => MockResponse)>;
   calls: MockCall[];
+  channels: MockChannelEntry[];
   storageUploadError: any;
   authStateCallback: ((event: string, session: any) => void) | null;
 }
@@ -65,6 +77,7 @@ export function createMockState(): MockState {
     responses: {},
     rpcResponses: {},
     calls: [],
+    channels: [],
     storageUploadError: null,
     authStateCallback: null
   };
@@ -77,13 +90,18 @@ export function resetMockState() {
   mockState.responses = {};
   mockState.rpcResponses = {};
   mockState.calls = [];
+  mockState.channels = [];
   mockState.storageUploadError = null;
   mockState.authStateCallback = null;
 }
 
 function makeChannel() {
   const channel: any = {
-    on: vi.fn(() => channel),
+    _handlers: [] as MockChannelHandler[],
+    on: vi.fn((event: string, config: any, callback: (payload: any) => void | Promise<void>) => {
+      channel._handlers.push({ event, config, callback });
+      return channel;
+    }),
     subscribe: vi.fn((cb?: (status: string) => void) => {
       cb?.('SUBSCRIBED');
       return channel;
@@ -137,7 +155,11 @@ export function buildSupabaseClient() {
       if (!resolver) return { data: null, error: null };
       return typeof resolver === 'function' ? resolver(params) : resolver;
     }),
-    channel: vi.fn(() => makeChannel()),
+    channel: vi.fn((name: string) => {
+      const channel = makeChannel();
+      mockState.channels.push({ name, channel });
+      return channel;
+    }),
     removeChannel: vi.fn(),
     storage: {
       from: vi.fn((bucket: string) => ({
