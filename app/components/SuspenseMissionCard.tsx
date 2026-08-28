@@ -67,16 +67,16 @@ export default function SuspenseMissionCard({
         };
       case "rare":
         return {
-          border: "border-cyan-400 shadow-[0_0_20px_rgba(34,211,238,0.4)]",
-          bg: "bg-cyan-500/10",
-          text: "text-cyan-400",
+          border: "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]",
+          bg: "bg-amber-500/10",
+          text: "text-amber-400",
           label: "💎 RARE QUEST",
         };
       default:
         return {
-          border: "border-zinc-700",
-          bg: "bg-zinc-900/80",
-          text: "text-zinc-400",
+          border: "border-slate-700",
+          bg: "bg-slate-900/80",
+          text: "text-slate-400",
           label: "⚪ COMMON QUEST",
         };
     }
@@ -94,7 +94,7 @@ export default function SuspenseMissionCard({
         <span className={`text-xs font-black tracking-widest uppercase ${style.text}`}>
           {isRevealing ? "🎲 ROLLING RARITY..." : style.label}
         </span>
-        <div className="px-3 py-1 rounded-full bg-zinc-800 border border-zinc-700 text-xs font-bold text-emerald-400">
+        <div className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold text-amber-400">
           +{currentXp} IRL XP
         </div>
       </div>
@@ -102,7 +102,7 @@ export default function SuspenseMissionCard({
       <div className="min-h-[100px] flex items-center justify-center my-4">
         <p
           className={`text-center text-lg font-medium leading-relaxed ${
-            isRevealing ? "text-zinc-500 animate-pulse font-mono text-sm" : "text-white"
+            isRevealing ? "text-slate-500 animate-pulse font-mono text-sm" : "text-white"
           }`}
         >
           "{displayText}"
@@ -110,7 +110,7 @@ export default function SuspenseMissionCard({
       </div>
 
       {!isRevealing && credit && (
-        <p className="text-center text-[10px] text-zinc-500 -mt-2 mb-2">
+        <p className="text-center text-[10px] text-slate-500 -mt-2 mb-2">
           Suggested by @{credit}
         </p>
       )}
@@ -119,14 +119,14 @@ export default function SuspenseMissionCard({
         <div className="mt-6 flex flex-col gap-3">
           <button
             onClick={onAcceptMission}
-            className="w-full py-3.5 px-4 rounded-xl font-extrabold text-black bg-gradient-to-r from-emerald-400 to-green-500 hover:brightness-110 active:scale-98 transition-all shadow-lg shadow-emerald-500/20"
+            className="w-full py-3.5 px-4 rounded-xl font-extrabold text-white bg-rose-600 hover:bg-rose-500 active:scale-98 transition-all shadow-lg shadow-rose-600/30"
           >
             ACCEPT MISSION & OPEN CAMERA
           </button>
 
           <button
             onClick={onReroll}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/50 transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 transition-all flex items-center justify-center gap-2"
           >
             <span>🔄 Reroll Quest</span>
           </button>

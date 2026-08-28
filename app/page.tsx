@@ -1638,7 +1638,7 @@ export default function Home() {
               t.type === 'error'
                 ? 'bg-rose-950/95 border-rose-500/40 text-rose-200'
                 : t.type === 'success'
-                ? 'bg-emerald-950/95 border-emerald-500/40 text-emerald-200'
+                ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
                 : 'bg-slate-900/95 border-slate-700 text-slate-200'
             }`}
           >
@@ -1653,7 +1653,7 @@ export default function Home() {
           onMouseUp={handleDevPressEnd}
           onTouchStart={handleDevPressStart}
           onTouchEnd={handleDevPressEnd}
-          className="text-xl font-extrabold tracking-wider text-rose-500 cursor-pointer select-none active:scale-95 transition-transform"
+          className="text-lg sm:text-xl font-extrabold tracking-tight sm:tracking-wider text-rose-500 cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
           title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
         >
           BREAK THE LOOP
@@ -1681,9 +1681,9 @@ export default function Home() {
 
           <button
             onClick={requestNotificationPermission}
-            className={`p-2 rounded-xl text-xs font-bold border transition-all ${
+            className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
               notificationsEnabled
-                ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                 : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
             }`}
             title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
@@ -1901,7 +1901,7 @@ export default function Home() {
                 pendingQuests.map((q) => (
                   <div key={q.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
                     <div className="flex justify-between items-start">
-                      <span className="bg-emerald-500/10 text-emerald-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                      <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                         {q.mode}
                       </span>
                       <span className="text-[9px] text-slate-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
@@ -1911,7 +1911,7 @@ export default function Home() {
                     <div className="flex space-x-2 pt-1 border-t border-slate-900">
                       <button
                         onClick={() => handleApproveQuest(q.id)}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                        className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
                       >
                         Approve
                       </button>
@@ -2078,7 +2078,7 @@ export default function Home() {
                 />
                 <button
                   onClick={handleVerifyEmailOtp}
-                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                  className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
                 >
                   Verify & Continue
                 </button>
@@ -2229,7 +2229,7 @@ export default function Home() {
                   />
                   <button
                     onClick={handleVerifyRecoverOtp}
-                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                    className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
                   >
                     Verify & Sign In
                   </button>
@@ -2346,7 +2346,7 @@ export default function Home() {
                     <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
                       <div>
                         <div className="flex items-center space-x-1.5">
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-slate-600'}`} />
+                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-slate-600'}`} />
                           <button
                             onClick={() => inspectProfile(f.handle)}
                             className="font-bold text-rose-400 hover:underline"
@@ -2370,7 +2370,7 @@ export default function Home() {
                           disabled={!isOnline || sendingInviteTo === f.handle}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
                             isOnline
-                              ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-600/30 active:scale-95'
+                              ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 active:scale-95'
                               : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
                           }`}
                         >
@@ -2416,7 +2416,7 @@ export default function Home() {
       )}
 
       {tab === 'quest' ? (
-        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-6">
+        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
           <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
@@ -2434,7 +2434,7 @@ export default function Home() {
           </div>
 
           {!activeQuest && !isCompleted && (
-            <div className="flex flex-col items-center space-y-6">
+            <div className="flex flex-col items-center space-y-4">
               <button
                 onClick={onStartMatchingClick}
                 disabled={isSearching}
@@ -2468,7 +2468,7 @@ export default function Home() {
                   <div className="flex flex-col items-center space-y-2 pt-2">
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-lg shadow-emerald-600/20 transition-all active:scale-95"
+                      className="bg-rose-600 hover:bg-rose-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-lg shadow-rose-600/20 transition-all active:scale-95"
                     >
                       <span>📲</span>
                       <span>Invite Friend via WhatsApp Now</span>
@@ -2491,8 +2491,8 @@ export default function Home() {
                 <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {mode} Mission Assigned
                 </span>
-                <span className="text-xs text-emerald-400 font-mono bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 font-bold flex items-center space-x-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
+                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                   <span>Active Mission</span>
                 </span>
               </div>
@@ -2501,7 +2501,7 @@ export default function Home() {
                 <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-left space-y-1.5">
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase">
                     <span>👑 Active Squad Roster ({squadRoster.length})</span>
-                    <span className="text-emerald-400 font-mono">Live Lobby</span>
+                    <span className="text-amber-400 font-mono">Live Lobby</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
@@ -2560,7 +2560,7 @@ export default function Home() {
                     <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
+                      className="text-[10px] bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
                     >
                       <span>📲</span>
                       <span>Invite Friend</span>
@@ -2665,9 +2665,9 @@ export default function Home() {
           )}
 
           {isCompleted && (
-            <div className="w-full bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-full bg-slate-900 border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
               <div className="text-4xl">🎉</div>
-              <h2 className="text-xl font-extrabold text-emerald-400">LOOP BROKEN!</h2>
+              <h2 className="text-xl font-extrabold text-amber-400">LOOP BROKEN!</h2>
               <p className="text-xs text-slate-300">
                 You broke routine and gained real-world experience today.
               </p>
@@ -2807,7 +2807,7 @@ export default function Home() {
                 setSuggestQuestMode(mode);
                 setShowSuggestQuestModal(true);
               }}
-              className="text-[10px] text-emerald-300 hover:underline font-bold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg"
+              className="text-[10px] text-rose-300 hover:underline font-bold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
             >
               ✍️ Suggest Quest
             </button>
@@ -2824,7 +2824,7 @@ export default function Home() {
                   setAuthModalReason('');
                   setShowAuthModal(true);
                 }}
-                className="text-[10px] text-emerald-400 hover:underline font-semibold"
+                className="text-[10px] text-rose-400 hover:underline font-semibold"
               >
                 Verify
               </button>
