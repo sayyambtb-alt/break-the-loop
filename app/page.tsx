@@ -2768,7 +2768,7 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
+      <footer className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
         <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
           {isEditingHandle ? (
             <input
