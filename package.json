@@ -11,7 +11,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@fontsource/anton": "^5.3.0",
+    "@fontsource/space-grotesk": "^5.3.0",
     "@supabase/supabase-js": "^2.112.2",
     "@types/canvas-confetti": "^1.9.0",
     "canvas-confetti": "^1.9.4",
