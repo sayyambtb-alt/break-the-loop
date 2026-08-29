@@ -1653,7 +1653,7 @@ export default function Home() {
           onMouseUp={handleDevPressEnd}
           onTouchStart={handleDevPressStart}
           onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-extrabold tracking-tight sm:tracking-wider bg-gradient-to-r from-rose-500 to-amber-500 bg-clip-text text-transparent drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
+          className="text-xl sm:text-2xl font-normal tracking-wide font-['Anton'] bg-gradient-to-r from-rose-500 to-amber-500 bg-clip-text text-transparent drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
           title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
         >
           BREAK THE LOOP
@@ -2451,8 +2451,8 @@ export default function Home() {
                   </div>
                 ) : (
                   <>
-                    <span className="tracking-widest drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                    <span className="text-sm font-bold text-rose-200 mt-1 tracking-[0.2em] line-through decoration-2">BOREDOM</span>
+                    <span className="font-['Anton'] font-normal text-3xl tracking-wide drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
+                    <span className="font-['Anton'] font-normal text-base text-rose-200 mt-1 tracking-[0.15em] line-through decoration-2">BOREDOM</span>
                   </>
                 )}
               </button>
