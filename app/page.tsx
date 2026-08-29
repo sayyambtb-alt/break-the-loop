@@ -1548,7 +1548,7 @@ export default function Home() {
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
-          colors: ["#f43f5e", "#10b981", "#f59e0b", "#8b5cf6"],
+          colors: ["#f43f5e", "#fda4af", "#f59e0b", "#fcd34d"],
         });
 
         setIsCompleted(true);
@@ -1628,7 +1628,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
+    <main className="min-h-screen bg-gradient-to-b from-[#20111f] via-[#160d17] to-[#0c0709] text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -2422,9 +2422,9 @@ export default function Home() {
               <button
                 key={m}
                 onClick={() => handleSelectMode(m)}
-                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] active:scale-95 ${
                   mode === m
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30 scale-105'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
@@ -2435,27 +2435,37 @@ export default function Home() {
 
           {!activeQuest && !isCompleted && (
             <div className="flex flex-col items-center space-y-4">
-              <button
-                onClick={onStartMatchingClick}
-                disabled={isSearching}
-                className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
-                  isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-                }`}
-              >
-                {isSearching ? (
-                  <div className="flex flex-col items-center space-y-1">
-                    <span className="text-2xl animate-spin">🌀</span>
-                    <span className="text-xs text-rose-200 font-mono font-normal">
-                      {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <span>DESTROY</span>
-                    <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
-                  </>
-                )}
-              </button>
+              <div className="relative flex items-center justify-center">
+                <div
+                  aria-hidden="true"
+                  className="absolute w-72 h-72 rounded-full bg-[radial-gradient(circle,rgba(244,63,94,0.35)_0%,rgba(244,63,94,0)_70%)] pointer-events-none"
+                />
+                <button
+                  onClick={onStartMatchingClick}
+                  disabled={isSearching}
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] touch-manipulation ${
+                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/15 rotate-[-20deg]"
+                  />
+                  {isSearching ? (
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="text-2xl animate-spin">🌀</span>
+                      <span className="text-xs text-rose-200 font-mono font-normal">
+                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <span>DESTROY</span>
+                      <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               <div className="text-center space-y-2 max-w-xs">
                 <p className="text-xs text-slate-500">
@@ -2768,7 +2778,7 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
+      <footer className="w-full max-w-md bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
         <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
           {isEditingHandle ? (
             <input
@@ -2835,7 +2845,11 @@ export default function Home() {
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
           <span className="text-slate-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
           {badges.map((b, i) => (
-            <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
+            <span
+              key={i}
+              className="badge-float bg-rose-500/10 border border-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full whitespace-nowrap font-medium"
+              style={{ animationDelay: `${i * 0.2}s` }}
+            >
               {b}
             </span>
           ))}
