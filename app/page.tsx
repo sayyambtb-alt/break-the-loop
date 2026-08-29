@@ -2417,7 +2417,7 @@ export default function Home() {
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
+          <div className="flex bg-[#241726] p-1.5 rounded-2xl border border-[#3a2438] w-full justify-between">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
                 key={m}
@@ -2496,7 +2496,7 @@ export default function Home() {
           )}
 
           {activeQuest && !isCompleted && (
-            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+            <div className="w-full bg-[#241726] border border-[#3a2438] rounded-3xl p-5 text-center space-y-4 shadow-2xl">
               <div className="flex justify-between items-center">
                 <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {mode} Mission Assigned
@@ -2508,14 +2508,14 @@ export default function Home() {
               </div>
 
               {squadRoster.length > 0 && (
-                <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-left space-y-1.5">
+                <div className="bg-[#170f18] border border-[#3a2438] p-2.5 rounded-xl text-left space-y-1.5">
                   <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase">
                     <span>👑 Active Squad Roster ({squadRoster.length})</span>
                     <span className="text-amber-400 font-mono">Live Lobby</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg text-xs">
+                      <div key={idx} className="flex items-center space-x-1 bg-[#241726] border border-[#3a2438] px-2 py-1 rounded-lg text-xs">
                         <button
                           onClick={() => inspectProfile(p.handle)}
                           className="text-rose-400 font-bold hover:underline"
@@ -2659,7 +2659,7 @@ export default function Home() {
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
                     proofImage && !uploading
                       ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-[#2e1c2c] text-slate-500 cursor-not-allowed border border-[#3a2438]'
                   }`}
                 >
                   {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
@@ -2675,7 +2675,7 @@ export default function Home() {
           )}
 
           {isCompleted && (
-            <div className="w-full bg-slate-900 border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-full bg-[#241726] border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
               <div className="text-4xl">🎉</div>
               <h2 className="text-xl font-extrabold text-amber-400">LOOP BROKEN!</h2>
               <p className="text-xs text-slate-300">
@@ -2684,7 +2684,7 @@ export default function Home() {
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-slate-950">
+                  <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-[#170f18]">
                     <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
                   </div>
 
@@ -2700,7 +2700,7 @@ export default function Home() {
 
               <button
                 onClick={() => setIsCompleted(false)}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                className="w-full bg-[#2e1c2c] hover:bg-[#3a2438] text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
               >
                 Back to Home
               </button>
