@@ -1628,7 +1628,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
+    <main className="min-h-screen bg-white text-slate-900 flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -1653,7 +1653,7 @@ export default function Home() {
           onMouseUp={handleDevPressEnd}
           onTouchStart={handleDevPressStart}
           onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-extrabold tracking-tight sm:tracking-wider text-rose-500 cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
+          className="text-lg sm:text-xl font-extrabold tracking-tight sm:tracking-wider bg-gradient-to-r from-rose-500 to-amber-500 bg-clip-text text-transparent drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
           title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
         >
           BREAK THE LOOP
@@ -2451,8 +2451,8 @@ export default function Home() {
                   </div>
                 ) : (
                   <>
-                    <span>DESTROY</span>
-                    <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
+                    <span className="tracking-widest drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
+                    <span className="text-sm font-bold text-rose-200 mt-1 tracking-[0.2em] line-through decoration-2">BOREDOM</span>
                   </>
                 )}
               </button>
