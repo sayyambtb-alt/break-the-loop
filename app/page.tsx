@@ -1548,7 +1548,7 @@ export default function Home() {
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
-          colors: ["#f43f5e", "#10b981", "#f59e0b", "#8b5cf6"],
+          colors: ["#f43f5e", "#fda4af", "#f59e0b", "#fcd34d"],
         });
 
         setIsCompleted(true);
@@ -1628,7 +1628,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
+    <main className="min-h-screen bg-[#FFF8EF] text-[#2B2118] flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -1639,7 +1639,7 @@ export default function Home() {
                 ? 'bg-rose-950/95 border-rose-500/40 text-rose-200'
                 : t.type === 'success'
                 ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-slate-900/95 border-slate-700 text-slate-200'
+                : 'bg-[#FFFFFF]/95 border-[#DCC29C] text-[#3D3024]'
             }`}
           >
             {t.message}
@@ -1647,7 +1647,7 @@ export default function Home() {
         ))}
       </div>
 
-      <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
+      <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-[#EAD9BE]">
         <h1
           onMouseDown={handleDevPressStart}
           onMouseUp={handleDevPressEnd}
@@ -1662,7 +1662,7 @@ export default function Home() {
           {userEmail === ADMIN_EMAIL && (
             <button
               onClick={fetchAdminReports}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
+              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
               title="Admin Moderation Queue"
             >
               🚩 Reports
@@ -1672,7 +1672,7 @@ export default function Home() {
           {userEmail === ADMIN_EMAIL && (
             <button
               onClick={fetchPendingQuests}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
+              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
               title="Pending Quest Suggestions"
             >
               📝 Quests
@@ -1683,19 +1683,19 @@ export default function Home() {
             onClick={requestNotificationPermission}
             className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
               notificationsEnabled
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
-                : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
+                : 'bg-[#FFFFFF] border-[#EAD9BE] text-[#8A7560] hover:text-[#2B2118]'
             }`}
             title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
           >
             {notificationsEnabled ? '🔔' : '🔕'}
           </button>
 
-          <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 text-xs">
+          <div className="flex bg-[#FFFFFF] border border-[#EAD9BE] rounded-xl p-1 text-xs">
             <button
               onClick={() => setTab('quest')}
               className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'quest' ? 'bg-rose-600 text-white' : 'text-slate-400'
+                tab === 'quest' ? 'bg-rose-600 text-white' : 'text-[#8A7560]'
               }`}
             >
               Quest
@@ -1703,7 +1703,7 @@ export default function Home() {
             <button
               onClick={() => setTab('feed')}
               className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'feed' ? 'bg-rose-600 text-white' : 'text-slate-400'
+                tab === 'feed' ? 'bg-rose-600 text-white' : 'text-[#8A7560]'
               }`}
             >
               Feed
@@ -1716,7 +1716,7 @@ export default function Home() {
       {incomingInvite && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-rose-950 border-2 border-rose-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(244,63,94,0.5)] animate-bounce text-center space-y-2">
           <div className="text-2xl">⚡</div>
-          <h3 className="font-extrabold text-sm text-slate-100">
+          <h3 className="font-extrabold text-sm text-[#2B2118]">
             @{incomingInvite.sender_handle} challenged you to a Duo Raid!
           </h3>
           <p className="text-[11px] text-rose-200 italic">
@@ -1725,7 +1725,7 @@ export default function Home() {
           <div className="flex space-x-2 pt-2">
             <button
               onClick={declineDirectInvite}
-              className="flex-1 bg-slate-900 text-slate-300 py-2 rounded-xl text-xs font-bold"
+              className="flex-1 bg-[#FFFFFF] text-[#5C4A38] py-2 rounded-xl text-xs font-bold"
             >
               Decline
             </button>
@@ -1742,10 +1742,10 @@ export default function Home() {
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-5 space-y-4 shadow-2xl relative">
             <button
               onClick={() => setSelectedProfile(null)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+              className="absolute top-4 right-4 text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
             >
               ✕
             </button>
@@ -1754,30 +1754,30 @@ export default function Home() {
               <div className="text-3xl">👤</div>
               <h2 className="text-base font-extrabold text-rose-400">
                 @{selectedProfile.handle}{' '}
-                <span className="text-slate-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
+                <span className="text-[#A08D77] font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
               </h2>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-[#A08D77]">
                 Explorer • Active Mumbai Loop Destroyer
               </p>
             </div>
 
-            <div className="flex justify-around bg-slate-950 p-3 rounded-2xl border border-slate-800 text-center">
+            <div className="flex justify-around bg-[#F5EAD9] p-3 rounded-2xl border border-[#EAD9BE] text-center">
               <div>
-                <p className="text-[10px] text-slate-500 font-semibold">STREAK</p>
-                <p className="text-sm font-black text-slate-200">{selectedProfile.streak} Days 🔥</p>
+                <p className="text-[10px] text-[#A08D77] font-semibold">STREAK</p>
+                <p className="text-sm font-black text-[#3D3024]">{selectedProfile.streak} Days 🔥</p>
               </div>
-              <div className="w-px bg-slate-800" />
+              <div className="w-px bg-[#EFE0C8]" />
               <div>
-                <p className="text-[10px] text-slate-500 font-semibold">IRL XP</p>
+                <p className="text-[10px] text-[#A08D77] font-semibold">IRL XP</p>
                 <p className="text-sm font-black text-rose-400">{selectedProfile.time_saved_mins} ⚡</p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Unlocked Badges</span>
+              <span className="text-[10px] font-bold text-[#8A7560] uppercase">Unlocked Badges</span>
               <div className="flex flex-wrap gap-1">
                 {selectedProfile.badges?.map((b, i) => (
-                  <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-300 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                  <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-medium">
                     {b}
                   </span>
                 ))}
@@ -1785,22 +1785,22 @@ export default function Home() {
             </div>
 
             <div className="space-y-2">
-              <span className="text-[10px] font-bold text-slate-400 uppercase">Recent Missions Conquered</span>
+              <span className="text-[10px] font-bold text-[#8A7560] uppercase">Recent Missions Conquered</span>
               <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
                 {selectedProfile.history && selectedProfile.history.length > 0 ? (
                   selectedProfile.history.map((h) => (
-                    <div key={h.id} className="bg-slate-950 p-2 rounded-xl border border-slate-800 flex space-x-2 items-center">
+                    <div key={h.id} className="bg-[#F5EAD9] p-2 rounded-xl border border-[#EAD9BE] flex space-x-2 items-center">
                       {h.photo_url && (
                         <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
                       )}
                       <div className="text-left overflow-hidden">
-                        <p className="text-[10px] text-slate-300 truncate font-medium">"{h.quest_text}"</p>
+                        <p className="text-[10px] text-[#5C4A38] truncate font-medium">"{h.quest_text}"</p>
                         <span className="text-[9px] text-rose-400/80 uppercase font-mono font-bold">{h.mode} Mission</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[10px] text-slate-600 text-center py-2">No public missions logged yet.</p>
+                  <p className="text-[10px] text-[#B5A48E] text-center py-2">No public missions logged yet.</p>
                 )}
               </div>
             </div>
@@ -1811,14 +1811,14 @@ export default function Home() {
       {/* Admin Moderation Queue Modal */}
       {showReportsModal && userEmail === ADMIN_EMAIL && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+          <div className="w-full max-w-md bg-[#FFFFFF] border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
+            <div className="flex justify-between items-center border-b border-[#EAD9BE] pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 🛡️ Moderation Reports Queue ({adminReports.length})
               </h2>
               <button
                 onClick={() => setShowReportsModal(false)}
-                className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+                className="text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
               >
                 ✕
               </button>
@@ -1826,21 +1826,21 @@ export default function Home() {
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
               {adminReports.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">Queue clear! Zero reported content.</p>
+                <p className="text-xs text-[#A08D77] text-center py-8">Queue clear! Zero reported content.</p>
               ) : (
                 adminReports.map((r) => (
-                  <div key={r.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                  <div key={r.id} className="bg-[#F5EAD9] p-3 rounded-2xl border border-[#EAD9BE] space-y-2 text-xs">
                     <div className="flex justify-between items-start">
                       <span className="text-rose-400 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
-                      <span className="text-[9px] text-slate-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
+                      <span className="text-[9px] text-[#A08D77] font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-slate-300 text-[11px]">
+                    <p className="text-[#5C4A38] text-[11px]">
                       <strong>Reason:</strong> "{r.reason}"
                     </p>
-                    <p className="text-slate-500 text-[10px]">
+                    <p className="text-[#A08D77] text-[10px]">
                       Reported by @{r.reporter_handle} • Target ID: {r.target_id.substring(0, 16)}...
                     </p>
-                    <div className="flex space-x-2 pt-1 border-t border-slate-900">
+                    <div className="flex space-x-2 pt-1 border-t border-[#EAD9BE]">
                       {r.reported_type === 'feed' && (
                         <button
                           onClick={() => {
@@ -1854,7 +1854,7 @@ export default function Home() {
                       )}
                       <button
                         onClick={() => handleResolveReport(r.id)}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                        className="bg-[#EFE0C8] hover:bg-[#E5D3B5] text-[#5C4A38] text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                       >
                         Dismiss Flag
                       </button>
@@ -1870,22 +1870,22 @@ export default function Home() {
       {/* Admin Pending Quest Suggestions Modal */}
       {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+          <div className="w-full max-w-md bg-[#FFFFFF] border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
+            <div className="flex justify-between items-center border-b border-[#EAD9BE] pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 📝 Pending Quest Suggestions ({pendingQuests.length})
               </h2>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={fetchPendingQuests}
-                  className="text-slate-500 hover:text-slate-300 text-[10px] font-bold"
+                  className="text-[#A08D77] hover:text-[#2B2118] text-[10px] font-bold"
                   title="Refresh"
                 >
                   🔄
                 </button>
                 <button
                   onClick={() => setShowPendingQuestsModal(false)}
-                  className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+                  className="text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
                 >
                   ✕
                 </button>
@@ -1894,21 +1894,21 @@ export default function Home() {
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
               {loadingPendingQuests ? (
-                <p className="text-xs text-slate-500 text-center py-8">Loading...</p>
+                <p className="text-xs text-[#A08D77] text-center py-8">Loading...</p>
               ) : pendingQuests.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">No quests awaiting review.</p>
+                <p className="text-xs text-[#A08D77] text-center py-8">No quests awaiting review.</p>
               ) : (
                 pendingQuests.map((q) => (
-                  <div key={q.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                  <div key={q.id} className="bg-[#F5EAD9] p-3 rounded-2xl border border-[#EAD9BE] space-y-2 text-xs">
                     <div className="flex justify-between items-start">
-                      <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                      <span className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                         {q.mode}
                       </span>
-                      <span className="text-[9px] text-slate-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
+                      <span className="text-[9px] text-[#A08D77] font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-slate-300 text-[11px]">"{q.quest_text}"</p>
-                    <p className="text-slate-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-slate-900">
+                    <p className="text-[#5C4A38] text-[11px]">"{q.quest_text}"</p>
+                    <p className="text-[#A08D77] text-[10px]">Suggested by @{q.submitted_by_handle}</p>
+                    <div className="flex space-x-2 pt-1 border-t border-[#EAD9BE]">
                       <button
                         onClick={() => handleApproveQuest(q.id)}
                         className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
@@ -1917,7 +1917,7 @@ export default function Home() {
                       </button>
                       <button
                         onClick={() => handleRejectQuest(q.id)}
-                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                        className="bg-[#EFE0C8] hover:bg-[#E5D3B5] text-[#5C4A38] text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                       >
                         Reject
                       </button>
@@ -1933,20 +1933,20 @@ export default function Home() {
       {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
+            <div className="flex justify-between items-center border-b border-[#EAD9BE] pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 🛠️ Developer Tools ({userEmail})
               </h2>
               <button
                 onClick={() => setShowDevModal(false)}
-                className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+                className="text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <div className="text-[10px] font-mono bg-slate-950 p-2.5 rounded-xl border border-slate-800 text-slate-400 space-y-1">
+            <div className="text-[10px] font-mono bg-[#F5EAD9] p-2.5 rounded-xl border border-[#EAD9BE] text-[#8A7560] space-y-1">
               <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
               <p><strong>Session:</strong> {userEmail}</p>
               <p><strong>Room:</strong> {roomId || 'None'}</p>
@@ -1965,7 +1965,7 @@ export default function Home() {
                     showToast('Queue locks released.', 'success');
                   }
                 }}
-                className="w-full bg-rose-950/40 hover:bg-rose-900/40 text-rose-300 py-2 rounded-xl text-xs font-mono font-bold border border-rose-500/30"
+                className="w-full bg-rose-100 hover:bg-rose-200 text-rose-700 py-2 rounded-xl text-xs font-mono font-bold border border-rose-300"
               >
                 Force Clear Queue Locks
               </button>
@@ -1988,10 +1988,10 @@ export default function Home() {
       {/* Handle Setup Modal */}
       {showHandleModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-rose-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🏷️</div>
-            <h2 className="text-lg font-extrabold text-slate-100">CHOOSE YOUR EXPLORER TAG</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-lg font-extrabold text-[#2B2118]">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-xs text-[#8A7560]">
               Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
@@ -2002,7 +2002,7 @@ export default function Home() {
                 value={newHandleInput}
                 onChange={(e) => setNewHandleInput(e.target.value)}
                 maxLength={20}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-4 py-2.5 text-sm text-slate-100 font-bold focus:outline-none focus:border-rose-500"
+                className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl pl-8 pr-4 py-2.5 text-sm text-[#2B2118] font-bold focus:outline-none focus:border-rose-500"
               />
             </div>
             <button
@@ -2018,20 +2018,20 @@ export default function Home() {
       {/* Auth Modal */}
       {(!isLoggedIn || showAuthModal) && !showHandleModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
             {isLoggedIn && (
               <button
                 onClick={() => setShowAuthModal(false)}
-                className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+                className="absolute top-4 right-4 text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
               >
                 ✕
               </button>
             )}
             <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-slate-100">
+            <h2 className="text-xl font-extrabold text-[#2B2118]">
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[#8A7560]">
               {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
 
@@ -2046,7 +2046,7 @@ export default function Home() {
                   placeholder="yourname@gmail.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+                  className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-4 py-3 text-sm text-[#2B2118] text-center focus:outline-none focus:border-rose-500"
                 />
                 <button
                   onClick={handleSendEmailOtp}
@@ -2056,13 +2056,13 @@ export default function Home() {
                 </button>
 
                 <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-800"></div></div>
-                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-slate-900 px-2 text-slate-500">Or</span></div>
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#EAD9BE]"></div></div>
+                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-[#FFFFFF] px-2 text-[#A08D77]">Or</span></div>
                 </div>
 
                 <button
                   onClick={handleGuestLogin}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
+                  className="w-full bg-[#EFE0C8] hover:bg-[#E5D3B5] text-[#3D3024] py-3 rounded-xl font-bold text-sm border border-[#DCC29C] transition-all active:scale-95"
                 >
                   ⚡ Continue as Guest (Solo Mode Only)
                 </button>
@@ -2074,7 +2074,7 @@ export default function Home() {
                   placeholder="Enter 6-digit Email Code"
                   value={otpInput}
                   onChange={(e) => setOtpInput(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono text-center focus:outline-none focus:border-rose-500"
+                  className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-4 py-3 text-sm text-[#2B2118] font-mono text-center focus:outline-none focus:border-rose-500"
                 />
                 <button
                   onClick={handleVerifyEmailOtp}
@@ -2084,7 +2084,7 @@ export default function Home() {
                 </button>
                 <button
                   onClick={() => setIsOtpSent(false)}
-                  className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
+                  className="text-xs text-[#A08D77] hover:underline pt-2 block mx-auto"
                 >
                   Change Email
                 </button>
@@ -2097,16 +2097,16 @@ export default function Home() {
       {/* Save My Progress Modal */}
       {showSaveProgressModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSaveProgressModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+              className="absolute top-4 right-4 text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">💾</div>
-            <h2 className="text-lg font-extrabold text-slate-100">SAVE MY PROGRESS</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-lg font-extrabold text-[#2B2118]">SAVE MY PROGRESS</h2>
+            <p className="text-xs text-[#8A7560]">
               Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
             </p>
             <div className="space-y-3">
@@ -2116,7 +2116,7 @@ export default function Home() {
                 value={saveProgressEmail}
                 onChange={(e) => setSaveProgressEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+                className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-4 py-3 text-sm text-[#2B2118] text-center focus:outline-none focus:border-rose-500"
               />
               <button
                 onClick={() => handleSaveProgress(saveProgressEmail.trim())}
@@ -2132,20 +2132,20 @@ export default function Home() {
       {/* Suggest a Quest Modal */}
       {showSuggestQuestModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestQuestModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+              className="absolute top-4 right-4 text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">✍️</div>
-            <h2 className="text-lg font-extrabold text-slate-100">SUGGEST A QUEST</h2>
-            <p className="text-xs text-slate-400">
+            <h2 className="text-lg font-extrabold text-[#2B2118]">SUGGEST A QUEST</h2>
+            <p className="text-xs text-[#8A7560]">
               Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
             </p>
             <div className="space-y-3">
-              <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 w-full justify-between">
+              <div className="flex bg-[#F5EAD9] p-1 rounded-xl border border-[#EAD9BE] w-full justify-between">
                 {(['solo', 'duo', 'squad'] as const).map((m) => (
                   <button
                     key={m}
@@ -2153,7 +2153,7 @@ export default function Home() {
                     className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
                       suggestQuestMode === m
                         ? 'bg-rose-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
+                        : 'text-[#8A7560] hover:text-[#2B2118]'
                     }`}
                   >
                     {m}
@@ -2166,7 +2166,7 @@ export default function Home() {
                 onChange={(e) => setSuggestQuestText(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-rose-500 resize-none"
+                className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-4 py-3 text-sm text-[#2B2118] focus:outline-none focus:border-rose-500 resize-none"
               />
               <button
                 onClick={handleSubmitQuestSuggestion}
@@ -2182,18 +2182,18 @@ export default function Home() {
       {/* Sign In / Recover Account Modal */}
       {showRecoverModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowRecoverModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+              className="absolute top-4 right-4 text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">🔑</div>
-            <h2 className="text-lg font-extrabold text-slate-100">SIGN IN ON THIS DEVICE</h2>
+            <h2 className="text-lg font-extrabold text-[#2B2118]">SIGN IN ON THIS DEVICE</h2>
             {!isRecoverOtpSent ? (
               <>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[#8A7560]">
                   Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
                 </p>
                 <div className="space-y-3">
@@ -2203,11 +2203,11 @@ export default function Home() {
                     value={recoverEmail}
                     onChange={(e) => setRecoverEmail(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 text-center focus:outline-none focus:border-rose-500"
+                    className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-4 py-3 text-sm text-[#2B2118] text-center focus:outline-none focus:border-rose-500"
                   />
                   <button
                     onClick={() => handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-bold text-sm border border-slate-700 transition-all active:scale-95"
+                    className="w-full bg-[#EFE0C8] hover:bg-[#E5D3B5] text-[#3D3024] py-3 rounded-xl font-bold text-sm border border-[#DCC29C] transition-all active:scale-95"
                   >
                     Send Sign-In Code
                   </button>
@@ -2215,7 +2215,7 @@ export default function Home() {
               </>
             ) : (
               <>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-[#8A7560]">
                   Enter the 6-digit code we emailed to {recoverEmail}.
                 </p>
                 <div className="space-y-3">
@@ -2225,7 +2225,7 @@ export default function Home() {
                     value={recoverOtpInput}
                     onChange={(e) => setRecoverOtpInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 font-mono text-center focus:outline-none focus:border-rose-500"
+                    className="w-full bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-4 py-3 text-sm text-[#2B2118] font-mono text-center focus:outline-none focus:border-rose-500"
                   />
                   <button
                     onClick={handleVerifyRecoverOtp}
@@ -2235,7 +2235,7 @@ export default function Home() {
                   </button>
                   <button
                     onClick={() => setIsRecoverOtpSent(false)}
-                    className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
+                    className="text-xs text-[#A08D77] hover:underline pt-2 block mx-auto"
                   >
                     Change Email
                   </button>
@@ -2249,10 +2249,10 @@ export default function Home() {
       {/* Safety Modal */}
       {showSafetyModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-rose-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🛡️</div>
-            <h2 className="text-lg font-extrabold text-slate-100">SAFETY FIRST</h2>
-            <div className="text-xs text-slate-300 text-left space-y-2 bg-slate-950 p-3 rounded-xl border border-slate-800">
+            <h2 className="text-lg font-extrabold text-[#2B2118]">SAFETY FIRST</h2>
+            <div className="text-xs text-[#5C4A38] text-left space-y-2 bg-[#F5EAD9] p-3 rounded-xl border border-[#EAD9BE]">
               <p>• <strong>Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
               <p>• <strong>Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
               <p>• <strong>Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
@@ -2260,7 +2260,7 @@ export default function Home() {
             <div className="flex space-x-2 pt-2">
               <button
                 onClick={() => setShowSafetyModal(false)}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 py-2.5 rounded-xl font-bold text-xs"
+                className="flex-1 bg-[#EFE0C8] hover:bg-[#E5D3B5] text-[#5C4A38] py-2.5 rounded-xl font-bold text-xs"
               >
                 Cancel
               </button>
@@ -2278,18 +2278,18 @@ export default function Home() {
       {/* Friends List Modal */}
       {showFriendsModal && (
         <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-              <h2 className="text-sm font-bold text-slate-200">🤝 Raid Squad ({friendsList.length})</h2>
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-6 space-y-4 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-[#EAD9BE] pb-2">
+              <h2 className="text-sm font-bold text-[#3D3024]">🤝 Raid Squad ({friendsList.length})</h2>
               <button
                 onClick={() => setShowFriendsModal(false)}
-                className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+                className="text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-800 w-full justify-between">
+            <div className="flex bg-[#F5EAD9] p-1 rounded-xl border border-[#EAD9BE] w-full justify-between">
               {(['squad', 'leaderboard'] as const).map((t) => (
                 <button
                   key={t}
@@ -2297,7 +2297,7 @@ export default function Home() {
                   className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
                     leaderboardTab === t
                       ? 'bg-rose-600 text-white'
-                      : 'text-slate-400 hover:text-slate-200'
+                      : 'text-[#8A7560] hover:text-[#2B2118]'
                   }`}
                 >
                   {t === 'squad' ? 'Squad' : 'Leaderboard'}
@@ -2313,11 +2313,11 @@ export default function Home() {
                     className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
                       entry.is_self
                         ? 'bg-rose-500/10 border-rose-500/40'
-                        : 'bg-slate-950 border-slate-800'
+                        : 'bg-[#F5EAD9] border-[#EAD9BE]'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
-                      <span className="text-slate-500 font-bold w-4 text-center">{i + 1}</span>
+                      <span className="text-[#A08D77] font-bold w-4 text-center">{i + 1}</span>
                       <div>
                         <button
                           onClick={() => inspectProfile(entry.handle)}
@@ -2325,12 +2325,12 @@ export default function Home() {
                         >
                           @{entry.handle}
                         </button>
-                        <span className="block text-[9px] text-slate-500">{getRankTitle(entry.total_xp)}</span>
+                        <span className="block text-[9px] text-[#A08D77]">{getRankTitle(entry.total_xp)}</span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-slate-200">{entry.total_xp} XP</p>
-                      <p className="text-[9px] text-slate-500">{entry.streak} Days 🔥</p>
+                      <p className="font-bold text-[#3D3024]">{entry.total_xp} XP</p>
+                      <p className="text-[9px] text-[#A08D77]">{entry.streak} Days 🔥</p>
                     </div>
                   </div>
                 ))}
@@ -2338,15 +2338,15 @@ export default function Home() {
             ) : (
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {friendsList.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
+                <p className="text-xs text-[#A08D77] text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
               ) : (
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
                   return (
-                    <div key={i} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800 flex justify-between items-center text-xs">
+                    <div key={i} className="bg-[#F5EAD9] p-2.5 rounded-xl border border-[#EAD9BE] flex justify-between items-center text-xs">
                       <div>
                         <div className="flex items-center space-x-1.5">
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-slate-600'}`} />
+                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-[#C4B39A]'}`} />
                           <button
                             onClick={() => inspectProfile(f.handle)}
                             className="font-bold text-rose-400 hover:underline"
@@ -2354,14 +2354,14 @@ export default function Home() {
                             @{f.handle}
                           </button>
                         </div>
-                        <span className="block text-[9px] text-slate-500 pl-3.5">
+                        <span className="block text-[9px] text-[#A08D77] pl-3.5">
                           {isOnline ? 'Online in App' : 'Offline'}
                         </span>
                       </div>
                       <div className="flex space-x-1.5">
                         <button
                           onClick={() => inspectProfile(f.handle)}
-                          className="bg-slate-900 hover:bg-slate-800 text-slate-300 text-[10px] px-2 py-1 rounded-lg border border-slate-800 font-bold"
+                          className="bg-[#FFFFFF] hover:bg-[#EFE0C8] text-[#5C4A38] text-[10px] px-2 py-1 rounded-lg border border-[#EAD9BE] font-bold"
                         >
                           Profile
                         </button>
@@ -2371,7 +2371,7 @@ export default function Home() {
                           className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
                             isOnline
                               ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 active:scale-95'
-                              : 'bg-slate-900 text-slate-600 border border-slate-800 cursor-not-allowed'
+                              : 'bg-[#FFFFFF] text-[#B5A48E] border border-[#EAD9BE] cursor-not-allowed'
                           }`}
                         >
                           <span>⚡</span>
@@ -2391,16 +2391,16 @@ export default function Home() {
       {/* Journey Recap Modal */}
       {showWrappedModal && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-slate-900 border border-rose-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
+          <div className="w-full max-w-sm bg-[#FFFFFF] border border-rose-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
             <button
               onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+              className="absolute top-4 right-4 text-[#A08D77] hover:text-[#2B2118] text-sm font-bold"
             >
               ✕
             </button>
             <h2 className="text-sm font-black text-rose-400 uppercase tracking-wider">🎧 Your IRL Recap</h2>
             {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-slate-800 bg-slate-950">
+              <div className="rounded-2xl overflow-hidden border border-[#EAD9BE] bg-[#F5EAD9]">
                 <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
               </div>
             )}
@@ -2417,15 +2417,15 @@ export default function Home() {
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-full justify-between">
+          <div className="flex bg-[#FFFFFF] p-1.5 rounded-2xl border border-[#EAD9BE] w-full justify-between">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => handleSelectMode(m)}
-                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] active:scale-95 ${
                   mode === m
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30 scale-105'
+                    : 'text-[#8A7560] hover:text-[#2B2118]'
                 }`}
               >
                 {m === 'squad' ? 'Squad (3-4)' : m}
@@ -2435,30 +2435,40 @@ export default function Home() {
 
           {!activeQuest && !isCompleted && (
             <div className="flex flex-col items-center space-y-4">
-              <button
-                onClick={onStartMatchingClick}
-                disabled={isSearching}
-                className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
-                  isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-                }`}
-              >
-                {isSearching ? (
-                  <div className="flex flex-col items-center space-y-1">
-                    <span className="text-2xl animate-spin">🌀</span>
-                    <span className="text-xs text-rose-200 font-mono font-normal">
-                      {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <span>DESTROY</span>
-                    <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
-                  </>
-                )}
-              </button>
+              <div className="relative flex items-center justify-center">
+                <div
+                  aria-hidden="true"
+                  className="absolute w-72 h-72 rounded-full bg-[radial-gradient(circle,rgba(216,90,48,0.18)_0%,rgba(216,90,48,0)_70%)] pointer-events-none"
+                />
+                <button
+                  onClick={onStartMatchingClick}
+                  disabled={isSearching}
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-4 border-white shadow-[0_10px_40px_rgba(225,29,72,0.25)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-200 ease-[cubic-bezier(0.34,1.56,0.64,1)] touch-manipulation ${
+                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/25 rotate-[-20deg]"
+                  />
+                  {isSearching ? (
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="text-2xl animate-spin">🌀</span>
+                      <span className="text-xs text-rose-200 font-mono font-normal">
+                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <span>DESTROY</span>
+                      <span className="text-sm font-normal text-rose-200 mt-1">BOREDOM</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-[#A08D77]">
                   {isSearching
                     ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
@@ -2475,7 +2485,7 @@ export default function Home() {
                     </button>
                     <button
                       onClick={cancelSearch}
-                      className="text-[10px] text-slate-500 hover:underline"
+                      className="text-[10px] text-[#A08D77] hover:underline"
                     >
                       Cancel Search
                     </button>
@@ -2486,26 +2496,26 @@ export default function Home() {
           )}
 
           {activeQuest && !isCompleted && (
-            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+            <div className="w-full bg-[#FFFFFF] border border-[#EAD9BE] rounded-3xl p-5 text-center space-y-4 shadow-2xl">
               <div className="flex justify-between items-center">
                 <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {mode} Mission Assigned
                 </span>
-                <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
+                <span className="text-xs text-amber-700 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
                   <span>Active Mission</span>
                 </span>
               </div>
 
               {squadRoster.length > 0 && (
-                <div className="bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-left space-y-1.5">
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold uppercase">
+                <div className="bg-[#F5EAD9] border border-[#EAD9BE] p-2.5 rounded-xl text-left space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] text-[#8A7560] font-bold uppercase">
                     <span>👑 Active Squad Roster ({squadRoster.length})</span>
-                    <span className="text-amber-400 font-mono">Live Lobby</span>
+                    <span className="text-amber-700 font-mono">Live Lobby</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg text-xs">
+                      <div key={idx} className="flex items-center space-x-1 bg-[#FFFFFF] border border-[#EAD9BE] px-2 py-1 rounded-lg text-xs">
                         <button
                           onClick={() => inspectProfile(p.handle)}
                           className="text-rose-400 font-bold hover:underline"
@@ -2515,7 +2525,7 @@ export default function Home() {
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
-                            className="text-[10px] text-slate-400 hover:text-rose-400 pl-1"
+                            className="text-[10px] text-[#8A7560] hover:text-rose-400 pl-1"
                             title="Add as Friend"
                           >
                             +🤝
@@ -2555,8 +2565,8 @@ export default function Home() {
               </div>
 
               {(mode === 'duo' || mode === 'squad') && (
-                <div className="bg-slate-950 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-2 text-left">
-                  <div className="flex justify-between items-center border-b border-slate-800 pb-1">
+                <div className="bg-[#F5EAD9] border border-[#EAD9BE] rounded-2xl p-3 flex flex-col space-y-2 text-left">
+                  <div className="flex justify-between items-center border-b border-[#EAD9BE] pb-1">
                     <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
                     <button
                       onClick={handleWhatsAppInvite}
@@ -2568,10 +2578,10 @@ export default function Home() {
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-600 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
+                      <p className="text-[10px] text-[#B5A48E] italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
                     ) : (
                       messages.map((m) => (
-                        <div key={m.id || Math.random()} className="bg-slate-900 p-2 rounded-xl border border-slate-800/80 flex justify-between items-start">
+                        <div key={m.id || Math.random()} className="bg-[#FFFFFF] p-2 rounded-xl border border-[#EAD9BE]/80 flex justify-between items-start">
                           <div>
                             <button
                               onClick={() => inspectProfile(m.sender_handle)}
@@ -2579,14 +2589,14 @@ export default function Home() {
                             >
                               @{m.sender_handle}: 
                             </button>
-                            <span className="text-slate-300 ml-1">
+                            <span className="text-[#5C4A38] ml-1">
                               {m.message}
                             </span>
                           </div>
                           {m.sender_handle !== handle && (
                             <button
                               onClick={() => handleReport('chat', m.id || m.message)}
-                              className="text-[9px] text-slate-600 hover:text-rose-400 pl-2"
+                              className="text-[9px] text-[#B5A48E] hover:text-rose-400 pl-2"
                               title="Report message"
                             >
                               🚩
@@ -2605,7 +2615,7 @@ export default function Home() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-3 py-1.5 text-xs text-slate-100 focus:outline-none focus:border-rose-500"
+                      className="flex-1 bg-[#F5EAD9] border border-[#EAD9BE] rounded-xl px-3 py-1.5 text-xs text-[#2B2118] focus:outline-none focus:border-rose-500"
                     />
                     <button
                       onClick={sendMessage}
@@ -2618,7 +2628,7 @@ export default function Home() {
               )}
 
               {isMissionAccepted && (
-                <div className="border-2 border-dashed border-slate-800 rounded-2xl p-3 flex flex-col items-center justify-center bg-slate-950/50 space-y-1">
+                <div className="border-2 border-dashed border-[#EAD9BE] rounded-2xl p-3 flex flex-col items-center justify-center bg-[#F5EAD9]/50 space-y-1">
                   {uploading ? (
                     <div className="py-4 flex flex-col items-center space-y-1">
                       <span className="animate-spin text-xl">☁️</span>
@@ -2629,7 +2639,7 @@ export default function Home() {
                   ) : (
                     <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
                       <span className="text-xl">📸</span>
-                      <span className="text-xs text-slate-400 font-semibold"></span>
+                      <span className="text-xs text-[#8A7560] font-semibold"></span>
                       <input
                         type="file"
                         accept="image/*"
@@ -2649,14 +2659,14 @@ export default function Home() {
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
                     proofImage && !uploading
                       ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 cursor-pointer'
-                      : 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700'
+                      : 'bg-[#EFE0C8] text-[#A08D77] cursor-not-allowed border border-[#DCC29C]'
                   }`}
                 >
                   {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
                 </button>
                 <button
                   onClick={handleAbandonMission}
-                  className="text-xs text-slate-500 hover:text-slate-400 py-1 transition-colors"
+                  className="text-xs text-[#A08D77] hover:text-[#5C4A38] py-1 transition-colors"
                 >
                   Abandon Mission
                 </button>
@@ -2665,16 +2675,16 @@ export default function Home() {
           )}
 
           {isCompleted && (
-            <div className="w-full bg-slate-900 border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-full bg-[#FFFFFF] border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
               <div className="text-4xl">🎉</div>
-              <h2 className="text-xl font-extrabold text-amber-400">LOOP BROKEN!</h2>
-              <p className="text-xs text-slate-300">
+              <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
+              <p className="text-xs text-[#5C4A38]">
                 You broke routine and gained real-world experience today.
               </p>
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-slate-950">
+                  <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-[#F5EAD9]">
                     <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
                   </div>
 
@@ -2690,7 +2700,7 @@ export default function Home() {
 
               <button
                 onClick={() => setIsCompleted(false)}
-                className="w-full bg-slate-800 hover:bg-slate-700 text-slate-200 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                className="w-full bg-[#EFE0C8] hover:bg-[#E5D3B5] text-[#3D3024] py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
               >
                 Back to Home
               </button>
@@ -2699,15 +2709,15 @@ export default function Home() {
         </div>
       ) : (
         <div className="w-full max-w-md my-auto space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-            <h2 className="text-sm font-bold text-slate-300">Community Proof Feed</h2>
-            <span className="text-xs text-slate-500">{feedItems.length} Missions Logged</span>
+          <div className="flex justify-between items-center border-b border-[#EAD9BE] pb-2">
+            <h2 className="text-sm font-bold text-[#5C4A38]">Community Proof Feed</h2>
+            <span className="text-xs text-[#A08D77]">{feedItems.length} Missions Logged</span>
           </div>
 
           <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
             {feedItems.length > 0 ? (
               feedItems.map((item) => (
-                <div key={item.id} className="bg-slate-900 border border-slate-800 rounded-2xl p-3 flex flex-col space-y-3">
+                <div key={item.id} className="bg-[#FFFFFF] border border-[#EAD9BE] rounded-2xl p-3 flex flex-col space-y-3">
                   {item.photo_url && (
                     <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
                   )}
@@ -2731,26 +2741,26 @@ export default function Home() {
                         )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
-                          className="text-[10px] text-slate-600 hover:text-rose-400"
+                          className="text-[10px] text-[#B5A48E] hover:text-rose-400"
                           title="Report post"
                         >
                           🚩
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-200 italic font-medium">"{item.quest_text}"</p>
+                    <p className="text-xs text-[#3D3024] italic font-medium">"{item.quest_text}"</p>
 
-                    <div className="flex space-x-2 pt-1 border-t border-slate-800/80">
+                    <div className="flex space-x-2 pt-1 border-t border-[#EAD9BE]/80">
                       <button
                         onClick={() => handleReact(item.id, 'fire')}
-                        className="flex items-center space-x-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-300 transition-all active:scale-95"
+                        className="flex items-center space-x-1 bg-[#F5EAD9] hover:bg-[#EFE0C8] border border-[#EAD9BE] px-2.5 py-1 rounded-xl text-xs font-semibold text-[#5C4A38] transition-all active:scale-95"
                       >
                         <span>🔥</span>
                         <span>{item.fire_count || 0}</span>
                       </button>
                       <button
                         onClick={() => handleReact(item.id, 'five')}
-                        className="flex items-center space-x-1 bg-slate-950 hover:bg-slate-800 border border-slate-800 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-300 transition-all active:scale-95"
+                        className="flex items-center space-x-1 bg-[#F5EAD9] hover:bg-[#EFE0C8] border border-[#EAD9BE] px-2.5 py-1 rounded-xl text-xs font-semibold text-[#5C4A38] transition-all active:scale-95"
                       >
                         <span>✋</span>
                         <span>{item.five_count || 0}</span>
@@ -2760,7 +2770,7 @@ export default function Home() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-12 text-slate-500 text-xs">
+              <div className="text-center py-12 text-[#A08D77] text-xs">
                 No missions logged yet. Complete a mission to be the first!
               </div>
             )}
@@ -2768,8 +2778,8 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-slate-900/50 border border-slate-800/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
-        <div className="flex justify-between items-center border-b border-slate-800/60 pb-2">
+      <footer className="w-full max-w-md bg-[#FFFFFF]/50 backdrop-blur-xl border border-[#EAD9BE]/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-sm">
+        <div className="flex justify-between items-center border-b border-[#EAD9BE]/60 pb-2">
           {isEditingHandle ? (
             <input
               type="text"
@@ -2777,7 +2787,7 @@ export default function Home() {
               onBlur={(e) => saveHandle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
               autoFocus
-              className="bg-slate-950 border border-rose-500/50 rounded-lg px-2 py-1 text-xs text-rose-400 font-bold focus:outline-none"
+              className="bg-[#F5EAD9] border border-rose-500/50 rounded-lg px-2 py-1 text-xs text-rose-400 font-bold focus:outline-none"
             />
           ) : (
             <button
@@ -2785,20 +2795,20 @@ export default function Home() {
               className="text-xs font-bold text-rose-400 hover:underline flex items-center space-x-1"
             >
               <span>@{handle}</span>
-              <span className="text-[10px] text-slate-500 font-medium">· {getRankTitle(totalXp)}</span>
-              <span className="text-[10px] text-slate-500">✏️</span>
+              <span className="text-[10px] text-[#A08D77] font-medium">· {getRankTitle(totalXp)}</span>
+              <span className="text-[10px] text-[#A08D77]">✏️</span>
             </button>
           )}
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowFriendsModal(true)}
-              className="text-[10px] text-rose-300 hover:underline font-semibold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
+              className="text-[10px] text-rose-700 hover:underline font-semibold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
             >
               🤝 Squad ({friendsList.length})
             </button>
             <button
               onClick={generateSpotifyWrappedCard}
-              className="text-[10px] text-amber-400 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
+              className="text-[10px] text-amber-700 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
             >
               🎧 Recap
             </button>
@@ -2807,7 +2817,7 @@ export default function Home() {
                 setSuggestQuestMode(mode);
                 setShowSuggestQuestModal(true);
               }}
-              className="text-[10px] text-rose-300 hover:underline font-bold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
+              className="text-[10px] text-rose-700 hover:underline font-bold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
             >
               ✍️ Suggest Quest
             </button>
@@ -2833,37 +2843,37 @@ export default function Home() {
         </div>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
-          <span className="text-slate-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
+          <span className="text-[#A08D77] text-[9px] font-semibold uppercase pr-1">Badges:</span>
           {badges.map((b, i) => (
-            <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
+            <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
               {b}
             </span>
           ))}
         </div>
 
-        <div className="flex justify-around text-center border-t border-slate-800/60 pt-2">
+        <div className="flex justify-around text-center border-t border-[#EAD9BE]/60 pt-2">
           <div>
-            <p className="text-xs text-slate-500">Loop Streak</p>
-            <p className="text-lg font-bold text-slate-200">{streak} Days 🔥</p>
+            <p className="text-xs text-[#A08D77]">Loop Streak</p>
+            <p className="text-lg font-bold text-[#3D3024]">{streak} Days 🔥</p>
           </div>
-          <div className="w-px bg-slate-800" />
+          <div className="w-px bg-[#EFE0C8]" />
           <div>
-            <p className="text-xs text-slate-500">Total IRL XP</p>
+            <p className="text-xs text-[#A08D77]">Total IRL XP</p>
             <p className="text-lg font-bold text-rose-400">{savedMins} XP ⚡</p>
           </div>
         </div>
 
         {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center space-y-1.5 border-t border-slate-800/60 pt-2">
+          <div className="flex flex-col items-center space-y-1.5 border-t border-[#EAD9BE]/60 pt-2">
             <button
               onClick={() => setShowSaveProgressModal(true)}
-              className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-300 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+              className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
             >
               💾 Save My Progress
             </button>
             <button
               onClick={() => setShowRecoverModal(true)}
-              className="text-[10px] text-slate-500 hover:underline"
+              className="text-[10px] text-[#A08D77] hover:underline"
             >
               Already have an account? Sign in
             </button>

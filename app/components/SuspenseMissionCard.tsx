@@ -62,21 +62,21 @@ export default function SuspenseMissionCard({
         return {
           border: "border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.5)]",
           bg: "bg-amber-500/10",
-          text: "text-amber-400",
+          text: "text-amber-700",
           label: "⚡ LEGENDARY QUEST",
         };
       case "rare":
         return {
           border: "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]",
           bg: "bg-amber-500/10",
-          text: "text-amber-400",
+          text: "text-amber-700",
           label: "💎 RARE QUEST",
         };
       default:
         return {
-          border: "border-slate-700",
-          bg: "bg-slate-900/80",
-          text: "text-slate-400",
+          border: "border-[#DCC29C]",
+          bg: "bg-[#FFFFFF]/80",
+          text: "text-[#8A7560]",
           label: "⚪ COMMON QUEST",
         };
     }
@@ -94,7 +94,7 @@ export default function SuspenseMissionCard({
         <span className={`text-xs font-black tracking-widest uppercase ${style.text}`}>
           {isRevealing ? "🎲 ROLLING RARITY..." : style.label}
         </span>
-        <div className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold text-amber-400">
+        <div className="px-3 py-1 rounded-full bg-[#EFE0C8] border border-[#DCC29C] text-xs font-bold text-amber-700">
           +{currentXp} IRL XP
         </div>
       </div>
@@ -102,7 +102,7 @@ export default function SuspenseMissionCard({
       <div className="min-h-[100px] flex items-center justify-center my-4">
         <p
           className={`text-center text-lg font-medium leading-relaxed ${
-            isRevealing ? "text-slate-500 animate-pulse font-mono text-sm" : "text-white"
+            isRevealing ? "text-[#A08D77] animate-pulse font-mono text-sm" : "text-[#2B2118]"
           }`}
         >
           "{displayText}"
@@ -110,7 +110,7 @@ export default function SuspenseMissionCard({
       </div>
 
       {!isRevealing && credit && (
-        <p className="text-center text-[10px] text-slate-500 -mt-2 mb-2">
+        <p className="text-center text-[10px] text-[#A08D77] -mt-2 mb-2">
           Suggested by @{credit}
         </p>
       )}
@@ -126,7 +126,7 @@ export default function SuspenseMissionCard({
 
           <button
             onClick={onReroll}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-[#8A7560] hover:text-[#2B2118] bg-[#EFE0C8]/60 hover:bg-[#EFE0C8] border border-[#DCC29C]/50 transition-all flex items-center justify-center gap-2"
           >
             <span>🔄 Reroll Quest</span>
           </button>
