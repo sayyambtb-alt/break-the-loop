@@ -1642,7 +1642,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
+    <main className="min-h-screen overflow-x-hidden bg-slate-950 text-slate-100 flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -1661,7 +1661,7 @@ export default function Home() {
         ))}
       </div>
 
-      <header className="w-full max-w-md flex justify-between items-center py-4 border-b border-slate-800">
+      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-slate-800">
         <h1
           onMouseDown={handleDevPressStart}
           onMouseUp={handleDevPressEnd}
@@ -1672,7 +1672,7 @@ export default function Home() {
         >
           BREAK THE LOOP
         </h1>
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center flex-wrap gap-2">
           {userEmail === ADMIN_EMAIL && (
             <button
               onClick={fetchAdminReports}
