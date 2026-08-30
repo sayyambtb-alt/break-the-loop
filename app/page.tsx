@@ -77,6 +77,10 @@ interface ReportItem {
   target_id: string;
   reason: string;
   created_at: string;
+  content_text?: string | null;
+  content_photo_url?: string | null;
+  offender_handle?: string | null;
+  offender_user_id?: string | null;
 }
 
 interface PendingQuest {
@@ -569,6 +573,22 @@ export default function Home() {
         showToast('Post removed successfully.', 'success');
       } else {
         showToast(`Failed to delete post: ${error.message}`, 'error');
+      }
+    } catch {
+    }
+  };
+
+  const handleAdminDeleteChatMessage = async (messageId: string) => {
+    if (!window.confirm('ADMIN: Are you sure you want to permanently remove this chat message?')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase.rpc('admin_delete_chat_message', { p_message_id: messageId });
+      if (!error) {
+        showToast('Message removed successfully.', 'success');
+      } else {
+        showToast(`Failed to delete message: ${error.message}`, 'error');
       }
     } catch {
     }
@@ -1900,8 +1920,21 @@ export default function Home() {
                     <p className="text-slate-300 text-[11px]">
                       <strong>Reason:</strong> "{r.reason}"
                     </p>
+                    {r.content_text && (
+                      <p className="text-slate-200 text-[11px] bg-slate-900 border border-slate-800 rounded-lg p-2">
+                        <strong className="text-amber-400">Reported content:</strong> "{r.content_text}"
+                      </p>
+                    )}
+                    {r.content_photo_url && (
+                      <img
+                        src={r.content_photo_url}
+                        alt="Reported proof photo"
+                        className="w-full max-h-40 object-cover rounded-lg border border-slate-800"
+                      />
+                    )}
                     <p className="text-slate-500 text-[10px]">
-                      Reported by @{r.reporter_handle} • Target ID: {r.target_id.substring(0, 16)}...
+                      Reported by @{r.reporter_handle}
+                      {r.offender_handle ? ` • Posted by @${r.offender_handle}` : ''}
                     </p>
                     <div className="flex space-x-2 pt-1 border-t border-slate-900">
                       {r.reported_type === 'feed' && (
@@ -1913,6 +1946,17 @@ export default function Home() {
                           className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
                         >
                           Delete Post
+                        </button>
+                      )}
+                      {r.reported_type === 'chat' && (
+                        <button
+                          onClick={() => {
+                            handleAdminDeleteChatMessage(r.target_id);
+                            handleResolveReport(r.id);
+                          }}
+                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                        >
+                          Delete Message
                         </button>
                       )}
                       <button
