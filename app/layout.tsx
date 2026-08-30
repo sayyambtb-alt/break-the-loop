@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from "next";
+import "@fontsource/space-grotesk/500.css";
+import "@fontsource/space-grotesk/700.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
