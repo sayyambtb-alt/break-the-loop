@@ -897,6 +897,7 @@ export default function Home() {
     setIsInviteSession(false);
     setIsSearching(false);
     setSquadRoster([]);
+    setSquadCapacity(selectedMode === 'squad' ? 8 : 2);
   };
 
   const handleAbandonMission = async () => {
@@ -910,6 +911,7 @@ export default function Home() {
       setIsSearching(false);
       setMessages([]);
       setSquadRoster([]);
+      setSquadCapacity(2);
     }
   };
 
@@ -1080,10 +1082,21 @@ export default function Home() {
         async (payload: any) => {
           if (!payload.new) return;
 
-          const justMatched = payload.old?.status !== 'matched' && payload.new.status === 'matched';
-          if (justMatched) {
+          const prevCount = payload.old?.current_players ?? 0;
+          const newCount = payload.new.current_players ?? 0;
+
+          // Reveal the mission the moment the room hits its minimum viable
+          // size (2) -- not when it's full. A Squad room keeps accepting
+          // joiners up to its cap long after this fires.
+          const justRevealed = prevCount < 2 && newCount >= 2;
+          if (justRevealed) {
             setRoomId(payload.new.room_id);
             setIsSearching(false);
+          }
+
+          // Keep the visible roster live as people keep trickling in,
+          // not just at the initial reveal moment.
+          if (newCount !== prevCount) {
             await fetchRoster(payload.new.room_id);
           }
 
@@ -1108,6 +1121,7 @@ export default function Home() {
     setCardDataUrl(null);
     setMessages([]);
     setSquadRoster([]);
+    setSquadCapacity(mode === 'squad' ? 8 : 2);
 
     if (mode === 'solo' || isInviteSession) {
       await pickRandomQuest();
@@ -2428,7 +2442,7 @@ export default function Home() {
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {m === 'squad' ? 'Squad (3-4)' : m}
+                {m === 'squad' ? 'Squad (2-8)' : m}
               </button>
             ))}
           </div>
