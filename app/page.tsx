@@ -611,13 +611,18 @@ export default function Home() {
     }
   };
 
-  const handleApproveGem = async (gemId: string) => {
-    const { error } = await supabase.rpc('admin_approve_gem', { p_gem_id: gemId });
+  const handleApproveGem = async (gem: PendingGem) => {
+    const { error } = await supabase.rpc('admin_approve_gem', {
+      p_gem_id: gem.id,
+      p_name: gem.name,
+      p_neighborhood: gem.neighborhood,
+      p_description: gem.description
+    });
     if (error) {
       showToast(`Couldn't approve spot: ${error.message}`, 'error');
       return;
     }
-    setPendingGems((prev) => prev.filter((g) => g.id !== gemId));
+    setPendingGems((prev) => prev.filter((g) => g.id !== gem.id));
   };
 
   const handleRejectGem = async (gemId: string) => {
@@ -2267,18 +2272,36 @@ export default function Home() {
               ) : (
                 pendingGems.map((g) => (
                   <div key={g.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                        {g.neighborhood}
-                      </span>
+                    <div className="flex justify-between items-start gap-2">
+                      <select
+                        value={g.neighborhood}
+                        onChange={(e) => setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item))}
+                        className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
+                      >
+                        {MUMBAI_NEIGHBORHOODS.map((n) => (
+                          <option key={n} value={n} className="bg-slate-900 text-slate-100 normal-case">{n}</option>
+                        ))}
+                      </select>
                       <span className="text-[9px] text-slate-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-slate-200 text-[11px] font-bold">{g.name}</p>
-                    <p className="text-slate-300 text-[11px]">"{g.description}"</p>
+                    <input
+                      type="text"
+                      value={g.name}
+                      onChange={(e) => setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item))}
+                      maxLength={100}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-bold focus:outline-none focus:border-amber-500"
+                    />
+                    <textarea
+                      value={g.description}
+                      onChange={(e) => setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item))}
+                      maxLength={300}
+                      rows={3}
+                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-300 text-[11px] resize-none focus:outline-none focus:border-amber-500"
+                    />
                     <p className="text-slate-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
                     <div className="flex space-x-2 pt-1 border-t border-slate-900">
                       <button
-                        onClick={() => handleApproveGem(g.id)}
+                        onClick={() => handleApproveGem(g)}
                         className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
                       >
                         Approve
