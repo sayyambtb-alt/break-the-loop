@@ -91,6 +91,15 @@ interface PendingQuest {
   created_at: string;
 }
 
+interface PendingGem {
+  id: string;
+  name: string;
+  neighborhood: string;
+  description: string;
+  submitted_by_handle: string;
+  created_at: string;
+}
+
 interface PublicProfileData {
   found: boolean;
   handle?: string;
@@ -128,6 +137,21 @@ export default function Home() {
 
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
+  const [isExplorerMode, setIsExplorerMode] = useState(false);
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
+  const [hiddenGemSubmittedBy, setHiddenGemSubmittedBy] = useState<string | null>(null);
+  const [showSuggestGemModal, setShowSuggestGemModal] = useState(false);
+  const [suggestGemName, setSuggestGemName] = useState('');
+  const [suggestGemNeighborhood, setSuggestGemNeighborhood] = useState('');
+  const [suggestGemDescription, setSuggestGemDescription] = useState('');
+  const [showPendingGemsModal, setShowPendingGemsModal] = useState(false);
+  const [pendingGems, setPendingGems] = useState<PendingGem[]>([]);
+  const [loadingPendingGems, setLoadingPendingGems] = useState(false);
+
+  const MUMBAI_NEIGHBORHOODS = [
+    'Colaba', 'Fort', 'Marine Drive', 'Dadar', 'Matunga', 'Mahim',
+    'Bandra', 'Worli', 'Andheri', 'Juhu', 'Powai', 'Borivali'
+  ];
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
@@ -572,6 +596,74 @@ export default function Home() {
     setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
   };
 
+  const fetchPendingGems = async () => {
+    if (userEmail !== ADMIN_EMAIL) return;
+    setLoadingPendingGems(true);
+    try {
+      const { data } = await supabase.rpc('admin_get_pending_gems');
+      if (data) {
+        setPendingGems(data);
+        setShowPendingGemsModal(true);
+      }
+    } catch {
+    } finally {
+      setLoadingPendingGems(false);
+    }
+  };
+
+  const handleApproveGem = async (gemId: string) => {
+    const { error } = await supabase.rpc('admin_approve_gem', { p_gem_id: gemId });
+    if (error) {
+      showToast(`Couldn't approve spot: ${error.message}`, 'error');
+      return;
+    }
+    setPendingGems((prev) => prev.filter((g) => g.id !== gemId));
+  };
+
+  const handleRejectGem = async (gemId: string) => {
+    const { error } = await supabase.rpc('admin_reject_gem', { p_gem_id: gemId });
+    if (error) {
+      showToast(`Couldn't reject spot: ${error.message}`, 'error');
+      return;
+    }
+    setPendingGems((prev) => prev.filter((g) => g.id !== gemId));
+  };
+
+  const handleSubmitGemSuggestion = async () => {
+    const cleanName = suggestGemName.trim();
+    const cleanDesc = suggestGemDescription.trim();
+
+    if (!suggestGemNeighborhood) {
+      showToast('Pick a neighborhood', 'error');
+      return;
+    }
+    if (cleanName.length < 2 || cleanName.length > 100) {
+      showToast('Place name must be between 2 and 100 characters', 'error');
+      return;
+    }
+    if (cleanDesc.length < 15 || cleanDesc.length > 300) {
+      showToast('Description must be between 15 and 300 characters', 'error');
+      return;
+    }
+
+    const { error } = await supabase.rpc('submit_hidden_gem', {
+      p_name: cleanName,
+      p_neighborhood: suggestGemNeighborhood,
+      p_description: cleanDesc
+    });
+
+    if (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+
+    setShowSuggestGemModal(false);
+    setSuggestGemName('');
+    setSuggestGemNeighborhood('');
+    setSuggestGemDescription('');
+    showToast('Thanks! Your spot is awaiting review.', 'success');
+  };
+
   const handleAdminDeleteFeedPost = async (logId: string) => {
     if (!window.confirm('ADMIN: Are you sure you want to permanently remove this post from the community feed?')) {
       return;
@@ -970,6 +1062,7 @@ export default function Home() {
     }
 
     setMode(selectedMode);
+    setIsExplorerMode(false);
     setActiveQuest(null);
     setRoomId('');
     setProofImage(null);
@@ -978,6 +1071,50 @@ export default function Home() {
     setIsSearching(false);
     setSquadRoster([]);
     setSquadCapacity(selectedMode === 'squad' ? 8 : 2);
+  };
+
+  const handleSelectExplorer = () => {
+    if (queueSubscriptionRef.current) {
+      supabase.removeChannel(queueSubscriptionRef.current);
+      queueSubscriptionRef.current = null;
+    }
+    if (participantsSubRef.current) {
+      supabase.removeChannel(participantsSubRef.current);
+      participantsSubRef.current = null;
+    }
+
+    setIsExplorerMode(true);
+    setActiveQuest(null);
+    setRoomId('');
+    setProofImage(null);
+    setIsCompleted(false);
+    setIsInviteSession(false);
+    setIsSearching(false);
+    setSquadRoster([]);
+    setHiddenGemSubmittedBy(null);
+  };
+
+  const handleRevealGem = async () => {
+    if (!selectedNeighborhood) return;
+    const { data, error } = await supabase.rpc('get_random_hidden_gem', { p_neighborhood: selectedNeighborhood });
+
+    if (error) {
+      showToast('Could not load a hidden gem right now — try again.', 'error');
+      return;
+    }
+
+    if (!data || !data.found) {
+      showToast(`No hidden gems submitted for ${selectedNeighborhood} yet — be the first!`, 'error');
+      return;
+    }
+
+    const { rarity, xp } = rollRarity();
+    setActiveQuestRarity(rarity);
+    setActiveQuestXp(xp);
+    setActiveQuestCredit(null);
+    setHiddenGemSubmittedBy(data.submitted_by_handle || null);
+    setIsMissionAccepted(false);
+    setActiveQuest(`📍 ${data.name} (${data.neighborhood})\n\n${data.description}`);
   };
 
   const handleAbandonMission = async () => {
@@ -1485,7 +1622,7 @@ export default function Home() {
 
     ctx.fillStyle = '#fda4af';
     ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${mode.toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
+    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
 
     ctx.fillStyle = '#f8fafc';
     ctx.font = '600 42px sans-serif';
@@ -1634,7 +1771,7 @@ export default function Home() {
       const { data, error } = await supabase.rpc('complete_mission', {
         p_quest_text: activeQuest || 'Micro Mission Completed',
         p_photo_url: proofImage,
-        p_mode: mode,
+        p_mode: isExplorerMode ? 'explorer' : mode,
         p_xp_earned: activeQuestXp
       });
 
@@ -1776,6 +1913,16 @@ export default function Home() {
               title="Pending Quest Suggestions"
             >
               📝 Quests
+            </button>
+          )}
+
+          {userEmail === ADMIN_EMAIL && (
+            <button
+              onClick={fetchPendingGems}
+              className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
+              title="Pending Hidden Gems"
+            >
+              🗺️ Gems
             </button>
           )}
 
@@ -2088,6 +2235,69 @@ export default function Home() {
         </div>
       )}
 
+      {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-slate-900 border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+              <h2 className="text-xs font-mono font-bold text-amber-400 uppercase tracking-wider">
+                🗺️ Pending Hidden Gems ({pendingGems.length})
+              </h2>
+              <div className="flex items-center space-x-2">
+                <button
+                  onClick={fetchPendingGems}
+                  className="text-slate-500 hover:text-slate-300 text-[10px] font-bold"
+                  title="Refresh"
+                >
+                  🔄
+                </button>
+                <button
+                  onClick={() => setShowPendingGemsModal(false)}
+                  className="text-slate-500 hover:text-slate-300 text-sm font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+              {loadingPendingGems ? (
+                <p className="text-xs text-slate-500 text-center py-8">Loading...</p>
+              ) : pendingGems.length === 0 ? (
+                <p className="text-xs text-slate-500 text-center py-8">No spots awaiting review.</p>
+              ) : (
+                pendingGems.map((g) => (
+                  <div key={g.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+                    <div className="flex justify-between items-start">
+                      <span className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
+                        {g.neighborhood}
+                      </span>
+                      <span className="text-[9px] text-slate-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
+                    </div>
+                    <p className="text-slate-200 text-[11px] font-bold">{g.name}</p>
+                    <p className="text-slate-300 text-[11px]">"{g.description}"</p>
+                    <p className="text-slate-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
+                    <div className="flex space-x-2 pt-1 border-t border-slate-900">
+                      <button
+                        onClick={() => handleApproveGem(g.id)}
+                        className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => handleRejectGem(g.id)}
+                        className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
         <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
@@ -2329,6 +2539,63 @@ export default function Home() {
               <button
                 onClick={handleSubmitQuestSuggestion}
                 className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+              >
+                Submit for Review
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showSuggestGemModal && (
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+            <button
+              onClick={() => setShowSuggestGemModal(false)}
+              className="absolute top-4 right-4 text-slate-500 hover:text-slate-300 text-sm font-bold"
+            >
+              ✕
+            </button>
+            <div className="text-3xl">🗺️</div>
+            <h2 className="text-lg font-extrabold text-slate-100">SUGGEST A HIDDEN GEM</h2>
+            <p className="text-xs text-slate-400">
+              A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Place name"
+                value={suggestGemName}
+                onChange={(e) => setSuggestGemName(e.target.value)}
+                maxLength={100}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-amber-500"
+              />
+              <div className="flex flex-wrap gap-2 justify-center">
+                {MUMBAI_NEIGHBORHOODS.map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setSuggestGemNeighborhood(n)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                      suggestGemNeighborhood === n
+                        ? 'bg-amber-500 text-slate-950 border-amber-500'
+                        : 'bg-slate-950 text-slate-400 border-slate-800'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <textarea
+                placeholder="Why is it special? (15-300 characters)..."
+                value={suggestGemDescription}
+                onChange={(e) => setSuggestGemDescription(e.target.value)}
+                maxLength={300}
+                rows={4}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-slate-100 focus:outline-none focus:border-amber-500 resize-none"
+              />
+              <button
+                onClick={handleSubmitGemSuggestion}
+                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 transition-all active:scale-95"
               >
                 Submit for Review
               </button>
@@ -2581,7 +2848,7 @@ export default function Home() {
                 key={m}
                 onClick={() => handleSelectMode(m)}
                 className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
-                  mode === m
+                  mode === m && !isExplorerMode
                     ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
                     : 'text-slate-400 hover:text-slate-200'
                 }`}
@@ -2589,9 +2856,55 @@ export default function Home() {
                 {m === 'squad' ? 'Squad (2-8)' : m}
               </button>
             ))}
+            <button
+              onClick={handleSelectExplorer}
+              className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all active:scale-95 ${
+                isExplorerMode
+                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Explore
+            </button>
           </div>
 
-          {!activeQuest && !isCompleted && (
+          {isExplorerMode && !activeQuest && !isCompleted && (
+            <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+              <p className="text-sm text-slate-300 font-semibold">
+                Pick a neighborhood to discover a hidden gem someone local actually knows about.
+              </p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {MUMBAI_NEIGHBORHOODS.map((n) => (
+                  <button
+                    key={n}
+                    onClick={() => setSelectedNeighborhood(n)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                      selectedNeighborhood === n
+                        ? 'bg-amber-500 text-slate-950 border-amber-500'
+                        : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={handleRevealGem}
+                disabled={!selectedNeighborhood}
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:hover:bg-amber-500 text-slate-950 font-black py-3 rounded-xl transition-all active:scale-95"
+              >
+                🗺️ Reveal a Hidden Gem
+              </button>
+              <button
+                onClick={() => setShowSuggestGemModal(true)}
+                className="text-xs text-slate-500 hover:text-slate-300 font-semibold underline"
+              >
+                Know a spot? Suggest your own hidden gem
+              </button>
+            </div>
+          )}
+
+          {!activeQuest && !isCompleted && !isExplorerMode && (
             <div className="flex flex-col items-center space-y-4">
               <button
                 onClick={onStartMatchingClick}
@@ -2647,7 +2960,7 @@ export default function Home() {
             <div className="w-full bg-slate-900 border border-slate-800 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
               <div className="flex justify-between items-center">
                 <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  {mode} Mission Assigned
+                  {isExplorerMode ? 'Explorer' : mode} Mission Assigned
                 </span>
                 <span className="text-xs text-amber-400 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
                   <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
@@ -2695,8 +3008,8 @@ export default function Home() {
                     rarity: activeQuestRarity,
                     xp_reward: activeQuestXp
                   }}
-                  credit={activeQuestCredit}
-                  onReroll={() => mode === 'solo' ? pickRandomQuest() : handleSharedReroll()}
+                  credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
+                  onReroll={() => isExplorerMode ? handleRevealGem() : (mode === 'solo' ? pickRandomQuest() : handleSharedReroll())}
                   onAcceptMission={() => {
                     setIsMissionAccepted(true);
                     // The upload box (and its file input) only mounts once
