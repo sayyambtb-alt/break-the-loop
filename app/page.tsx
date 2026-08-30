@@ -131,6 +131,7 @@ export default function Home() {
   const [activeQuestCredit, setActiveQuestCredit] = useState<string | null>(null);
   const [isMissionAccepted, setIsMissionAccepted] = useState(false);
   const [roomId, setRoomId] = useState<string>('');
+  const [pendingInviteRoomId, setPendingInviteRoomId] = useState<string | null>(null);
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -217,6 +218,7 @@ export default function Home() {
   const presenceChannelRef = useRef<any>(null);
   const invitesChannelRef = useRef<any>(null);
   const myQueueEntryIdRef = useRef<string | null>(null);
+  const inviteLinkJoinedRef = useRef<boolean>(false);
   const currentUserIdRef = useRef<string | null>(null);
   const isQueueCreatorRef = useRef<boolean>(false);
   const accessTokenRef = useRef<string | null>(null);
@@ -276,14 +278,12 @@ export default function Home() {
 
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
-      const urlMode = params.get('mode');
-      const urlQuest = params.get('quest');
 
+      // Don't set match state directly from URL params -- the room may
+      // have filled up, expired, or moved on since the link was shared.
+      // join_room_by_id is the source of truth once auth resolves below.
       if (urlRoom) {
-        setRoomId(urlRoom);
-        setIsInviteSession(true);
-        if (urlMode) setMode(urlMode as 'duo' | 'squad');
-        if (urlQuest) setActiveQuest(decodeURIComponent(urlQuest));
+        setPendingInviteRoomId(urlRoom);
       }
 
       supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -316,6 +316,55 @@ export default function Home() {
       cleanupAllChannels();
     };
   }, []);
+
+  // Resolve a shared invite link once we actually have an authenticated
+  // user and handle -- never trust the URL's own claims about mode/quest,
+  // since the room may have moved on since the link was shared.
+  useEffect(() => {
+    if (!pendingInviteRoomId || !currentUserId || !handle || inviteLinkJoinedRef.current) return;
+    inviteLinkJoinedRef.current = true;
+
+    (async () => {
+      const { data: joinResult, error } = await supabase.rpc('join_room_by_id', {
+        p_room_id: pendingInviteRoomId,
+        p_user_id: currentUserId,
+        p_handle: handle
+      });
+
+      if (error || !joinResult || joinResult.error) {
+        showToast("That invite link has expired or the room is full — try starting your own mission instead!", 'error');
+        setPendingInviteRoomId(null);
+        return;
+      }
+
+      setMode(joinResult.mode);
+      setRoomId(joinResult.room_id);
+      setSquadCapacity(joinResult.max_players || 2);
+      setIsQueueCreator(false);
+      if (joinResult.roster) setSquadRoster(joinResult.roster);
+
+      if (joinResult.queue_id) {
+        myQueueEntryIdRef.current = joinResult.queue_id;
+      }
+
+      if (joinResult.matched) {
+        setActiveQuest(joinResult.quest_text);
+        setActiveQuestRarity(joinResult.rarity);
+        setActiveQuestXp(joinResult.xp_reward);
+        setActiveQuestCredit(null);
+        setIsMissionAccepted(false);
+        setIsSearching(false);
+        if (joinResult.queue_id) {
+          subscribeToQueueUpdates(joinResult.queue_id);
+        }
+      } else if (joinResult.queue_id) {
+        setIsSearching(true);
+        subscribeToQueueUpdates(joinResult.queue_id);
+      }
+
+      setPendingInviteRoomId(null);
+    })();
+  }, [pendingInviteRoomId, currentUserId, handle]);
 
   const cleanupAllChannels = () => {
     if (presenceChannelRef.current) {
@@ -1034,7 +1083,7 @@ export default function Home() {
   };
 
   const handleWhatsAppInvite = () => {
-    const inviteLink = `https://breaktheloopapp.in/?room=${roomId}&mode=${mode}&quest=${encodeURIComponent(activeQuest || '')}`;
+    const inviteLink = `https://breaktheloopapp.in/?room=${roomId}`;
     const text = encodeURIComponent(
       `🔥 Hey! @${handle} invited you to a ${mode.toUpperCase()} Raid on Break The Loop!\n\nTap this link to join my exact mission lobby right now:\n${inviteLink}`
     );
