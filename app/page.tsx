@@ -336,7 +336,13 @@ export default function Home() {
       });
 
       if (error || !joinResult || joinResult.error) {
-        showToast("That invite link has expired or the room is full — try starting your own mission instead!", 'error');
+        if (joinResult?.error === 'banned') {
+          showToast('Your account has been suspended from multiplayer missions.', 'error');
+        } else if (joinResult?.error === 'blocked') {
+          showToast("Couldn't join that mission.", 'error');
+        } else {
+          showToast("That invite link has expired or the room is full — try starting your own mission instead!", 'error');
+        }
         setPendingInviteRoomId(null);
         return;
       }
@@ -1218,6 +1224,12 @@ export default function Home() {
         return;
       }
 
+      if (matchResult && matchResult.error === 'banned') {
+        showToast('Your account has been suspended from multiplayer missions.', 'error');
+        setIsSearching(false);
+        return;
+      }
+
       if (matchResult) {
         setRoomId(matchResult.room_id);
         setSquadCapacity(matchResult.max_players || 2);
@@ -1844,6 +1856,24 @@ export default function Home() {
               </p>
             </div>
 
+            {selectedProfile.handle !== handle && (
+              <button
+                onClick={async () => {
+                  if (!window.confirm(`Block @${selectedProfile.handle}? You will never be matched with them again.`)) return;
+                  const { data, error } = await supabase.rpc('block_user', { p_blocked_handle: selectedProfile.handle });
+                  if (!error && data && !data.error) {
+                    showToast(`@${selectedProfile.handle} has been blocked.`, 'success');
+                    setSelectedProfile(null);
+                  } else {
+                    showToast('Could not block this user.', 'error');
+                  }
+                }}
+                className="w-full bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-rose-400 text-[10px] font-bold py-2 rounded-lg border border-slate-800 transition-all"
+              >
+                🚫 Block this Explorer
+              </button>
+            )}
+
             <div className="flex justify-around bg-slate-950 p-3 rounded-2xl border border-slate-800 text-center">
               <div>
                 <p className="text-[10px] text-slate-500 font-semibold">STREAK</p>
@@ -1957,6 +1987,22 @@ export default function Home() {
                           className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
                         >
                           Delete Message
+                        </button>
+                      )}
+                      {r.offender_user_id && (
+                        <button
+                          onClick={async () => {
+                            if (!window.confirm(`ADMIN: Permanently ban @${r.offender_handle || 'this user'}? They will be unable to start or join any match.`)) return;
+                            const { data, error } = await supabase.rpc('admin_ban_user', { p_user_id: r.offender_user_id });
+                            if (!error && data && data.success) {
+                              showToast(`@${r.offender_handle || 'User'} has been banned.`, 'success');
+                            } else {
+                              showToast('Failed to ban user.', 'error');
+                            }
+                          }}
+                          className="bg-red-950 hover:bg-red-900 text-red-300 text-[10px] px-3 py-1 rounded-lg font-bold border border-red-500/40 transition-all"
+                        >
+                          Ban User
                         </button>
                       )}
                       <button
