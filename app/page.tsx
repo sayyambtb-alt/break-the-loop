@@ -477,12 +477,17 @@ export default function Home() {
       const { data, error } = await supabase.rpc('get_explorer_public_profile', {
         p_handle: cleanHandle
       });
-      if (data && data.found) {
+      if (error) {
+        console.error('Profile lookup error:', error);
+        showToast('Could not load that profile right now — try again.', 'error');
+      } else if (data && data.found) {
         setSelectedProfile(data);
       } else {
         showToast(`Could not find an active profile for @${cleanHandle}`, 'error');
       }
-    } catch {
+    } catch (err) {
+      console.error('Profile lookup exception:', err);
+      showToast('Could not load that profile right now — try again.', 'error');
     } finally {
       setLoadingProfile(false);
     }
@@ -1836,7 +1841,7 @@ export default function Home() {
 
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-5 space-y-4 shadow-2xl relative">
             <button
               onClick={() => setSelectedProfile(null)}
