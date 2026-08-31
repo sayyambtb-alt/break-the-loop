@@ -148,6 +148,9 @@ export default function Home() {
   const [suggestGemDescription, setSuggestGemDescription] = useState('');
   const [showPendingGemsModal, setShowPendingGemsModal] = useState(false);
   const [pendingGems, setPendingGems] = useState<PendingGem[]>([]);
+  const [dirtyGemIds, setDirtyGemIds] = useState<string[]>([]);
+  const [savedGemIds, setSavedGemIds] = useState<string[]>([]);
+  const [pendingGemCount, setPendingGemCount] = useState<number>(0);
   const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
   const MUMBAI_NEIGHBORHOODS = [
@@ -607,6 +610,11 @@ export default function Home() {
       const { data } = await supabase.rpc('admin_get_all_gems');
       if (data) {
         setPendingGems(data);
+        // Any in-progress edits are discarded by a refetch, so clear the
+        // dirty markers too rather than leaving them pointing at stale edits.
+        setDirtyGemIds([]);
+        setSavedGemIds([]);
+        setPendingGemCount(data.filter((g: PendingGem) => g.status === 'pending').length);
         setShowPendingGemsModal(true);
       }
     } catch {
@@ -614,6 +622,21 @@ export default function Home() {
       setLoadingPendingGems(false);
     }
   };
+
+  const markGemDirty = (gemId: string) => {
+    setDirtyGemIds((prev) => prev.includes(gemId) ? prev : [...prev, gemId]);
+    setSavedGemIds((prev) => prev.filter((id) => id !== gemId));
+  };
+
+  // Surfaces the pending-submission count on the header badge without
+  // needing to open the panel first.
+  useEffect(() => {
+    if (userEmail !== ADMIN_EMAIL) return;
+    (async () => {
+      const { data } = await supabase.rpc('admin_get_pending_gem_count');
+      if (typeof data === 'number') setPendingGemCount(data);
+    })();
+  }, [userEmail]);
 
   const handleApproveGem = async (gem: PendingGem) => {
     const { error } = await supabase.rpc('admin_approve_gem', {
@@ -626,16 +649,25 @@ export default function Home() {
       showToast(`Couldn't approve spot: ${error.message}`, 'error');
       return;
     }
-    setPendingGems((prev) => prev.filter((g) => g.id !== gem.id));
+    // Approving doesn't remove the gem, it flips it to live -- keep it in
+    // the list so it stays editable, and drop the pending badge count.
+    setPendingGems((prev) => prev.map((g) => g.id === gem.id ? { ...g, status: 'approved', is_active: true } : g));
+    setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
+    setPendingGemCount((prev) => Math.max(0, prev - 1));
+    showToast(`"${gem.name}" is now live in ${gem.neighborhood}.`, 'success');
   };
 
   const handleRejectGem = async (gemId: string) => {
+    const wasPending = pendingGems.find((g) => g.id === gemId)?.status === 'pending';
     const { error } = await supabase.rpc('admin_reject_gem', { p_gem_id: gemId });
     if (error) {
       showToast(`Couldn't remove spot: ${error.message}`, 'error');
       return;
     }
     setPendingGems((prev) => prev.filter((g) => g.id !== gemId));
+    setDirtyGemIds((prev) => prev.filter((id) => id !== gemId));
+    if (wasPending) setPendingGemCount((prev) => Math.max(0, prev - 1));
+    showToast('Spot removed.', 'success');
   };
 
   // Edits an already-approved gem in place, without re-triggering approval.
@@ -650,7 +682,9 @@ export default function Home() {
       showToast(`Couldn't save changes: ${error.message}`, 'error');
       return;
     }
-    showToast('Saved.', 'success');
+    setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
+    setSavedGemIds((prev) => prev.includes(gem.id) ? prev : [...prev, gem.id]);
+    showToast(`Saved — "${gem.name}" now lives in ${gem.neighborhood}.`, 'success');
   };
 
   const handleSubmitGemSuggestion = async () => {
@@ -1943,10 +1977,15 @@ export default function Home() {
           {userEmail === ADMIN_EMAIL && (
             <button
               onClick={fetchPendingGems}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Pending Hidden Gems"
+              className="relative bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
+              title="Manage Hidden Gems"
             >
               🗺️ Gems
+              {pendingGemCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
+                  {pendingGemCount}
+                </span>
+              )}
             </button>
           )}
 
@@ -2295,7 +2334,7 @@ export default function Home() {
                       <div className="flex items-center gap-1.5">
                         <select
                           value={g.neighborhood}
-                          onChange={(e) => setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item))}
+                          onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
                           className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
                         >
                           {MUMBAI_NEIGHBORHOODS.map((n) => (
@@ -2307,19 +2346,29 @@ export default function Home() {
                         }`}>
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
+                        {dirtyGemIds.includes(g.id) && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/20 text-amber-300">
+                            Unsaved
+                          </span>
+                        )}
+                        {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/15 text-emerald-300">
+                            ✓ Saved
+                          </span>
+                        )}
                       </div>
                       <span className="text-[9px] text-slate-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
                     </div>
                     <input
                       type="text"
                       value={g.name}
-                      onChange={(e) => setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item))}
+                      onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
                       maxLength={100}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-bold focus:outline-none focus:border-amber-500"
                     />
                     <textarea
                       value={g.description}
-                      onChange={(e) => setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item))}
+                      onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
                       maxLength={300}
                       rows={3}
                       className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-300 text-[11px] resize-none focus:outline-none focus:border-amber-500"
@@ -2345,9 +2394,14 @@ export default function Home() {
                         <>
                           <button
                             onClick={() => handleUpdateGem(g)}
-                            className="bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                            disabled={!dirtyGemIds.includes(g.id)}
+                            className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
+                              dirtyGemIds.includes(g.id)
+                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            }`}
                           >
-                            Save Changes
+                            {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
                           </button>
                           <button
                             onClick={() => {
