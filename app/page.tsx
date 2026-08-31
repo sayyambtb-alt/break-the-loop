@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import SuspenseMissionCard from "./components/SuspenseMissionCard";
+import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
@@ -142,6 +142,7 @@ export default function Home() {
   const [isExplorerMode, setIsExplorerMode] = useState(false);
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
   const [hiddenGemSubmittedBy, setHiddenGemSubmittedBy] = useState<string | null>(null);
+  const [activeGem, setActiveGem] = useState<GemDetails | null>(null);
   const [showSuggestGemModal, setShowSuggestGemModal] = useState(false);
   const [suggestGemName, setSuggestGemName] = useState('');
   const [suggestGemNeighborhood, setSuggestGemNeighborhood] = useState('');
@@ -1122,6 +1123,7 @@ export default function Home() {
     setMode(selectedMode);
     setIsExplorerMode(false);
     setActiveQuest(null);
+    setActiveGem(null);
     setRoomId('');
     setProofImage(null);
     setIsCompleted(false);
@@ -1150,6 +1152,7 @@ export default function Home() {
     setIsSearching(false);
     setSquadRoster([]);
     setHiddenGemSubmittedBy(null);
+    setActiveGem(null);
   };
 
   const handleRevealGem = async () => {
@@ -1172,13 +1175,17 @@ export default function Home() {
     setActiveQuestCredit(null);
     setHiddenGemSubmittedBy(data.submitted_by_handle || null);
     setIsMissionAccepted(false);
-    setActiveQuest(`📍 ${data.name} (${data.neighborhood})\n\n${data.description}`);
+    setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description });
+    // activeQuest still drives photo-proof, completion logging and the share
+    // card, so it stays set even though the gem card renders from activeGem.
+    setActiveQuest(`📍 ${data.name} (${data.neighborhood}) — ${data.description}`);
   };
 
   const handleAbandonMission = async () => {
     if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
       await cancelSearch();
       setActiveQuest(null);
+      setActiveGem(null);
       setRoomId('');
       setProofImage(null);
       setIsCompleted(false);
@@ -3135,6 +3142,7 @@ export default function Home() {
                     xp_reward: activeQuestXp
                   }}
                   credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
+                  gem={isExplorerMode ? activeGem : null}
                   onReroll={() => isExplorerMode ? handleRevealGem() : (mode === 'solo' ? pickRandomQuest() : handleSharedReroll())}
                   onAcceptMission={() => {
                     setIsMissionAccepted(true);
