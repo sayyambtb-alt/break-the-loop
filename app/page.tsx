@@ -155,7 +155,7 @@ export default function Home() {
   const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
   const MUMBAI_NEIGHBORHOODS = [
-    'Colaba', 'Fort', 'Marine Drive', 'Dadar', 'Matunga', 'Mahim',
+    'Colaba', 'Fort', 'Marine Drive', 'Dadar', 'Matunga', 'Mahim', 'Wadala', 'Sewri',
     'Bandra', 'Worli', 'Andheri', 'Juhu', 'Powai', 'Borivali'
   ];
   const [isSearching, setIsSearching] = useState(false);
