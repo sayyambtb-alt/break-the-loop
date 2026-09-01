@@ -152,6 +152,9 @@ export default function Home() {
   const [dirtyGemIds, setDirtyGemIds] = useState<string[]>([]);
   const [savedGemIds, setSavedGemIds] = useState<string[]>([]);
   const [pendingGemCount, setPendingGemCount] = useState<number>(0);
+  const [gemNeighborhoodCounts, setGemNeighborhoodCounts] = useState<Record<string, number>>({});
+  const [gemSearchQuery, setGemSearchQuery] = useState('');
+  const [gemNeighborhoodFilter, setGemNeighborhoodFilter] = useState('All');
   const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
   const MUMBAI_NEIGHBORHOODS = [
@@ -639,6 +642,33 @@ export default function Home() {
     })();
   }, [userEmail]);
 
+  // Runs for every user, not just admin -- the Explorer picker needs this
+  // to grey out empty neighborhoods, and the admin filter dropdown reuses
+  // the same data for its inline counts.
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.rpc('get_gem_neighborhood_counts');
+      if (data) {
+        const counts: Record<string, number> = {};
+        data.forEach((row: { neighborhood: string; gem_count: number }) => {
+          counts[row.neighborhood] = Number(row.gem_count);
+        });
+        setGemNeighborhoodCounts(counts);
+      }
+    })();
+  }, []);
+
+  const refreshGemNeighborhoodCounts = async () => {
+    const { data } = await supabase.rpc('get_gem_neighborhood_counts');
+    if (data) {
+      const counts: Record<string, number> = {};
+      data.forEach((row: { neighborhood: string; gem_count: number }) => {
+        counts[row.neighborhood] = Number(row.gem_count);
+      });
+      setGemNeighborhoodCounts(counts);
+    }
+  };
+
   const handleApproveGem = async (gem: PendingGem) => {
     const { error } = await supabase.rpc('admin_approve_gem', {
       p_gem_id: gem.id,
@@ -656,6 +686,7 @@ export default function Home() {
     setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
     setPendingGemCount((prev) => Math.max(0, prev - 1));
     showToast(`"${gem.name}" is now live in ${gem.neighborhood}.`, 'success');
+    refreshGemNeighborhoodCounts();
   };
 
   const handleRejectGem = async (gemId: string) => {
@@ -669,6 +700,7 @@ export default function Home() {
     setDirtyGemIds((prev) => prev.filter((id) => id !== gemId));
     if (wasPending) setPendingGemCount((prev) => Math.max(0, prev - 1));
     showToast('Spot removed.', 'success');
+    refreshGemNeighborhoodCounts();
   };
 
   // Edits an already-approved gem in place, without re-triggering approval.
@@ -686,7 +718,108 @@ export default function Home() {
     setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
     setSavedGemIds((prev) => prev.includes(gem.id) ? prev : [...prev, gem.id]);
     showToast(`Saved — "${gem.name}" now lives in ${gem.neighborhood}.`, 'success');
+    refreshGemNeighborhoodCounts();
   };
+
+  const pendingGemsList = pendingGems.filter((g) => g.status === 'pending');
+  const allLiveGemsList = pendingGems.filter((g) => g.status !== 'pending');
+  const liveGemsList = allLiveGemsList.filter((g) => {
+    const matchesNeighborhood = gemNeighborhoodFilter === 'All' || g.neighborhood === gemNeighborhoodFilter;
+    const q = gemSearchQuery.trim().toLowerCase();
+    const matchesSearch = q === '' || g.name.toLowerCase().includes(q) || g.description.toLowerCase().includes(q);
+    return matchesNeighborhood && matchesSearch;
+  });
+
+  const renderGemCard = (g: PendingGem) => (
+    <div key={g.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
+      <div className="flex justify-between items-start gap-2">
+        <div className="flex items-center gap-1.5">
+          <select
+            value={g.neighborhood}
+            onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
+            className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
+          >
+            {MUMBAI_NEIGHBORHOODS.map((n) => (
+              <option key={n} value={n} className="bg-slate-900 text-slate-100 normal-case">{n}</option>
+            ))}
+          </select>
+          <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
+            g.status === 'pending' ? 'bg-slate-800 text-slate-400' : 'bg-rose-500/10 text-rose-400'
+          }`}>
+            {g.status === 'pending' ? 'Pending' : 'Live'}
+          </span>
+          {dirtyGemIds.includes(g.id) && (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/20 text-amber-300">
+              Unsaved
+            </span>
+          )}
+          {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/15 text-emerald-300">
+              ✓ Saved
+            </span>
+          )}
+        </div>
+        <span className="text-[9px] text-slate-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
+      </div>
+      <input
+        type="text"
+        value={g.name}
+        onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
+        maxLength={100}
+        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-bold focus:outline-none focus:border-amber-500"
+      />
+      <textarea
+        value={g.description}
+        onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
+        maxLength={300}
+        rows={3}
+        className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-300 text-[11px] resize-none focus:outline-none focus:border-amber-500"
+      />
+      <p className="text-slate-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
+      <div className="flex space-x-2 pt-1 border-t border-slate-900">
+        {g.status === 'pending' ? (
+          <>
+            <button
+              onClick={() => handleApproveGem(g)}
+              className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+            >
+              Approve
+            </button>
+            <button
+              onClick={() => handleRejectGem(g.id)}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+            >
+              Reject
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              onClick={() => handleUpdateGem(g)}
+              disabled={!dirtyGemIds.includes(g.id)}
+              className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
+                dirtyGemIds.includes(g.id)
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
+                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+              }`}
+            >
+              {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
+            </button>
+            <button
+              onClick={() => {
+                if (window.confirm(`Permanently remove "${g.name}" from Explorer mode?`)) {
+                  handleRejectGem(g.id);
+                }
+              }}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+            >
+              Delete
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
 
   const handleSubmitGemSuggestion = async () => {
     const cleanName = suggestGemName.trim();
@@ -2329,102 +2462,54 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+            <div className="max-h-[28rem] overflow-y-auto space-y-4 pr-1">
               {loadingPendingGems ? (
                 <p className="text-xs text-slate-500 text-center py-8">Loading...</p>
-              ) : pendingGems.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">No spots awaiting review.</p>
               ) : (
-                pendingGems.map((g) => (
-                  <div key={g.id} className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2 text-xs">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          value={g.neighborhood}
-                          onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
-                          className="bg-amber-500/10 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
-                        >
-                          {MUMBAI_NEIGHBORHOODS.map((n) => (
-                            <option key={n} value={n} className="bg-slate-900 text-slate-100 normal-case">{n}</option>
-                          ))}
-                        </select>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          g.status === 'pending' ? 'bg-slate-800 text-slate-400' : 'bg-rose-500/10 text-rose-400'
-                        }`}>
-                          {g.status === 'pending' ? 'Pending' : 'Live'}
-                        </span>
-                        {dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/20 text-amber-300">
-                            Unsaved
-                          </span>
-                        )}
-                        {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/15 text-emerald-300">
-                            ✓ Saved
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[9px] text-slate-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={g.name}
-                      onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
-                      maxLength={100}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-200 text-[11px] font-bold focus:outline-none focus:border-amber-500"
-                    />
-                    <textarea
-                      value={g.description}
-                      onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
-                      maxLength={300}
-                      rows={3}
-                      className="w-full bg-slate-900 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-300 text-[11px] resize-none focus:outline-none focus:border-amber-500"
-                    />
-                    <p className="text-slate-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-slate-900">
-                      {g.status === 'pending' ? (
-                        <>
-                          <button
-                            onClick={() => handleApproveGem(g)}
-                            className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleRejectGem(g.id)}
-                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleUpdateGem(g)}
-                            disabled={!dirtyGemIds.includes(g.id)}
-                            className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
-                              dirtyGemIds.includes(g.id)
-                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                                : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                            }`}
-                          >
-                            {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Permanently remove "${g.name}" from Explorer mode?`)) {
-                                handleRejectGem(g.id);
-                              }
-                            }}
-                            className="bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
+                <>
+                  <div>
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      ⏳ Pending Review ({pendingGemsList.length})
+                    </h3>
+                    {pendingGemsList.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-4">Nothing waiting for review.</p>
+                    ) : (
+                      <div className="space-y-2">{pendingGemsList.map(renderGemCard)}</div>
+                    )}
                   </div>
-                ))
+
+                  <div className="pt-3 border-t border-slate-800">
+                    <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      ✅ Live Gems ({liveGemsList.length})
+                    </h3>
+                    <div className="flex gap-2 mb-2">
+                      <select
+                        value={gemNeighborhoodFilter}
+                        onChange={(e) => setGemNeighborhoodFilter(e.target.value)}
+                        className="bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-300 text-[11px] focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="All">All areas ({allLiveGemsList.length})</option>
+                        {MUMBAI_NEIGHBORHOODS.map((n) => (
+                          <option key={n} value={n}>{n} ({gemNeighborhoodCounts[n] || 0})</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        placeholder="Search by name..."
+                        value={gemSearchQuery}
+                        onChange={(e) => setGemSearchQuery(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-2 py-1.5 text-slate-300 text-[11px] focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    {liveGemsList.length === 0 ? (
+                      <p className="text-xs text-slate-500 text-center py-4">
+                        {allLiveGemsList.length === 0 ? 'No live gems yet.' : 'No matches for this filter.'}
+                      </p>
+                    ) : (
+                      <div className="space-y-2">{liveGemsList.map(renderGemCard)}</div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
           </div>
@@ -3007,13 +3092,15 @@ export default function Home() {
                 Pick a neighborhood to discover a hidden gem someone local actually knows about.
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
-                {MUMBAI_NEIGHBORHOODS.map((n) => (
+                {[...MUMBAI_NEIGHBORHOODS].sort((a, b) => (gemNeighborhoodCounts[b] || 0) - (gemNeighborhoodCounts[a] || 0)).map((n) => (
                   <button
                     key={n}
                     onClick={() => setSelectedNeighborhood(n)}
                     className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
                       selectedNeighborhood === n
                         ? 'bg-amber-500 text-slate-950 border-amber-500'
+                        : !gemNeighborhoodCounts[n]
+                        ? 'bg-slate-950 text-slate-600 border-slate-900 hover:text-slate-400'
                         : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
                     }`}
                   >
