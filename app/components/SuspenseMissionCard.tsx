@@ -77,21 +77,21 @@ export default function SuspenseMissionCard({
         return {
           border: "border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.5)]",
           bg: "bg-amber-500/10",
-          text: "text-amber-400",
+          text: "text-amber-700",
           label: "⚡ LEGENDARY QUEST",
         };
       case "rare":
         return {
           border: "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]",
           bg: "bg-amber-500/10",
-          text: "text-amber-400",
+          text: "text-amber-700",
           label: "💎 RARE QUEST",
         };
       default:
         return {
-          border: "border-slate-700",
-          bg: "bg-slate-900/80",
-          text: "text-slate-400",
+          border: "border-slate-300",
+          bg: "bg-white/80",
+          text: "text-slate-600",
           label: "⚪ COMMON QUEST",
         };
     }
@@ -106,7 +106,7 @@ export default function SuspenseMissionCard({
       }`}
     >
       <div className="flex items-center justify-between mb-4">
-        <span className={`text-xs font-black tracking-widest uppercase ${gem ? "text-amber-400" : style.text}`}>
+        <span className={`text-xs font-black tracking-widest uppercase ${gem ? "text-amber-700" : style.text}`}>
           {isRevealing
             ? gem
               ? "📍 FINDING A SPOT..."
@@ -115,7 +115,7 @@ export default function SuspenseMissionCard({
             ? "📍 HYPER-LOCAL SECRET"
             : style.label}
         </span>
-        <div className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold text-amber-400">
+        <div className="px-3 py-1 rounded-full bg-slate-100 border border-slate-300 text-xs font-bold text-amber-700">
           +{currentXp} IRL XP
         </div>
       </div>
@@ -123,12 +123,12 @@ export default function SuspenseMissionCard({
       {gem && !isRevealing ? (
         <div className="my-4 space-y-3">
           <div className="text-center space-y-1.5">
-            <h3 className="text-xl font-black text-white leading-tight">{gem.name}</h3>
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+            <h3 className="text-xl font-black text-slate-900 leading-tight">{gem.name}</h3>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
               {gem.neighborhood}
             </span>
           </div>
-          <p className="text-center text-sm text-slate-300 leading-relaxed">
+          <p className="text-center text-sm text-slate-700 leading-relaxed">
             {gem.description}
           </p>
         </div>
@@ -136,7 +136,7 @@ export default function SuspenseMissionCard({
         <div className="min-h-[100px] flex items-center justify-center my-4">
           <p
             className={`text-center text-lg font-medium leading-relaxed ${
-              isRevealing ? "text-slate-500 animate-pulse font-mono text-sm" : "text-white"
+              isRevealing ? "text-slate-500 animate-pulse font-mono text-sm" : "text-slate-900"
             }`}
           >
             "{displayText}"
@@ -161,7 +161,7 @@ export default function SuspenseMissionCard({
 
           <button
             onClick={onReroll}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 bg-slate-100/60 hover:bg-slate-100 border border-slate-300/50 transition-all flex items-center justify-center gap-2"
           >
             <span>{gem ? "🔄 Show Me Another Spot" : "🔄 Reroll Quest"}</span>
           </button>
