@@ -1941,7 +1941,7 @@ export default function Home() {
                 ? 'bg-rose-950/95 border-rose-500/40 text-rose-200'
                 : t.type === 'success'
                 ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-white/95 border-slate-300 text-slate-800'
+                : 'bg-white border-slate-300 text-slate-800'
             }`}
           >
             {t.message}
@@ -3042,7 +3042,7 @@ export default function Home() {
               <button
                 onClick={onStartMatchingClick}
                 disabled={isSearching}
-                className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-8 border-rose-950 shadow-[0_0_50px_rgba(225,29,72,0.4)] flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
+                className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-4 border-white shadow-2xl shadow-rose-600/40 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
                   isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
                 }`}
               >
@@ -3373,7 +3373,7 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-white/50 border border-slate-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto">
+      <footer className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-lg">
         <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
           {isEditingHandle ? (
             <input

@@ -75,22 +75,25 @@ export default function SuspenseMissionCard({
     switch (currentRarity) {
       case "legendary":
         return {
-          border: "border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.5)]",
-          bg: "bg-amber-500/10",
+          border: "border-amber-400",
+          bg: "bg-amber-50",
+          shadow: "shadow-xl shadow-amber-400/40",
           text: "text-amber-700",
           label: "⚡ LEGENDARY QUEST",
         };
       case "rare":
         return {
-          border: "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]",
-          bg: "bg-amber-500/10",
+          border: "border-amber-400",
+          bg: "bg-amber-50",
+          shadow: "shadow-lg shadow-amber-400/25",
           text: "text-amber-700",
           label: "💎 RARE QUEST",
         };
       default:
         return {
           border: "border-slate-300",
-          bg: "bg-white/80",
+          bg: "bg-white",
+          shadow: "shadow-lg shadow-slate-500/10",
           text: "text-slate-600",
           label: "⚪ COMMON QUEST",
         };
@@ -101,7 +104,7 @@ export default function SuspenseMissionCard({
 
   return (
     <div
-      className={`relative w-full max-w-md p-6 rounded-2xl border ${style.border} ${style.bg} backdrop-blur-xl transition-all duration-500 transform ${
+      className={`relative w-full max-w-md p-6 rounded-2xl border ${style.border} ${style.bg} ${style.shadow} transition-all duration-500 transform ${
         isRevealing ? "scale-95 blur-xs" : "scale-100 blur-none"
       }`}
     >
