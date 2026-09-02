@@ -383,17 +383,33 @@ export default function Home() {
       setIsQueueCreator(false);
       if (joinResult.roster) setSquadRoster(joinResult.roster);
 
+      // An invite link to an Explore room needs to land the joiner on the
+      // Explore track with the right neighborhood selected, not silently
+      // treated as a regular Quest match.
+      if (joinResult.neighborhood) {
+        setIsExplorerMode(true);
+        setSelectedNeighborhood(joinResult.neighborhood);
+      }
+
       if (joinResult.queue_id) {
         myQueueEntryIdRef.current = joinResult.queue_id;
       }
 
       if (joinResult.matched) {
         setActiveQuest(joinResult.quest_text);
-        setActiveQuestRarity(joinResult.rarity);
+        setActiveQuestRarity(joinResult.neighborhood ? 'common' : joinResult.rarity);
         setActiveQuestXp(joinResult.xp_reward);
         setActiveQuestCredit(null);
         setIsMissionAccepted(false);
         setIsSearching(false);
+        if (joinResult.neighborhood) {
+          setActiveGem({
+            name: joinResult.gem_name,
+            neighborhood: joinResult.neighborhood,
+            description: joinResult.gem_description
+          });
+          setHiddenGemSubmittedBy(joinResult.gem_submitted_by || null);
+        }
         if (joinResult.queue_id) {
           subscribeToQueueUpdates(joinResult.queue_id);
         }
@@ -1121,7 +1137,6 @@ export default function Home() {
     }
 
     setMode(selectedMode);
-    setIsExplorerMode(false);
     setActiveQuest(null);
     setActiveGem(null);
     setRoomId('');
@@ -1131,6 +1146,28 @@ export default function Home() {
     setIsSearching(false);
     setSquadRoster([]);
     setSquadCapacity(selectedMode === 'squad' ? 8 : 2);
+  };
+
+  const handleSelectQuestTrack = () => {
+    if (queueSubscriptionRef.current) {
+      supabase.removeChannel(queueSubscriptionRef.current);
+      queueSubscriptionRef.current = null;
+    }
+    if (participantsSubRef.current) {
+      supabase.removeChannel(participantsSubRef.current);
+      participantsSubRef.current = null;
+    }
+
+    setIsExplorerMode(false);
+    setActiveQuest(null);
+    setActiveGem(null);
+    setRoomId('');
+    setProofImage(null);
+    setIsCompleted(false);
+    setIsInviteSession(false);
+    setIsSearching(false);
+    setSquadRoster([]);
+    setHiddenGemSubmittedBy(null);
   };
 
   const handleSelectExplorer = () => {
@@ -1151,6 +1188,7 @@ export default function Home() {
     setIsInviteSession(false);
     setIsSearching(false);
     setSquadRoster([]);
+    setSquadCapacity(mode === 'squad' ? 8 : 2);
     setHiddenGemSubmittedBy(null);
     setActiveGem(null);
   };
@@ -1179,6 +1217,107 @@ export default function Home() {
     // activeQuest still drives photo-proof, completion logging and the share
     // card, so it stays set even though the gem card renders from activeGem.
     setActiveQuest(`📍 ${data.name} (${data.neighborhood}) — ${data.description}`);
+  };
+
+  // Duo/Squad Explore -- mirrors executeMatchmaking's multiplayer path
+  // closely, but matches people wanting the same neighborhood (not the
+  // same generic mode) and sources content from hidden_gems.
+  const handleExploreMatchmaking = async () => {
+    setShowSafetyModal(false);
+    if (!selectedNeighborhood) {
+      showToast('Pick a neighborhood first.', 'error');
+      return;
+    }
+    if (!currentUserId) return;
+
+    setIsSearching(true);
+    setActiveQuest(null);
+    setActiveGem(null);
+    setProofImage(null);
+    setIsCompleted(false);
+    setCardDataUrl(null);
+    setMessages([]);
+    setSquadRoster([]);
+    setSquadCapacity(mode === 'squad' ? 8 : 2);
+
+    try {
+      const { data: matchResult, error } = await supabase.rpc('find_or_create_explore_match', {
+        p_user_id: currentUserId,
+        p_mode: mode,
+        p_handle: handle,
+        p_neighborhood: selectedNeighborhood
+      });
+
+      if (error) {
+        console.error('Explore matchmaking error:', error);
+        showToast(`Could not start exploring: ${error.message || JSON.stringify(error)}`, 'error');
+        setIsSearching(false);
+        return;
+      }
+
+      if (matchResult && matchResult.error === 'banned') {
+        showToast('Your account has been suspended from multiplayer missions.', 'error');
+        setIsSearching(false);
+        return;
+      }
+
+      if (matchResult && matchResult.error === 'no_gems_for_neighborhood') {
+        showToast(`No hidden gems submitted for ${selectedNeighborhood} yet — be the first!`, 'error');
+        setIsSearching(false);
+        return;
+      }
+
+      if (matchResult) {
+        setRoomId(matchResult.room_id);
+        setSquadCapacity(matchResult.max_players || 2);
+        setIsQueueCreator(matchResult.is_creator || false);
+        if (matchResult.roster) setSquadRoster(matchResult.roster);
+
+        if (matchResult.queue_id) {
+          myQueueEntryIdRef.current = matchResult.queue_id;
+        }
+
+        if (matchResult.matched) {
+          setActiveGem({
+            name: matchResult.gem_name,
+            neighborhood: matchResult.neighborhood,
+            description: matchResult.gem_description
+          });
+          setHiddenGemSubmittedBy(matchResult.gem_submitted_by || null);
+          setActiveQuest(matchResult.quest_text);
+          setActiveQuestRarity('common');
+          setActiveQuestXp(matchResult.xp_reward);
+          setActiveQuestCredit(null);
+          setIsMissionAccepted(false);
+          setIsSearching(false);
+          if (matchResult.queue_id) {
+            subscribeToQueueUpdates(matchResult.queue_id);
+          }
+        } else if (matchResult.queue_id) {
+          subscribeToQueueUpdates(matchResult.queue_id);
+
+          const rosterChannel = supabase
+            .channel(`roster_${matchResult.room_id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'matchmaking_participants',
+                filter: `room_id=eq.${matchResult.room_id}`
+              },
+              () => fetchRoster(matchResult.room_id)
+            )
+            .subscribe();
+
+          participantsSubRef.current = rosterChannel;
+        }
+      }
+    } catch (err) {
+      console.error('Explore matchmaking exception:', err);
+      showToast('Could not start exploring right now — try again.', 'error');
+      setIsSearching(false);
+    }
   };
 
   const handleAbandonMission = async () => {
@@ -1324,6 +1463,11 @@ export default function Home() {
   };
 
   const onStartMatchingClick = () => {
+    if (isExplorerMode && mode === 'solo') {
+      handleRevealGem();
+      return;
+    }
+
     if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
       setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
       setShowAuthModal(true);
@@ -1332,6 +1476,8 @@ export default function Home() {
 
     if (mode !== 'solo' && !isInviteSession) {
       setShowSafetyModal(true);
+    } else if (isExplorerMode) {
+      handleExploreMatchmaking();
     } else {
       executeMatchmaking();
     }
@@ -1387,6 +1533,20 @@ export default function Home() {
           setActiveQuestXp(payload.new.xp_reward);
           setActiveQuestCredit(null);
           setIsMissionAccepted(false);
+
+          // Explore rooms carry gem fields on the same row -- keep every
+          // participant's structured gem card in sync too, whether this
+          // update is the initial group reveal or a later shared reroll.
+          if (payload.new.neighborhood) {
+            setActiveGem({
+              name: payload.new.gem_name,
+              neighborhood: payload.new.neighborhood,
+              description: payload.new.gem_description
+            });
+            setHiddenGemSubmittedBy(payload.new.gem_submitted_by || null);
+          } else {
+            setActiveGem(null);
+          }
         }
       )
       .subscribe();
@@ -2823,7 +2983,7 @@ export default function Home() {
                 Cancel
               </button>
               <button
-                onClick={executeMatchmaking}
+                onClick={() => isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking()}
                 className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-rose-600/30"
               >
                 I Agree & Search
@@ -2975,23 +3135,20 @@ export default function Home() {
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between">
-            {(['solo', 'duo', 'squad'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleSelectMode(m)}
-                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
-                  mode === m && !isExplorerMode
-                    ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                {m === 'squad' ? 'Squad (2-8)' : m}
-              </button>
-            ))}
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between mb-2">
+            <button
+              onClick={handleSelectQuestTrack}
+              className={`flex-1 py-2 text-sm font-bold rounded-xl transition-all active:scale-95 ${
+                !isExplorerMode
+                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Quest
+            </button>
             <button
               onClick={handleSelectExplorer}
-              className={`flex-1 py-2 text-sm font-semibold rounded-xl transition-all active:scale-95 ${
+              className={`flex-1 py-2 text-sm font-bold rounded-xl transition-all active:scale-95 ${
                 isExplorerMode
                   ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
                   : 'text-slate-600 hover:text-slate-900'
@@ -2999,6 +3156,24 @@ export default function Home() {
             >
               Explore
             </button>
+          </div>
+
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between">
+            {(['solo', 'duo', 'squad'] as const).map((m) => (
+              <button
+                key={m}
+                onClick={() => handleSelectMode(m)}
+                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
+                  mode === m
+                    ? isExplorerMode
+                      ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
+                      : 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                {m === 'squad' ? 'Squad (2-8)' : m}
+              </button>
+            ))}
           </div>
 
           {isExplorerMode && !activeQuest && !isCompleted && (
@@ -3011,7 +3186,8 @@ export default function Home() {
                   <button
                     key={n}
                     onClick={() => setSelectedNeighborhood(n)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${
+                    disabled={isSearching}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
                       selectedNeighborhood === n
                         ? 'bg-amber-500 text-slate-950 border-amber-500'
                         : 'bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900'
@@ -3022,18 +3198,27 @@ export default function Home() {
                 ))}
               </div>
               <button
-                onClick={handleRevealGem}
-                disabled={!selectedNeighborhood}
+                onClick={onStartMatchingClick}
+                disabled={!selectedNeighborhood || isSearching}
                 className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:hover:bg-amber-500 text-slate-950 font-black py-3 rounded-xl transition-all active:scale-95"
               >
-                🗺️ Reveal a Hidden Gem
+                {isSearching ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <span className="animate-spin">🌀</span>
+                    {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
+                  </span>
+                ) : (
+                  '🗺️ Reveal a Hidden Gem'
+                )}
               </button>
-              <button
-                onClick={() => setShowSuggestGemModal(true)}
-                className="text-xs text-slate-500 hover:text-slate-900 font-semibold underline"
-              >
-                Know a spot? Suggest your own hidden gem
-              </button>
+              {!isSearching && (
+                <button
+                  onClick={() => setShowSuggestGemModal(true)}
+                  className="text-xs text-slate-500 hover:text-slate-900 font-semibold underline"
+                >
+                  Know a spot? Suggest your own hidden gem
+                </button>
+              )}
             </div>
           )}
 
@@ -3143,7 +3328,7 @@ export default function Home() {
                   }}
                   credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
                   gem={isExplorerMode ? activeGem : null}
-                  onReroll={() => isExplorerMode ? handleRevealGem() : (mode === 'solo' ? pickRandomQuest() : handleSharedReroll())}
+                  onReroll={() => mode === 'solo' ? (isExplorerMode ? handleRevealGem() : pickRandomQuest()) : handleSharedReroll()}
                   onAcceptMission={() => {
                     setIsMissionAccepted(true);
                     // The upload box (and its file input) only mounts once
