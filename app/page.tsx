@@ -3135,10 +3135,10 @@ export default function Home() {
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between mb-2">
+          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between shadow-sm">
             <button
               onClick={handleSelectQuestTrack}
-              className={`flex-1 py-2 text-sm font-bold rounded-xl transition-all active:scale-95 ${
+              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
                 !isExplorerMode
                   ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
                   : 'text-slate-600 hover:text-slate-900'
@@ -3148,7 +3148,7 @@ export default function Home() {
             </button>
             <button
               onClick={handleSelectExplorer}
-              className={`flex-1 py-2 text-sm font-bold rounded-xl transition-all active:scale-95 ${
+              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
                 isExplorerMode
                   ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
                   : 'text-slate-600 hover:text-slate-900'
@@ -3158,17 +3158,17 @@ export default function Home() {
             </button>
           </div>
 
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between">
+          {/* Deliberately lighter-weight than the Quest/Explore choice above --
+              this is a refinement of that choice, not a second equal decision. */}
+          <div className="flex items-center justify-center gap-1">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => handleSelectMode(m)}
-                className={`flex-1 py-2 text-sm font-semibold rounded-xl capitalize transition-all active:scale-95 ${
+                className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
                   mode === m
-                    ? isExplorerMode
-                      ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
-                      : 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-                    : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-slate-800 text-white'
+                    : 'text-white/70 hover:text-white'
                 }`}
               >
                 {m === 'squad' ? 'Squad (2-8)' : m}
@@ -3247,7 +3247,7 @@ export default function Home() {
               </button>
 
               <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-white/80 font-medium">
                   {isSearching
                     ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
