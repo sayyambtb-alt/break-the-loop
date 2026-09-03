@@ -76,7 +76,7 @@ export default function SuspenseMissionCard({
       case "legendary":
         return {
           border: "border-amber-400",
-          bg: "bg-amber-50",
+          bg: "bg-gradient-to-b from-amber-50 to-white",
           shadow: "shadow-xl shadow-amber-400/40",
           text: "text-amber-700",
           label: "⚡ LEGENDARY QUEST",
@@ -84,7 +84,7 @@ export default function SuspenseMissionCard({
       case "rare":
         return {
           border: "border-amber-400",
-          bg: "bg-amber-50",
+          bg: "bg-gradient-to-b from-amber-50 to-white",
           shadow: "shadow-lg shadow-amber-400/25",
           text: "text-amber-700",
           label: "💎 RARE QUEST",
@@ -92,7 +92,7 @@ export default function SuspenseMissionCard({
       default:
         return {
           border: "border-slate-300",
-          bg: "bg-white",
+          bg: "bg-gradient-to-b from-white to-slate-50",
           shadow: "shadow-lg shadow-slate-500/10",
           text: "text-slate-600",
           label: "⚪ COMMON QUEST",

@@ -2090,7 +2090,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-slate-500 text-slate-900 flex flex-col items-center justify-between p-6 font-sans select-none">
+    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#7C8CA3_0%,_#64748B_45%,_#4A5568_100%)] text-slate-900 flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -3135,7 +3135,7 @@ export default function Home() {
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-white p-1.5 rounded-2xl border border-slate-200 w-full justify-between shadow-sm">
+          <div className="flex bg-gradient-to-b from-white to-slate-50 p-1.5 rounded-2xl border border-slate-200 w-full justify-between shadow-xl shadow-slate-900/10">
             <button
               onClick={handleSelectQuestTrack}
               className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
@@ -3224,27 +3224,37 @@ export default function Home() {
 
           {!activeQuest && !isCompleted && !isExplorerMode && (
             <div className="flex flex-col items-center space-y-4">
-              <button
-                onClick={onStartMatchingClick}
-                disabled={isSearching}
-                className={`w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-4 border-white shadow-2xl shadow-rose-600/40 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide active:scale-90 transition-transform duration-100 touch-manipulation ${
-                  isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-                }`}
-              >
-                {isSearching ? (
-                  <div className="flex flex-col items-center space-y-1">
-                    <span className="text-2xl animate-spin">🌀</span>
-                    <span className="text-xs text-rose-200 font-mono font-normal">
-                      {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                    <span className="font-['Space_Grotesk'] font-medium text-sm text-rose-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
-                  </>
-                )}
-              </button>
+              <div className="relative flex items-center justify-center">
+                <div
+                  aria-hidden="true"
+                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(225,29,72,0.28)_0%,rgba(225,29,72,0)_70%)] pointer-events-none"
+                />
+                <button
+                  onClick={onStartMatchingClick}
+                  disabled={isSearching}
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-4 border-white shadow-2xl shadow-rose-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
+                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/25 rotate-[-20deg]"
+                  />
+                  {isSearching ? (
+                    <div className="flex flex-col items-center space-y-1">
+                      <span className="text-2xl animate-spin">🌀</span>
+                      <span className="text-xs text-rose-200 font-mono font-normal">
+                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
+                      <span className="font-['Space_Grotesk'] font-medium text-sm text-rose-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
+                    </>
+                  )}
+                </button>
+              </div>
 
               <div className="text-center space-y-2 max-w-xs">
                 <p className="text-xs text-white/80 font-medium">
@@ -3558,7 +3568,7 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-white border border-slate-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-lg">
+      <footer className="w-full max-w-md bg-gradient-to-b from-white to-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-slate-900/15">
         <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
           {isEditingHandle ? (
             <input
