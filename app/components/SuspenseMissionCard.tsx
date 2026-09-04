@@ -75,23 +75,26 @@ export default function SuspenseMissionCard({
     switch (currentRarity) {
       case "legendary":
         return {
-          border: "border-amber-400 shadow-[0_0_25px_rgba(251,191,36,0.5)]",
-          bg: "bg-amber-500/10",
-          text: "text-amber-400",
+          border: "border-amber-400",
+          bg: "bg-gradient-to-b from-amber-50 to-white",
+          shadow: "shadow-xl shadow-amber-400/40",
+          text: "text-amber-700",
           label: "⚡ LEGENDARY QUEST",
         };
       case "rare":
         return {
-          border: "border-amber-400 shadow-[0_0_20px_rgba(251,191,36,0.4)]",
-          bg: "bg-amber-500/10",
-          text: "text-amber-400",
+          border: "border-amber-400",
+          bg: "bg-gradient-to-b from-amber-50 to-white",
+          shadow: "shadow-lg shadow-amber-400/25",
+          text: "text-amber-700",
           label: "💎 RARE QUEST",
         };
       default:
         return {
-          border: "border-slate-700",
-          bg: "bg-slate-900/80",
-          text: "text-slate-400",
+          border: "border-stone-300",
+          bg: "bg-gradient-to-b from-white to-stone-50",
+          shadow: "shadow-lg shadow-stone-500/10",
+          text: "text-stone-600",
           label: "⚪ COMMON QUEST",
         };
     }
@@ -101,12 +104,12 @@ export default function SuspenseMissionCard({
 
   return (
     <div
-      className={`relative w-full max-w-md p-6 rounded-2xl border ${style.border} ${style.bg} backdrop-blur-xl transition-all duration-500 transform ${
+      className={`relative w-full max-w-md p-6 rounded-2xl border ${style.border} ${style.bg} ${style.shadow} transition-all duration-500 transform ${
         isRevealing ? "scale-95 blur-xs" : "scale-100 blur-none"
       }`}
     >
       <div className="flex items-center justify-between mb-4">
-        <span className={`text-xs font-black tracking-widest uppercase ${gem ? "text-amber-400" : style.text}`}>
+        <span className={`text-xs font-black tracking-widest uppercase ${gem ? "text-amber-700" : style.text}`}>
           {isRevealing
             ? gem
               ? "📍 FINDING A SPOT..."
@@ -115,7 +118,7 @@ export default function SuspenseMissionCard({
             ? "📍 HYPER-LOCAL SECRET"
             : style.label}
         </span>
-        <div className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-bold text-amber-400">
+        <div className="px-3 py-1 rounded-full bg-stone-100 border border-stone-300 text-xs font-bold text-amber-700">
           +{currentXp} IRL XP
         </div>
       </div>
@@ -123,12 +126,12 @@ export default function SuspenseMissionCard({
       {gem && !isRevealing ? (
         <div className="my-4 space-y-3">
           <div className="text-center space-y-1.5">
-            <h3 className="text-xl font-black text-white leading-tight">{gem.name}</h3>
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
+            <h3 className="text-xl font-black text-stone-900 leading-tight">{gem.name}</h3>
+            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
               {gem.neighborhood}
             </span>
           </div>
-          <p className="text-center text-sm text-slate-300 leading-relaxed">
+          <p className="text-center text-sm text-stone-700 leading-relaxed">
             {gem.description}
           </p>
         </div>
@@ -136,7 +139,7 @@ export default function SuspenseMissionCard({
         <div className="min-h-[100px] flex items-center justify-center my-4">
           <p
             className={`text-center text-lg font-medium leading-relaxed ${
-              isRevealing ? "text-slate-500 animate-pulse font-mono text-sm" : "text-white"
+              isRevealing ? "text-stone-500 animate-pulse font-mono text-sm" : "text-stone-900"
             }`}
           >
             "{displayText}"
@@ -145,7 +148,7 @@ export default function SuspenseMissionCard({
       )}
 
       {!isRevealing && credit && (
-        <p className="text-center text-[10px] text-slate-500 -mt-2 mb-2">
+        <p className="text-center text-[10px] text-stone-500 -mt-2 mb-2">
           {gem ? "Shared by" : "Suggested by"} @{credit}
         </p>
       )}
@@ -154,14 +157,14 @@ export default function SuspenseMissionCard({
         <div className="mt-6 flex flex-col gap-3">
           <button
             onClick={onAcceptMission}
-            className="w-full py-3.5 px-4 rounded-xl font-extrabold text-white bg-rose-600 hover:bg-rose-500 active:scale-98 transition-all shadow-lg shadow-rose-600/30"
+            className="w-full py-3.5 px-4 rounded-xl font-extrabold text-white bg-orange-600 hover:bg-orange-500 active:scale-98 transition-all shadow-lg shadow-orange-600/30"
           >
             {gem ? "I'M GOING — OPEN CAMERA" : "ACCEPT MISSION & OPEN CAMERA"}
           </button>
 
           <button
             onClick={onReroll}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 transition-all flex items-center justify-center gap-2"
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100/60 hover:bg-stone-100 border border-stone-300/50 transition-all flex items-center justify-center gap-2"
           >
             <span>{gem ? "🔄 Show Me Another Spot" : "🔄 Reroll Quest"}</span>
           </button>
