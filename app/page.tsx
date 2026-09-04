@@ -3168,7 +3168,7 @@ export default function Home() {
                 className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
                   mode === m
                     ? 'bg-stone-800 text-white'
-                    : 'text-white/70 hover:text-white'
+                    : 'text-stone-500 hover:text-stone-900'
                 }`}
               >
                 {m === 'squad' ? 'Squad (2-8)' : m}
@@ -3265,7 +3265,7 @@ export default function Home() {
               </div>
 
               <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-white/80 font-medium">
+                <p className="text-xs text-stone-600 font-medium">
                   {isSearching
                     ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
