@@ -2090,7 +2090,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#7C8CA3_0%,_#64748B_45%,_#4A5568_100%)] text-slate-900 flex flex-col items-center justify-between p-6 font-sans select-none">
+    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] text-stone-900 flex flex-col items-center justify-between p-6 font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -2098,10 +2098,10 @@ export default function Home() {
             key={t.id}
             className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
               t.type === 'error'
-                ? 'bg-rose-950/95 border-rose-500/40 text-rose-200'
+                ? 'bg-orange-950/95 border-orange-500/40 text-orange-200'
                 : t.type === 'success'
                 ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-white border-slate-300 text-slate-800'
+                : 'bg-white border-stone-300 text-stone-800'
             }`}
           >
             {t.message}
@@ -2109,13 +2109,13 @@ export default function Home() {
         ))}
       </div>
 
-      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-slate-200">
+      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-stone-200">
         <h1
           onMouseDown={handleDevPressStart}
           onMouseUp={handleDevPressEnd}
           onTouchStart={handleDevPressStart}
           onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-bold tracking-tight font-['Space_Grotesk'] bg-gradient-to-r from-rose-500 to-amber-500 bg-clip-text text-transparent drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
+          className="text-lg sm:text-xl font-black tracking-tight font-['Space_Grotesk'] text-orange-600 drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
           title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
         >
           BREAK THE LOOP
@@ -2149,7 +2149,7 @@ export default function Home() {
             >
               🗺️ Gems
               {pendingGemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1.5 -right-1.5 bg-orange-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
                   {pendingGemCount}
                 </span>
               )}
@@ -2161,18 +2161,18 @@ export default function Home() {
             className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
               notificationsEnabled
                 ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
-                : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900'
+                : 'bg-white border-stone-200 text-stone-600 hover:text-stone-900'
             }`}
             title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
           >
             {notificationsEnabled ? '🔔' : '🔕'}
           </button>
 
-          <div className="flex bg-white border border-slate-200 rounded-xl p-1 text-xs">
+          <div className="flex bg-white border border-stone-200 rounded-xl p-1 text-xs">
             <button
               onClick={() => setTab('quest')}
               className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'quest' ? 'bg-rose-600 text-white' : 'text-slate-600'
+                tab === 'quest' ? 'bg-orange-600 text-white' : 'text-stone-600'
               }`}
             >
               Quest
@@ -2180,7 +2180,7 @@ export default function Home() {
             <button
               onClick={() => setTab('feed')}
               className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'feed' ? 'bg-rose-600 text-white' : 'text-slate-600'
+                tab === 'feed' ? 'bg-orange-600 text-white' : 'text-stone-600'
               }`}
             >
               Feed
@@ -2191,24 +2191,24 @@ export default function Home() {
 
       {/* Incoming Live Raid Invite Banner */}
       {incomingInvite && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-rose-950 border-2 border-rose-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(244,63,94,0.5)] animate-bounce text-center space-y-2">
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-orange-950 border-2 border-orange-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(249,115,22,0.5)] animate-bounce text-center space-y-2">
           <div className="text-2xl">⚡</div>
-          <h3 className="font-extrabold text-sm text-slate-100">
+          <h3 className="font-extrabold text-sm text-stone-100">
             @{incomingInvite.sender_handle} challenged you to a Duo Raid!
           </h3>
-          <p className="text-[11px] text-rose-200 italic">
+          <p className="text-[11px] text-orange-200 italic">
             "{incomingInvite.quest_text}"
           </p>
           <div className="flex space-x-2 pt-2">
             <button
               onClick={declineDirectInvite}
-              className="flex-1 bg-white text-slate-700 py-2 rounded-xl text-xs font-bold"
+              className="flex-1 bg-white text-stone-700 py-2 rounded-xl text-xs font-bold"
             >
               Decline
             </button>
             <button
               onClick={acceptDirectInvite}
-              className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-rose-600/40"
+              className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-orange-600/40"
             >
               Accept Raid 🔥
             </button>
@@ -2218,22 +2218,22 @@ export default function Home() {
 
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-5 space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-5 space-y-4 shadow-2xl relative">
             <button
               onClick={() => setSelectedProfile(null)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
             >
               ✕
             </button>
 
             <div className="text-center space-y-1">
               <div className="text-3xl">👤</div>
-              <h2 className="text-base font-extrabold text-rose-400">
+              <h2 className="text-base font-extrabold text-orange-400">
                 @{selectedProfile.handle}{' '}
-                <span className="text-slate-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
+                <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
               </h2>
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-stone-500">
                 Explorer • Active Mumbai Loop Destroyer
               </p>
             </div>
@@ -2250,29 +2250,29 @@ export default function Home() {
                     showToast('Could not block this user.', 'error');
                   }
                 }}
-                className="w-full bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-rose-400 text-[10px] font-bold py-2 rounded-lg border border-slate-200 transition-all"
+                className="w-full bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-orange-400 text-[10px] font-bold py-2 rounded-lg border border-stone-200 transition-all"
               >
                 🚫 Block this Explorer
               </button>
             )}
 
-            <div className="flex justify-around bg-slate-50 p-3 rounded-2xl border border-slate-200 text-center">
+            <div className="flex justify-around bg-stone-50 p-3 rounded-2xl border border-stone-200 text-center">
               <div>
-                <p className="text-[10px] text-slate-500 font-semibold">STREAK</p>
-                <p className="text-sm font-black text-slate-800">{selectedProfile.streak} Days 🔥</p>
+                <p className="text-[10px] text-stone-500 font-semibold">STREAK</p>
+                <p className="text-sm font-black text-stone-800">{selectedProfile.streak} Days 🔥</p>
               </div>
-              <div className="w-px bg-slate-100" />
+              <div className="w-px bg-stone-100" />
               <div>
-                <p className="text-[10px] text-slate-500 font-semibold">IRL XP</p>
-                <p className="text-sm font-black text-rose-400">{selectedProfile.time_saved_mins} ⚡</p>
+                <p className="text-[10px] text-stone-500 font-semibold">IRL XP</p>
+                <p className="text-sm font-black text-orange-400">{selectedProfile.time_saved_mins} ⚡</p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-slate-600 uppercase">Unlocked Badges</span>
+              <span className="text-[10px] font-bold text-stone-600 uppercase">Unlocked Badges</span>
               <div className="flex flex-wrap gap-1">
                 {selectedProfile.badges?.map((b, i) => (
-                  <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-700 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                  <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-medium">
                     {b}
                   </span>
                 ))}
@@ -2280,22 +2280,22 @@ export default function Home() {
             </div>
 
             <div className="space-y-2">
-              <span className="text-[10px] font-bold text-slate-600 uppercase">Recent Missions Conquered</span>
+              <span className="text-[10px] font-bold text-stone-600 uppercase">Recent Missions Conquered</span>
               <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
                 {selectedProfile.history && selectedProfile.history.length > 0 ? (
                   selectedProfile.history.map((h) => (
-                    <div key={h.id} className="bg-slate-50 p-2 rounded-xl border border-slate-200 flex space-x-2 items-center">
+                    <div key={h.id} className="bg-stone-50 p-2 rounded-xl border border-stone-200 flex space-x-2 items-center">
                       {h.photo_url && (
                         <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
                       )}
                       <div className="text-left overflow-hidden">
-                        <p className="text-[10px] text-slate-700 truncate font-medium">"{h.quest_text}"</p>
-                        <span className="text-[9px] text-rose-400/80 uppercase font-mono font-bold">{h.mode} Mission</span>
+                        <p className="text-[10px] text-stone-700 truncate font-medium">"{h.quest_text}"</p>
+                        <span className="text-[9px] text-orange-400/80 uppercase font-mono font-bold">{h.mode} Mission</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[10px] text-slate-400 text-center py-2">No public missions logged yet.</p>
+                  <p className="text-[10px] text-stone-400 text-center py-2">No public missions logged yet.</p>
                 )}
               </div>
             </div>
@@ -2305,15 +2305,15 @@ export default function Home() {
 
       {/* Admin Moderation Queue Modal */}
       {showReportsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 🛡️ Moderation Reports Queue ({adminReports.length})
               </h2>
               <button
                 onClick={() => setShowReportsModal(false)}
-                className="text-slate-500 hover:text-slate-900 text-sm font-bold"
+                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
               >
                 ✕
               </button>
@@ -2321,19 +2321,19 @@ export default function Home() {
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
               {adminReports.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">Queue clear! Zero reported content.</p>
+                <p className="text-xs text-stone-500 text-center py-8">Queue clear! Zero reported content.</p>
               ) : (
                 adminReports.map((r) => (
-                  <div key={r.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                  <div key={r.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
                     <div className="flex justify-between items-start">
-                      <span className="text-rose-400 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
-                      <span className="text-[9px] text-slate-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
+                      <span className="text-orange-400 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
+                      <span className="text-[9px] text-stone-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-slate-700 text-[11px]">
+                    <p className="text-stone-700 text-[11px]">
                       <strong>Reason:</strong> "{r.reason}"
                     </p>
                     {r.content_text && (
-                      <p className="text-slate-800 text-[11px] bg-white border border-slate-200 rounded-lg p-2">
+                      <p className="text-stone-800 text-[11px] bg-white border border-stone-200 rounded-lg p-2">
                         <strong className="text-amber-700">Reported content:</strong> "{r.content_text}"
                       </p>
                     )}
@@ -2341,14 +2341,14 @@ export default function Home() {
                       <img
                         src={r.content_photo_url}
                         alt="Reported proof photo"
-                        className="w-full max-h-40 object-cover rounded-lg border border-slate-200"
+                        className="w-full max-h-40 object-cover rounded-lg border border-stone-200"
                       />
                     )}
-                    <p className="text-slate-500 text-[10px]">
+                    <p className="text-stone-500 text-[10px]">
                       Reported by @{r.reporter_handle}
                       {r.offender_handle ? ` • Posted by @${r.offender_handle}` : ''}
                     </p>
-                    <div className="flex space-x-2 pt-1 border-t border-slate-200">
+                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
                       {r.reported_type === 'feed' && (
                         <button
                           onClick={() => {
@@ -2389,7 +2389,7 @@ export default function Home() {
                       )}
                       <button
                         onClick={() => handleResolveReport(r.id)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                       >
                         Dismiss Flag
                       </button>
@@ -2404,23 +2404,23 @@ export default function Home() {
 
       {/* Admin Pending Quest Suggestions Modal */}
       {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 📝 Pending Quest Suggestions ({pendingQuests.length})
               </h2>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={fetchPendingQuests}
-                  className="text-slate-500 hover:text-slate-900 text-[10px] font-bold"
+                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
                   title="Refresh"
                 >
                   🔄
                 </button>
                 <button
                   onClick={() => setShowPendingQuestsModal(false)}
-                  className="text-slate-500 hover:text-slate-900 text-sm font-bold"
+                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
                 >
                   ✕
                 </button>
@@ -2429,30 +2429,30 @@ export default function Home() {
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
               {loadingPendingQuests ? (
-                <p className="text-xs text-slate-500 text-center py-8">Loading...</p>
+                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
               ) : pendingQuests.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">No quests awaiting review.</p>
+                <p className="text-xs text-stone-500 text-center py-8">No quests awaiting review.</p>
               ) : (
                 pendingQuests.map((q) => (
-                  <div key={q.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                  <div key={q.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
                     <div className="flex justify-between items-start">
                       <span className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
                         {q.mode}
                       </span>
-                      <span className="text-[9px] text-slate-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
+                      <span className="text-[9px] text-stone-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-slate-700 text-[11px]">"{q.quest_text}"</p>
-                    <p className="text-slate-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-slate-200">
+                    <p className="text-stone-700 text-[11px]">"{q.quest_text}"</p>
+                    <p className="text-stone-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
+                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
                       <button
                         onClick={() => handleApproveQuest(q.id)}
-                        className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                        className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleRejectQuest(q.id)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                       >
                         Reject
                       </button>
@@ -2466,23 +2466,23 @@ export default function Home() {
       )}
 
       {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 🗺️ Manage Hidden Gems ({pendingGems.length})
               </h2>
               <div className="flex items-center space-x-2">
                 <button
                   onClick={fetchPendingGems}
-                  className="text-slate-500 hover:text-slate-900 text-[10px] font-bold"
+                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
                   title="Refresh"
                 >
                   🔄
                 </button>
                 <button
                   onClick={() => setShowPendingGemsModal(false)}
-                  className="text-slate-500 hover:text-slate-900 text-sm font-bold"
+                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
                 >
                   ✕
                 </button>
@@ -2491,12 +2491,12 @@ export default function Home() {
 
             <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
               {loadingPendingGems ? (
-                <p className="text-xs text-slate-500 text-center py-8">Loading...</p>
+                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
               ) : pendingGems.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-8">No spots awaiting review.</p>
+                <p className="text-xs text-stone-500 text-center py-8">No spots awaiting review.</p>
               ) : (
                 pendingGems.map((g) => (
-                  <div key={g.id} className="bg-slate-50 p-3 rounded-2xl border border-slate-200 space-y-2 text-xs">
+                  <div key={g.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex items-center gap-1.5">
                         <select
@@ -2505,11 +2505,11 @@ export default function Home() {
                           className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
                         >
                           {MUMBAI_NEIGHBORHOODS.map((n) => (
-                            <option key={n} value={n} className="bg-white text-slate-900 normal-case">{n}</option>
+                            <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
                           ))}
                         </select>
                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          g.status === 'pending' ? 'bg-slate-100 text-slate-600' : 'bg-rose-500/10 text-rose-400'
+                          g.status === 'pending' ? 'bg-stone-100 text-stone-600' : 'bg-orange-500/10 text-orange-400'
                         }`}>
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
@@ -2524,35 +2524,35 @@ export default function Home() {
                           </span>
                         )}
                       </div>
-                      <span className="text-[9px] text-slate-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
+                      <span className="text-[9px] text-stone-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
                     </div>
                     <input
                       type="text"
                       value={g.name}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
                       maxLength={100}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-800 text-[11px] font-bold focus:outline-none focus:border-amber-500"
+                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-800 text-[11px] font-bold focus:outline-none focus:border-amber-500"
                     />
                     <textarea
                       value={g.description}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
                       maxLength={300}
                       rows={3}
-                      className="w-full bg-white border border-slate-200 rounded-lg px-2 py-1.5 text-slate-700 text-[11px] resize-none focus:outline-none focus:border-amber-500"
+                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-700 text-[11px] resize-none focus:outline-none focus:border-amber-500"
                     />
-                    <p className="text-slate-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-slate-200">
+                    <p className="text-stone-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
+                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
                       {g.status === 'pending' ? (
                         <>
                           <button
                             onClick={() => handleApproveGem(g)}
-                            className="bg-rose-600 hover:bg-rose-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                            className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleRejectGem(g.id)}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                           >
                             Reject
                           </button>
@@ -2564,8 +2564,8 @@ export default function Home() {
                             disabled={!dirtyGemIds.includes(g.id)}
                             className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
                               dirtyGemIds.includes(g.id)
-                                ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                                : 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                                ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
+                                : 'bg-stone-100 text-stone-500 cursor-not-allowed'
                             }`}
                           >
                             {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
@@ -2576,7 +2576,7 @@ export default function Home() {
                                 handleRejectGem(g.id);
                               }
                             }}
-                            className="bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
                           >
                             Delete
                           </button>
@@ -2593,21 +2593,21 @@ export default function Home() {
 
       {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
                 🛠️ Developer Tools ({userEmail})
               </h2>
               <button
                 onClick={() => setShowDevModal(false)}
-                className="text-slate-500 hover:text-slate-900 text-sm font-bold"
+                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <div className="text-[10px] font-mono bg-slate-50 p-2.5 rounded-xl border border-slate-200 text-slate-600 space-y-1">
+            <div className="text-[10px] font-mono bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-stone-600 space-y-1">
               <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
               <p><strong>Session:</strong> {userEmail}</p>
               <p><strong>Room:</strong> {roomId || 'None'}</p>
@@ -2626,7 +2626,7 @@ export default function Home() {
                     showToast('Queue locks released.', 'success');
                   }
                 }}
-                className="w-full bg-rose-100 hover:bg-rose-200 text-rose-700 py-2 rounded-xl text-xs font-mono font-bold border border-rose-300"
+                className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 py-2 rounded-xl text-xs font-mono font-bold border border-orange-300"
               >
                 Force Clear Queue Locks
               </button>
@@ -2648,27 +2648,27 @@ export default function Home() {
 
       {/* Handle Setup Modal */}
       {showHandleModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-rose-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-orange-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🏷️</div>
-            <h2 className="text-lg font-extrabold text-slate-900">CHOOSE YOUR EXPLORER TAG</h2>
-            <p className="text-xs text-slate-600">
+            <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-xs text-stone-600">
               Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
-              <span className="absolute left-4 top-3 text-rose-400 font-bold text-sm">@</span>
+              <span className="absolute left-4 top-3 text-orange-400 font-bold text-sm">@</span>
               <input
                 type="text"
                 placeholder="ExplorerTag"
                 value={newHandleInput}
                 onChange={(e) => setNewHandleInput(e.target.value)}
                 maxLength={20}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-slate-900 font-bold focus:outline-none focus:border-rose-500"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-stone-900 font-bold focus:outline-none focus:border-orange-500"
               />
             </div>
             <button
               onClick={() => saveHandleDirect(newHandleInput || handle)}
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+              className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
             >
               Claim Tag & Start
             </button>
@@ -2678,26 +2678,26 @@ export default function Home() {
 
       {/* Auth Modal */}
       {(!isLoggedIn || showAuthModal) && !showHandleModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
             {isLoggedIn && (
               <button
                 onClick={() => setShowAuthModal(false)}
-                className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+                className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
               >
                 ✕
               </button>
             )}
             <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-slate-900">
+            <h2 className="text-xl font-extrabold text-stone-900">
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
-            <p className="text-xs text-slate-600">
+            <p className="text-xs text-stone-600">
               {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
 
             {authError && (
-              <p className="text-xs text-rose-400 bg-rose-500/10 p-2 rounded-xl font-medium">{authError}</p>
+              <p className="text-xs text-orange-400 bg-orange-500/10 p-2 rounded-xl font-medium">{authError}</p>
             )}
 
             {!isOtpSent ? (
@@ -2707,23 +2707,23 @@ export default function Home() {
                   placeholder="yourname@gmail.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 text-center focus:outline-none focus:border-rose-500"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
                 />
                 <button
                   onClick={handleSendEmailOtp}
-                  className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                  className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
                 >
                   Send 6-Digit Code
                 </button>
 
                 <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200"></div></div>
-                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-2 text-slate-500">Or</span></div>
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-stone-200"></div></div>
+                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-2 text-stone-500">Or</span></div>
                 </div>
 
                 <button
                   onClick={handleGuestLogin}
-                  className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-xl font-bold text-sm border border-slate-300 transition-all active:scale-95"
+                  className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
                 >
                   ⚡ Continue as Guest (Solo Mode Only)
                 </button>
@@ -2735,17 +2735,17 @@ export default function Home() {
                   placeholder="Enter 6-digit Email Code"
                   value={otpInput}
                   onChange={(e) => setOtpInput(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 font-mono text-center focus:outline-none focus:border-rose-500"
+                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
                 />
                 <button
                   onClick={handleVerifyEmailOtp}
-                  className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                  className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
                 >
                   Verify & Continue
                 </button>
                 <button
                   onClick={() => setIsOtpSent(false)}
-                  className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
+                  className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
                 >
                   Change Email
                 </button>
@@ -2757,17 +2757,17 @@ export default function Home() {
 
       {/* Save My Progress Modal */}
       {showSaveProgressModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSaveProgressModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">💾</div>
-            <h2 className="text-lg font-extrabold text-slate-900">SAVE MY PROGRESS</h2>
-            <p className="text-xs text-slate-600">
+            <h2 className="text-lg font-extrabold text-stone-900">SAVE MY PROGRESS</h2>
+            <p className="text-xs text-stone-600">
               Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
             </p>
             <div className="space-y-3">
@@ -2777,11 +2777,11 @@ export default function Home() {
                 value={saveProgressEmail}
                 onChange={(e) => setSaveProgressEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 text-center focus:outline-none focus:border-rose-500"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
               />
               <button
                 onClick={() => handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
               >
                 Send Confirmation Link
               </button>
@@ -2792,29 +2792,29 @@ export default function Home() {
 
       {/* Suggest a Quest Modal */}
       {showSuggestQuestModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestQuestModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">✍️</div>
-            <h2 className="text-lg font-extrabold text-slate-900">SUGGEST A QUEST</h2>
-            <p className="text-xs text-slate-600">
+            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A QUEST</h2>
+            <p className="text-xs text-stone-600">
               Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
             </p>
             <div className="space-y-3">
-              <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200 w-full justify-between">
+              <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
                 {(['solo', 'duo', 'squad'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setSuggestQuestMode(m)}
                     className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
                       suggestQuestMode === m
-                        ? 'bg-rose-600 text-white'
-                        : 'text-slate-600 hover:text-slate-900'
+                        ? 'bg-orange-600 text-white'
+                        : 'text-stone-600 hover:text-stone-900'
                     }`}
                   >
                     {m}
@@ -2827,11 +2827,11 @@ export default function Home() {
                 onChange={(e) => setSuggestQuestText(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-rose-500 resize-none"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-orange-500 resize-none"
               />
               <button
                 onClick={handleSubmitQuestSuggestion}
-                className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
               >
                 Submit for Review
               </button>
@@ -2841,17 +2841,17 @@ export default function Home() {
       )}
 
       {showSuggestGemModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestGemModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">🗺️</div>
-            <h2 className="text-lg font-extrabold text-slate-900">SUGGEST A HIDDEN GEM</h2>
-            <p className="text-xs text-slate-600">
+            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A HIDDEN GEM</h2>
+            <p className="text-xs text-stone-600">
               A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
             </p>
             <div className="space-y-3">
@@ -2861,7 +2861,7 @@ export default function Home() {
                 value={suggestGemName}
                 onChange={(e) => setSuggestGemName(e.target.value)}
                 maxLength={100}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500"
               />
               <div className="flex flex-wrap gap-2 justify-center">
                 {MUMBAI_NEIGHBORHOODS.map((n) => (
@@ -2870,8 +2870,8 @@ export default function Home() {
                     onClick={() => setSuggestGemNeighborhood(n)}
                     className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
                       suggestGemNeighborhood === n
-                        ? 'bg-amber-500 text-slate-950 border-amber-500'
-                        : 'bg-slate-50 text-slate-600 border-slate-200'
+                        ? 'bg-amber-500 text-stone-950 border-amber-500'
+                        : 'bg-stone-50 text-stone-600 border-stone-200'
                     }`}
                   >
                     {n}
@@ -2884,11 +2884,11 @@ export default function Home() {
                 onChange={(e) => setSuggestGemDescription(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 focus:outline-none focus:border-amber-500 resize-none"
+                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500 resize-none"
               />
               <button
                 onClick={handleSubmitGemSuggestion}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-slate-950 py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 transition-all active:scale-95"
+                className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 transition-all active:scale-95"
               >
                 Submit for Review
               </button>
@@ -2899,19 +2899,19 @@ export default function Home() {
 
       {/* Sign In / Recover Account Modal */}
       {showRecoverModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowRecoverModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
             >
               ✕
             </button>
             <div className="text-3xl">🔑</div>
-            <h2 className="text-lg font-extrabold text-slate-900">SIGN IN ON THIS DEVICE</h2>
+            <h2 className="text-lg font-extrabold text-stone-900">SIGN IN ON THIS DEVICE</h2>
             {!isRecoverOtpSent ? (
               <>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-stone-600">
                   Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
                 </p>
                 <div className="space-y-3">
@@ -2921,11 +2921,11 @@ export default function Home() {
                     value={recoverEmail}
                     onChange={(e) => setRecoverEmail(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 text-center focus:outline-none focus:border-rose-500"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
                   />
                   <button
                     onClick={() => handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-xl font-bold text-sm border border-slate-300 transition-all active:scale-95"
+                    className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
                   >
                     Send Sign-In Code
                   </button>
@@ -2933,7 +2933,7 @@ export default function Home() {
               </>
             ) : (
               <>
-                <p className="text-xs text-slate-600">
+                <p className="text-xs text-stone-600">
                   Enter the 6-digit code we emailed to {recoverEmail}.
                 </p>
                 <div className="space-y-3">
@@ -2943,17 +2943,17 @@ export default function Home() {
                     value={recoverOtpInput}
                     onChange={(e) => setRecoverOtpInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-900 font-mono text-center focus:outline-none focus:border-rose-500"
+                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
                   />
                   <button
                     onClick={handleVerifyRecoverOtp}
-                    className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95"
+                    className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
                   >
                     Verify & Sign In
                   </button>
                   <button
                     onClick={() => setIsRecoverOtpSent(false)}
-                    className="text-xs text-slate-500 hover:underline pt-2 block mx-auto"
+                    className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
                   >
                     Change Email
                   </button>
@@ -2966,11 +2966,11 @@ export default function Home() {
 
       {/* Safety Modal */}
       {showSafetyModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-rose-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🛡️</div>
-            <h2 className="text-lg font-extrabold text-slate-900">SAFETY FIRST</h2>
-            <div className="text-xs text-slate-700 text-left space-y-2 bg-slate-50 p-3 rounded-xl border border-slate-200">
+            <h2 className="text-lg font-extrabold text-stone-900">SAFETY FIRST</h2>
+            <div className="text-xs text-stone-700 text-left space-y-2 bg-stone-50 p-3 rounded-xl border border-stone-200">
               <p>• <strong>Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
               <p>• <strong>Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
               <p>• <strong>Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
@@ -2978,13 +2978,13 @@ export default function Home() {
             <div className="flex space-x-2 pt-2">
               <button
                 onClick={() => setShowSafetyModal(false)}
-                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 py-2.5 rounded-xl font-bold text-xs"
+                className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl font-bold text-xs"
               >
                 Cancel
               </button>
               <button
                 onClick={() => isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking()}
-                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-rose-600/30"
+                className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-orange-600/30"
               >
                 I Agree & Search
               </button>
@@ -2995,27 +2995,27 @@ export default function Home() {
 
       {/* Friends List Modal */}
       {showFriendsModal && (
-        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-3xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-              <h2 className="text-sm font-bold text-slate-800">🤝 Raid Squad ({friendsList.length})</h2>
+        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 space-y-4 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
+              <h2 className="text-sm font-bold text-stone-800">🤝 Raid Squad ({friendsList.length})</h2>
               <button
                 onClick={() => setShowFriendsModal(false)}
-                className="text-slate-500 hover:text-slate-900 text-sm font-bold"
+                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-200 w-full justify-between">
+            <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
               {(['squad', 'leaderboard'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setLeaderboardTab(t)}
                   className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
                     leaderboardTab === t
-                      ? 'bg-rose-600 text-white'
-                      : 'text-slate-600 hover:text-slate-900'
+                      ? 'bg-orange-600 text-white'
+                      : 'text-stone-600 hover:text-stone-900'
                   }`}
                 >
                   {t === 'squad' ? 'Squad' : 'Leaderboard'}
@@ -3030,25 +3030,25 @@ export default function Home() {
                     key={entry.handle}
                     className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
                       entry.is_self
-                        ? 'bg-rose-500/10 border-rose-500/40'
-                        : 'bg-slate-50 border-slate-200'
+                        ? 'bg-orange-500/10 border-orange-500/40'
+                        : 'bg-stone-50 border-stone-200'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
-                      <span className="text-slate-500 font-bold w-4 text-center">{i + 1}</span>
+                      <span className="text-stone-500 font-bold w-4 text-center">{i + 1}</span>
                       <div>
                         <button
                           onClick={() => inspectProfile(entry.handle)}
-                          className="font-bold text-rose-400 hover:underline"
+                          className="font-bold text-orange-400 hover:underline"
                         >
                           @{entry.handle}
                         </button>
-                        <span className="block text-[9px] text-slate-500">{getRankTitle(entry.total_xp)}</span>
+                        <span className="block text-[9px] text-stone-500">{getRankTitle(entry.total_xp)}</span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-slate-800">{entry.total_xp} XP</p>
-                      <p className="text-[9px] text-slate-500">{entry.streak} Days 🔥</p>
+                      <p className="font-bold text-stone-800">{entry.total_xp} XP</p>
+                      <p className="text-[9px] text-stone-500">{entry.streak} Days 🔥</p>
                     </div>
                   </div>
                 ))}
@@ -3056,30 +3056,30 @@ export default function Home() {
             ) : (
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {friendsList.length === 0 ? (
-                <p className="text-xs text-slate-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
+                <p className="text-xs text-stone-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
               ) : (
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
                   return (
-                    <div key={i} className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex justify-between items-center text-xs">
+                    <div key={i} className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 flex justify-between items-center text-xs">
                       <div>
                         <div className="flex items-center space-x-1.5">
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-slate-300'}`} />
+                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-stone-300'}`} />
                           <button
                             onClick={() => inspectProfile(f.handle)}
-                            className="font-bold text-rose-400 hover:underline"
+                            className="font-bold text-orange-400 hover:underline"
                           >
                             @{f.handle}
                           </button>
                         </div>
-                        <span className="block text-[9px] text-slate-500 pl-3.5">
+                        <span className="block text-[9px] text-stone-500 pl-3.5">
                           {isOnline ? 'Online in App' : 'Offline'}
                         </span>
                       </div>
                       <div className="flex space-x-1.5">
                         <button
                           onClick={() => inspectProfile(f.handle)}
-                          className="bg-white hover:bg-slate-100 text-slate-700 text-[10px] px-2 py-1 rounded-lg border border-slate-200 font-bold"
+                          className="bg-white hover:bg-stone-100 text-stone-700 text-[10px] px-2 py-1 rounded-lg border border-stone-200 font-bold"
                         >
                           Profile
                         </button>
@@ -3088,8 +3088,8 @@ export default function Home() {
                           disabled={!isOnline || sendingInviteTo === f.handle}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
                             isOnline
-                              ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/30 active:scale-95'
-                              : 'bg-white text-slate-400 border border-slate-200 cursor-not-allowed'
+                              ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-600/30 active:scale-95'
+                              : 'bg-white text-stone-400 border border-stone-200 cursor-not-allowed'
                           }`}
                         >
                           <span>⚡</span>
@@ -3108,23 +3108,23 @@ export default function Home() {
 
       {/* Journey Recap Modal */}
       {showWrappedModal && (
-        <div className="fixed inset-0 bg-slate-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-rose-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
             <button
               onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-slate-500 hover:text-slate-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
             >
               ✕
             </button>
-            <h2 className="text-sm font-black text-rose-400 uppercase tracking-wider">🎧 Your IRL Recap</h2>
+            <h2 className="text-sm font-black text-orange-400 uppercase tracking-wider">🎧 Your IRL Recap</h2>
             {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-50">
+              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
                 <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
               </div>
             )}
             <button
               onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-xs shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+              className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-xs shadow-lg shadow-orange-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
             >
               <span>📲</span>
               <span>Share Recap to Story / WhatsApp</span>
@@ -3135,13 +3135,13 @@ export default function Home() {
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-gradient-to-b from-white to-slate-50 p-1.5 rounded-2xl border border-slate-200 w-full justify-between shadow-xl shadow-slate-900/10">
+          <div className="flex bg-gradient-to-b from-white to-stone-50 p-1.5 rounded-2xl border border-stone-200 w-full justify-between shadow-xl shadow-stone-900/10">
             <button
               onClick={handleSelectQuestTrack}
               className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
                 !isExplorerMode
-                  ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30'
+                  : 'text-stone-600 hover:text-stone-900'
               }`}
             >
               Quest
@@ -3150,8 +3150,8 @@ export default function Home() {
               onClick={handleSelectExplorer}
               className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
                 isExplorerMode
-                  ? 'bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/30'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-amber-500 text-stone-950 shadow-lg shadow-amber-500/30'
+                  : 'text-stone-600 hover:text-stone-900'
               }`}
             >
               Explore
@@ -3167,7 +3167,7 @@ export default function Home() {
                 onClick={() => handleSelectMode(m)}
                 className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
                   mode === m
-                    ? 'bg-slate-800 text-white'
+                    ? 'bg-stone-800 text-white'
                     : 'text-white/70 hover:text-white'
                 }`}
               >
@@ -3177,8 +3177,8 @@ export default function Home() {
           </div>
 
           {isExplorerMode && !activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-slate-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <p className="text-sm text-slate-700 font-semibold">
+            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+              <p className="text-sm text-stone-700 font-semibold">
                 Pick a neighborhood to discover a hidden gem someone local actually knows about.
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
@@ -3189,8 +3189,8 @@ export default function Home() {
                     disabled={isSearching}
                     className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
                       selectedNeighborhood === n
-                        ? 'bg-amber-500 text-slate-950 border-amber-500'
-                        : 'bg-slate-50 text-slate-600 border-slate-200 hover:text-slate-900'
+                        ? 'bg-amber-500 text-stone-950 border-amber-500'
+                        : 'bg-stone-50 text-stone-600 border-stone-200 hover:text-stone-900'
                     }`}
                   >
                     {n}
@@ -3200,7 +3200,7 @@ export default function Home() {
               <button
                 onClick={onStartMatchingClick}
                 disabled={!selectedNeighborhood || isSearching}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:hover:bg-amber-500 text-slate-950 font-black py-3 rounded-xl transition-all active:scale-95"
+                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:hover:bg-amber-500 text-stone-950 font-black py-3 rounded-xl transition-all active:scale-95"
               >
                 {isSearching ? (
                   <span className="flex items-center justify-center gap-2">
@@ -3214,7 +3214,7 @@ export default function Home() {
               {!isSearching && (
                 <button
                   onClick={() => setShowSuggestGemModal(true)}
-                  className="text-xs text-slate-500 hover:text-slate-900 font-semibold underline"
+                  className="text-xs text-stone-500 hover:text-stone-900 font-semibold underline"
                 >
                   Know a spot? Suggest your own hidden gem
                 </button>
@@ -3227,12 +3227,20 @@ export default function Home() {
               <div className="relative flex items-center justify-center">
                 <div
                   aria-hidden="true"
-                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(225,29,72,0.28)_0%,rgba(225,29,72,0)_70%)] pointer-events-none"
+                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.3)_0%,rgba(234,88,12,0)_70%)] pointer-events-none"
                 />
+                {!isSearching && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-2 right-6 text-xl rotate-12 pointer-events-none select-none"
+                  >
+                    ✨
+                  </span>
+                )}
                 <button
                   onClick={onStartMatchingClick}
                   disabled={isSearching}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-rose-500 to-rose-700 border-4 border-white shadow-2xl shadow-rose-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 border-4 border-white shadow-2xl shadow-orange-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
                     isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
                   }`}
                 >
@@ -3243,14 +3251,14 @@ export default function Home() {
                   {isSearching ? (
                     <div className="flex flex-col items-center space-y-1">
                       <span className="text-2xl animate-spin">🌀</span>
-                      <span className="text-xs text-rose-200 font-mono font-normal">
+                      <span className="text-xs text-orange-200 font-mono font-normal">
                         {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
                       </span>
                     </div>
                   ) : (
                     <>
                       <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                      <span className="font-['Space_Grotesk'] font-medium text-sm text-rose-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
+                      <span className="font-['Space_Grotesk'] font-medium text-sm text-orange-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
                     </>
                   )}
                 </button>
@@ -3267,14 +3275,14 @@ export default function Home() {
                   <div className="flex flex-col items-center space-y-2 pt-2">
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="bg-rose-600 hover:bg-rose-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-lg shadow-rose-600/20 transition-all active:scale-95"
+                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-lg shadow-orange-600/20 transition-all active:scale-95"
                     >
                       <span>📲</span>
                       <span>Invite Friend via WhatsApp Now</span>
                     </button>
                     <button
                       onClick={cancelSearch}
-                      className="text-[10px] text-slate-500 hover:underline"
+                      className="text-[10px] text-stone-500 hover:underline"
                     >
                       Cancel Search
                     </button>
@@ -3285,9 +3293,9 @@ export default function Home() {
           )}
 
           {activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-slate-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
               <div className="flex justify-between items-center">
-                <span className="bg-rose-500/10 text-rose-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                <span className="bg-orange-500/10 text-orange-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {isExplorerMode ? 'Explorer' : mode} Mission Assigned
                 </span>
                 <span className="text-xs text-amber-700 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
@@ -3297,24 +3305,24 @@ export default function Home() {
               </div>
 
               {squadRoster.length > 0 && (
-                <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-left space-y-1.5">
-                  <div className="flex justify-between items-center text-[10px] text-slate-600 font-bold uppercase">
+                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl text-left space-y-1.5">
+                  <div className="flex justify-between items-center text-[10px] text-stone-600 font-bold uppercase">
                     <span>👑 Active Squad Roster ({squadRoster.length})</span>
                     <span className="text-amber-700 font-mono">Live Lobby</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-white border border-slate-200 px-2 py-1 rounded-lg text-xs">
+                      <div key={idx} className="flex items-center space-x-1 bg-white border border-stone-200 px-2 py-1 rounded-lg text-xs">
                         <button
                           onClick={() => inspectProfile(p.handle)}
-                          className="text-rose-400 font-bold hover:underline"
+                          className="text-orange-400 font-bold hover:underline"
                         >
                           @{p.handle}
                         </button>
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
-                            className="text-[10px] text-slate-600 hover:text-rose-400 pl-1"
+                            className="text-[10px] text-stone-600 hover:text-orange-400 pl-1"
                             title="Add as Friend"
                           >
                             +🤝
@@ -3355,12 +3363,12 @@ export default function Home() {
               </div>
 
               {(mode === 'duo' || mode === 'squad') && (
-                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 flex flex-col space-y-2 text-left">
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-1">
-                    <span className="text-[10px] font-bold text-rose-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
+                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 flex flex-col space-y-2 text-left">
+                  <div className="flex justify-between items-center border-b border-stone-200 pb-1">
+                    <span className="text-[10px] font-bold text-orange-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-rose-600/20 hover:bg-rose-600/30 text-rose-400 border border-rose-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
+                      className="text-[10px] bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
                     >
                       <span>📲</span>
                       <span>Invite Friend</span>
@@ -3368,25 +3376,25 @@ export default function Home() {
                   </div>
                   <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-slate-400 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
+                      <p className="text-[10px] text-stone-400 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
                     ) : (
                       messages.map((m) => (
-                        <div key={m.id || Math.random()} className="bg-white p-2 rounded-xl border border-slate-200/80 flex justify-between items-start">
+                        <div key={m.id || Math.random()} className="bg-white p-2 rounded-xl border border-stone-200/80 flex justify-between items-start">
                           <div>
                             <button
                               onClick={() => inspectProfile(m.sender_handle)}
-                              className="text-[10px] font-bold text-rose-400 hover:underline"
+                              className="text-[10px] font-bold text-orange-400 hover:underline"
                             >
                               @{m.sender_handle}: 
                             </button>
-                            <span className="text-slate-700 ml-1">
+                            <span className="text-stone-700 ml-1">
                               {m.message}
                             </span>
                           </div>
                           {m.sender_handle !== handle && (
                             <button
                               onClick={() => handleReport('chat', m.id || m.message)}
-                              className="text-[9px] text-slate-400 hover:text-rose-400 pl-2"
+                              className="text-[9px] text-stone-400 hover:text-orange-400 pl-2"
                               title="Report message"
                             >
                               🚩
@@ -3405,11 +3413,11 @@ export default function Home() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900 focus:outline-none focus:border-rose-500"
+                      className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:border-orange-500"
                     />
                     <button
                       onClick={sendMessage}
-                      className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
+                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
                     >
                       Send
                     </button>
@@ -3418,18 +3426,18 @@ export default function Home() {
               )}
 
               {isMissionAccepted && (
-                <div className="border-2 border-dashed border-slate-200 rounded-2xl p-3 flex flex-col items-center justify-center bg-slate-50/50 space-y-1">
+                <div className="border-2 border-dashed border-stone-200 rounded-2xl p-3 flex flex-col items-center justify-center bg-stone-50/50 space-y-1">
                   {uploading ? (
                     <div className="py-4 flex flex-col items-center space-y-1">
                       <span className="animate-spin text-xl">☁️</span>
-                      <span className="text-xs text-rose-400 font-semibold">Compressing & Uploading (~50KB)...</span>
+                      <span className="text-xs text-orange-400 font-semibold">Compressing & Uploading (~50KB)...</span>
                     </div>
                   ) : proofImage ? (
                     <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
                   ) : (
                     <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
                       <span className="text-xl">📸</span>
-                      <span className="text-xs text-slate-600 font-semibold"></span>
+                      <span className="text-xs text-stone-600 font-semibold"></span>
                       <input
                         type="file"
                         accept="image/*"
@@ -3448,15 +3456,15 @@ export default function Home() {
                   disabled={uploading || !proofImage}
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
                     proofImage && !uploading
-                      ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-600/30 cursor-pointer'
-                      : 'bg-slate-100 text-slate-500 cursor-not-allowed border border-slate-300'
+                      ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/30 cursor-pointer'
+                      : 'bg-stone-100 text-stone-500 cursor-not-allowed border border-stone-300'
                   }`}
                 >
                   {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
                 </button>
                 <button
                   onClick={handleAbandonMission}
-                  className="text-xs text-slate-500 hover:text-slate-800 py-1 transition-colors"
+                  className="text-xs text-stone-500 hover:text-stone-800 py-1 transition-colors"
                 >
                   Abandon Mission
                 </button>
@@ -3468,19 +3476,19 @@ export default function Home() {
             <div className="w-full bg-white border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
               <div className="text-4xl">🎉</div>
               <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
-              <p className="text-xs text-slate-700">
+              <p className="text-xs text-stone-700">
                 You broke routine and gained real-world experience today.
               </p>
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-rose-500/30 shadow-xl bg-slate-50">
+                  <div className="relative rounded-2xl overflow-hidden border border-orange-500/30 shadow-xl bg-stone-50">
                     <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
                   </div>
 
                   <button
                     onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-rose-600 hover:bg-rose-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-rose-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                    className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
                   >
                     <span>📲</span>
                     <span>Share to Instagram Story / WhatsApp</span>
@@ -3490,7 +3498,7 @@ export default function Home() {
 
               <button
                 onClick={() => setIsCompleted(false)}
-                className="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
+                className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
               >
                 Back to Home
               </button>
@@ -3499,15 +3507,15 @@ export default function Home() {
         </div>
       ) : (
         <div className="w-full max-w-md my-auto space-y-4">
-          <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-            <h2 className="text-sm font-bold text-slate-700">Community Proof Feed</h2>
-            <span className="text-xs text-slate-500">{feedItems.length} Missions Logged</span>
+          <div className="flex justify-between items-center border-b border-stone-200 pb-2">
+            <h2 className="text-sm font-bold text-stone-700">Community Proof Feed</h2>
+            <span className="text-xs text-stone-500">{feedItems.length} Missions Logged</span>
           </div>
 
           <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
             {feedItems.length > 0 ? (
               feedItems.map((item) => (
-                <div key={item.id} className="bg-white border border-slate-200 rounded-2xl p-3 flex flex-col space-y-3">
+                <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
                   {item.photo_url && (
                     <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
                   )}
@@ -3515,7 +3523,7 @@ export default function Home() {
                     <div className="flex justify-between items-center">
                       <button
                         onClick={() => inspectProfile(item.handle)}
-                        className="text-xs font-bold text-rose-400 hover:underline"
+                        className="text-xs font-bold text-orange-400 hover:underline"
                       >
                         @{item.handle || 'Explorer'}
                       </button>
@@ -3531,26 +3539,26 @@ export default function Home() {
                         )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
-                          className="text-[10px] text-slate-400 hover:text-rose-400"
+                          className="text-[10px] text-stone-400 hover:text-orange-400"
                           title="Report post"
                         >
                           🚩
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-800 italic font-medium">"{item.quest_text}"</p>
+                    <p className="text-xs text-stone-800 italic font-medium">"{item.quest_text}"</p>
 
-                    <div className="flex space-x-2 pt-1 border-t border-slate-200/80">
+                    <div className="flex space-x-2 pt-1 border-t border-stone-200/80">
                       <button
                         onClick={() => handleReact(item.id, 'fire')}
-                        className="flex items-center space-x-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-700 transition-all active:scale-95"
+                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
                       >
                         <span>🔥</span>
                         <span>{item.fire_count || 0}</span>
                       </button>
                       <button
                         onClick={() => handleReact(item.id, 'five')}
-                        className="flex items-center space-x-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-slate-700 transition-all active:scale-95"
+                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
                       >
                         <span>✋</span>
                         <span>{item.five_count || 0}</span>
@@ -3560,7 +3568,7 @@ export default function Home() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-12 text-slate-500 text-xs">
+              <div className="text-center py-12 text-stone-500 text-xs">
                 No missions logged yet. Complete a mission to be the first!
               </div>
             )}
@@ -3568,8 +3576,8 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-gradient-to-b from-white to-slate-50 border border-slate-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-slate-900/15">
-        <div className="flex justify-between items-center border-b border-slate-200/60 pb-2">
+      <footer className="w-full max-w-md bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-stone-900/15">
+        <div className="flex justify-between items-center border-b border-stone-200/60 pb-2">
           {isEditingHandle ? (
             <input
               type="text"
@@ -3577,22 +3585,22 @@ export default function Home() {
               onBlur={(e) => saveHandle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
               autoFocus
-              className="bg-slate-50 border border-rose-500/50 rounded-lg px-2 py-1 text-xs text-rose-400 font-bold focus:outline-none"
+              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-400 font-bold focus:outline-none"
             />
           ) : (
             <button
               onClick={() => setIsEditingHandle(true)}
-              className="text-xs font-bold text-rose-400 hover:underline flex items-center space-x-1"
+              className="text-xs font-bold text-orange-400 hover:underline flex items-center space-x-1"
             >
               <span>@{handle}</span>
-              <span className="text-[10px] text-slate-500 font-medium">· {getRankTitle(totalXp)}</span>
-              <span className="text-[10px] text-slate-500">✏️</span>
+              <span className="text-[10px] text-stone-500 font-medium">· {getRankTitle(totalXp)}</span>
+              <span className="text-[10px] text-stone-500">✏️</span>
             </button>
           )}
           <div className="flex items-center space-x-2">
             <button
               onClick={() => setShowFriendsModal(true)}
-              className="text-[10px] text-rose-700 hover:underline font-semibold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
+              className="text-[10px] text-orange-700 hover:underline font-semibold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
             >
               🤝 Squad ({friendsList.length})
             </button>
@@ -3607,14 +3615,14 @@ export default function Home() {
                 setSuggestQuestMode(mode);
                 setShowSuggestQuestModal(true);
               }}
-              className="text-[10px] text-rose-700 hover:underline font-bold bg-rose-500/10 border border-rose-500/20 px-2 py-0.5 rounded-lg"
+              className="text-[10px] text-orange-700 hover:underline font-bold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
             >
               ✍️ Suggest Quest
             </button>
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
                 onClick={handleSignOut}
-                className="text-[10px] text-rose-400 hover:underline font-semibold"
+                className="text-[10px] text-orange-400 hover:underline font-semibold"
               >
                 Sign Out
               </button>
@@ -3624,7 +3632,7 @@ export default function Home() {
                   setAuthModalReason('');
                   setShowAuthModal(true);
                 }}
-                className="text-[10px] text-rose-400 hover:underline font-semibold"
+                className="text-[10px] text-orange-400 hover:underline font-semibold"
               >
                 Verify
               </button>
@@ -3633,37 +3641,37 @@ export default function Home() {
         </div>
 
         <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
-          <span className="text-slate-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
+          <span className="text-stone-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
           {badges.map((b, i) => (
-            <span key={i} className="bg-rose-500/10 border border-rose-500/20 text-rose-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
+            <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
               {b}
             </span>
           ))}
         </div>
 
-        <div className="flex justify-around text-center border-t border-slate-200/60 pt-2">
+        <div className="flex justify-around text-center border-t border-stone-200/60 pt-2">
           <div>
-            <p className="text-xs text-slate-500">Loop Streak</p>
-            <p className="text-lg font-bold text-slate-800">{streak} Days 🔥</p>
+            <p className="text-xs text-stone-500">Loop Streak</p>
+            <p className="text-lg font-bold text-stone-800">{streak} Days 🔥</p>
           </div>
-          <div className="w-px bg-slate-100" />
+          <div className="w-px bg-stone-100" />
           <div>
-            <p className="text-xs text-slate-500">Total IRL XP</p>
-            <p className="text-lg font-bold text-rose-400">{savedMins} XP ⚡</p>
+            <p className="text-xs text-stone-500">Total IRL XP</p>
+            <p className="text-lg font-bold text-orange-400">{savedMins} XP ⚡</p>
           </div>
         </div>
 
         {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center space-y-1.5 border-t border-slate-200/60 pt-2">
+          <div className="flex flex-col items-center space-y-1.5 border-t border-stone-200/60 pt-2">
             <button
               onClick={() => setShowSaveProgressModal(true)}
-              className="w-full bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+              className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
             >
               💾 Save My Progress
             </button>
             <button
               onClick={() => setShowRecoverModal(true)}
-              className="text-[10px] text-slate-500 hover:underline"
+              className="text-[10px] text-stone-500 hover:underline"
             >
               Already have an account? Sign in
             </button>
