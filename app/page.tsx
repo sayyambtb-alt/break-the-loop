@@ -3200,13 +3200,19 @@ export default function Home() {
               <button
                 onClick={onStartMatchingClick}
                 disabled={!selectedNeighborhood || isSearching}
-                className="w-full bg-amber-500 hover:bg-amber-400 disabled:opacity-40 disabled:hover:bg-amber-500 text-stone-950 font-black py-3 rounded-xl transition-all active:scale-95"
+                className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 ${
+                  !selectedNeighborhood
+                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
+                    : 'bg-amber-500 hover:bg-amber-400 text-stone-950'
+                }`}
               >
                 {isSearching ? (
                   <span className="flex items-center justify-center gap-2">
                     <span className="animate-spin">🌀</span>
                     {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
                   </span>
+                ) : !selectedNeighborhood ? (
+                  'Pick a neighborhood first'
                 ) : (
                   '🗺️ Reveal a Hidden Gem'
                 )}
