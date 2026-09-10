@@ -6,14 +6,6 @@ export const metadata: Metadata = {
   description: "The rules for using Break The Loop, including important safety information about meeting people in person.",
 };
 
-function TODO({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="bg-amber-200 text-amber-900 font-bold px-1.5 py-0.5 rounded">
-      {children}
-    </span>
-  );
-}
-
 function H2({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xl font-extrabold text-stone-900 mt-8 mb-3">{children}</h2>;
 }
@@ -32,7 +24,7 @@ export default function TermsOfService() {
 
         <div className="bg-gradient-to-b from-white to-stone-50 rounded-3xl shadow-xl shadow-orange-900/10 p-6 sm:p-10 mt-4">
           <h1 className="text-2xl sm:text-3xl font-black text-stone-900 mb-1">Terms of Service</h1>
-          <p className="text-sm text-stone-500 mb-6">Last updated: <TODO>[DATE]</TODO></p>
+          <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
 
           <P>
             Please read these Terms carefully. They include a liability waiver relevant to meeting other users
@@ -178,7 +170,7 @@ export default function TermsOfService() {
           </P>
 
           <H2>12. Contact</H2>
-          <P>Questions about these Terms, or to file a complaint: <TODO>[GRIEVANCE EMAIL]</TODO></P>
+          <P>Questions about these Terms, or to file a complaint: sayyambtb@gmail.com</P>
         </div>
       </div>
     </main>

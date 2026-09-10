@@ -35,7 +35,7 @@ export default function PrivacyPolicy() {
 
         <div className="bg-gradient-to-b from-white to-stone-50 rounded-3xl shadow-xl shadow-orange-900/10 p-6 sm:p-10 mt-4">
           <h1 className="text-2xl sm:text-3xl font-black text-stone-900 mb-1">Privacy Policy</h1>
-          <p className="text-sm text-stone-500 mb-6">Last updated: <TODO>[DATE]</TODO></p>
+          <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
 
           <P>
             This Privacy Policy explains what information Break The Loop ("we," "us," "the App") collects when
@@ -56,9 +56,9 @@ export default function PrivacyPolicy() {
           </P>
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-700 space-y-1">
             <p><strong>Data Fiduciary / Grievance Officer</strong></p>
-            <p>Name: <TODO>[YOUR NAME]</TODO></p>
-            <p>Email: <TODO>[GRIEVANCE EMAIL]</TODO></p>
-            <p>Address: <TODO>[YOUR ADDRESS OR REGISTERED BUSINESS ADDRESS]</TODO></p>
+            <p>Name: Sayyam</p>
+            <p>Email: sayyambtb@gmail.com</p>
+            <p>Address: Mumbai, Maharashtra, India</p>
           </div>
           <P>
             Complaints will be acknowledged within 24 hours and resolved within 15 days, in line with the IT
@@ -168,7 +168,7 @@ export default function PrivacyPolicy() {
             <li><strong className="text-stone-800">Erase</strong> your data, subject to the retention exception above.</li>
             <li><strong className="text-stone-800">File a complaint</strong> with our Grievance Officer (above), and if unresolved, with the Data Protection Board of India.</li>
           </ul>
-          <P>To exercise any of these rights, email <TODO>[GRIEVANCE EMAIL]</TODO>.</P>
+          <P>To exercise any of these rights, email sayyambtb@gmail.com.</P>
 
           <H2>8. Data breach notification</H2>
           <P>
@@ -192,7 +192,7 @@ export default function PrivacyPolicy() {
           </P>
 
           <H2>11. Contact</H2>
-          <P>Questions about this policy or your data: <TODO>[GRIEVANCE EMAIL]</TODO></P>
+          <P>Questions about this policy or your data: sayyambtb@gmail.com</P>
         </div>
       </div>
     </main>
