@@ -242,6 +242,7 @@ export default function Home() {
   // Notifications & Feed
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [loadingFeed, setLoadingFeed] = useState(false);
 
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1380,6 +1381,7 @@ export default function Home() {
   }, [showFriendsModal, leaderboardTab]);
 
   const fetchGallery = async () => {
+    setLoadingFeed(true);
     try {
       const { data: logs, error } = await supabase.from("mission_logs").select("*").order("created_at", { ascending: false }).limit(20);
       if (logs && !error) {
@@ -1403,6 +1405,8 @@ export default function Home() {
       }
     } catch (err) {
       console.error("Error fetching gallery:", err);
+    } finally {
+      setLoadingFeed(false);
     }
   };
 
@@ -3189,7 +3193,12 @@ export default function Home() {
             ) : (
             <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {friendsList.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-6">No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!</p>
+                <div className="text-center py-8 space-y-2">
+                  <div className="text-3xl">🤝</div>
+                  <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
+                    No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!
+                  </p>
+                </div>
               ) : (
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
@@ -3652,7 +3661,21 @@ export default function Home() {
           </div>
 
           <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-            {feedItems.length > 0 ? (
+            {loadingFeed ? (
+              [1, 2, 3].map((i) => (
+                <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3 animate-pulse">
+                  <div className="w-full h-48 bg-stone-100 rounded-xl" />
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <div className="h-3 w-20 bg-stone-100 rounded" />
+                      <div className="h-3 w-6 bg-stone-100 rounded" />
+                    </div>
+                    <div className="h-3 w-full bg-stone-100 rounded" />
+                    <div className="h-3 w-2/3 bg-stone-100 rounded" />
+                  </div>
+                </div>
+              ))
+            ) : feedItems.length > 0 ? (
               feedItems.map((item) => (
                 <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
                   {item.photo_url && (
@@ -3707,8 +3730,18 @@ export default function Home() {
                 </div>
               ))
             ) : (
-              <div className="text-center py-12 text-stone-500 text-xs">
-                No missions logged yet. Complete a mission to be the first!
+              <div className="text-center py-10 space-y-3">
+                <div className="text-4xl">📭</div>
+                <h3 className="text-sm font-bold text-stone-800">No missions logged yet</h3>
+                <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
+                  Be the first to complete one and show up here.
+                </p>
+                <button
+                  onClick={() => setTab('quest')}
+                  className="bg-orange-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
+                >
+                  Start a mission
+                </button>
               </div>
             )}
           </div>
