@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import "@fontsource/space-grotesk/500.css";
 import "@fontsource/space-grotesk/700.css";
+import "@fontsource/inter/400.css";
+import "@fontsource/inter/500.css";
+import "@fontsource/inter/600.css";
+import "@fontsource/inter/700.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -29,7 +33,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased bg-slate-950 text-slate-100">
+      <body className="antialiased bg-[#FFF8F0] text-stone-900">
         {children}
       </body>
     </html>

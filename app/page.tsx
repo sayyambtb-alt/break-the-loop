@@ -2340,7 +2340,7 @@ export default function Home() {
 
             <div className="text-center space-y-1">
               <div className="text-3xl">👤</div>
-              <h2 className="text-base font-extrabold text-orange-400">
+              <h2 className="text-base font-extrabold text-orange-700">
                 @{selectedProfile.handle}{' '}
                 <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
               </h2>
@@ -2361,7 +2361,7 @@ export default function Home() {
                     showToast('Could not block this user.', 'error');
                   }
                 }}
-                className="w-full bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-orange-400 text-[10px] font-bold py-2 rounded-lg border border-stone-200 transition-all"
+                className="w-full bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-orange-700 text-[10px] font-bold py-2 rounded-lg border border-stone-200 transition-all"
               >
                 🚫 Block this Explorer
               </button>
@@ -2375,7 +2375,7 @@ export default function Home() {
               <div className="w-px bg-stone-100" />
               <div>
                 <p className="text-[10px] text-stone-500 font-semibold">IRL XP</p>
-                <p className="text-sm font-black text-orange-400">{selectedProfile.time_saved_mins} ⚡</p>
+                <p className="text-sm font-black text-orange-700">{selectedProfile.time_saved_mins} ⚡</p>
               </div>
             </div>
 
@@ -2401,7 +2401,7 @@ export default function Home() {
                       )}
                       <div className="text-left overflow-hidden">
                         <p className="text-[10px] text-stone-700 truncate font-medium">"{h.quest_text}"</p>
-                        <span className="text-[9px] text-orange-400/80 uppercase font-mono font-bold">{h.mode} Mission</span>
+                        <span className="text-[9px] text-orange-700/80 uppercase font-mono font-bold">{h.mode} Mission</span>
                       </div>
                     </div>
                   ))
@@ -2437,7 +2437,7 @@ export default function Home() {
                 adminReports.map((r) => (
                   <div key={r.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
                     <div className="flex justify-between items-start">
-                      <span className="text-orange-400 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
+                      <span className="text-orange-700 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
                       <span className="text-[9px] text-stone-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
                     <p className="text-stone-700 text-[11px]">
@@ -2620,7 +2620,7 @@ export default function Home() {
                           ))}
                         </select>
                         <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          g.status === 'pending' ? 'bg-stone-100 text-stone-600' : 'bg-orange-500/10 text-orange-400'
+                          g.status === 'pending' ? 'bg-stone-100 text-stone-600' : 'bg-orange-500/10 text-orange-700'
                         }`}>
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
@@ -2767,7 +2767,7 @@ export default function Home() {
               Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
-              <span className="absolute left-4 top-3 text-orange-400 font-bold text-sm">@</span>
+              <span className="absolute left-4 top-3 text-orange-700 font-bold text-sm">@</span>
               <input
                 type="text"
                 placeholder="ExplorerTag"
@@ -2808,7 +2808,7 @@ export default function Home() {
             </p>
 
             {authError && (
-              <p className="text-xs text-orange-400 bg-orange-500/10 p-2 rounded-xl font-medium">{authError}</p>
+              <p className="text-xs text-orange-700 bg-orange-500/10 p-2 rounded-xl font-medium">{authError}</p>
             )}
 
             {!isOtpSent ? (
@@ -3172,7 +3172,7 @@ export default function Home() {
                       <div>
                         <button
                           onClick={() => inspectProfile(entry.handle)}
-                          className="font-bold text-orange-400 hover:underline"
+                          className="font-bold text-orange-700 hover:underline"
                         >
                           @{entry.handle}
                         </button>
@@ -3200,7 +3200,7 @@ export default function Home() {
                           <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-stone-300'}`} />
                           <button
                             onClick={() => inspectProfile(f.handle)}
-                            className="font-bold text-orange-400 hover:underline"
+                            className="font-bold text-orange-700 hover:underline"
                           >
                             @{f.handle}
                           </button>
@@ -3249,7 +3249,7 @@ export default function Home() {
             >
               ✕
             </button>
-            <h2 className="text-sm font-black text-orange-400 uppercase tracking-wider">🎧 Your IRL Recap</h2>
+            <h2 className="text-sm font-black text-orange-700 uppercase tracking-wider">🎧 Your IRL Recap</h2>
             {wrappedCardDataUrl && (
               <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
                 <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
@@ -3434,7 +3434,7 @@ export default function Home() {
           {activeQuest && !isCompleted && (
             <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
               <div className="flex justify-between items-center">
-                <span className="bg-orange-500/10 text-orange-400 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+                <span className="bg-orange-500/10 text-orange-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {isExplorerMode ? 'Explorer' : mode} Mission Assigned
                 </span>
                 <span className="text-xs text-amber-700 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
@@ -3454,14 +3454,14 @@ export default function Home() {
                       <div key={idx} className="flex items-center space-x-1 bg-white border border-stone-200 px-2 py-1 rounded-lg text-xs">
                         <button
                           onClick={() => inspectProfile(p.handle)}
-                          className="text-orange-400 font-bold hover:underline"
+                          className="text-orange-700 font-bold hover:underline"
                         >
                           @{p.handle}
                         </button>
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
-                            className="text-[10px] text-stone-600 hover:text-orange-400 pl-1"
+                            className="text-[10px] text-stone-600 hover:text-orange-700 pl-1"
                             title="Add as Friend"
                           >
                             +🤝
@@ -3504,10 +3504,10 @@ export default function Home() {
               {(mode === 'duo' || mode === 'squad') && (
                 <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 flex flex-col space-y-2 text-left">
                   <div className="flex justify-between items-center border-b border-stone-200 pb-1">
-                    <span className="text-[10px] font-bold text-orange-400 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
+                    <span className="text-[10px] font-bold text-orange-700 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
+                      className="text-[10px] bg-orange-600/20 hover:bg-orange-600/30 text-orange-700 border border-orange-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
                     >
                       <span>📲</span>
                       <span>Invite Friend</span>
@@ -3522,7 +3522,7 @@ export default function Home() {
                           <div>
                             <button
                               onClick={() => inspectProfile(m.sender_handle)}
-                              className="text-[10px] font-bold text-orange-400 hover:underline"
+                              className="text-[10px] font-bold text-orange-700 hover:underline"
                             >
                               @{m.sender_handle}: 
                             </button>
@@ -3533,7 +3533,7 @@ export default function Home() {
                           {m.sender_handle !== handle && (
                             <button
                               onClick={() => handleReport('chat', m.id || m.message)}
-                              className="text-[9px] text-stone-400 hover:text-orange-400 pl-2"
+                              className="text-[9px] text-stone-400 hover:text-orange-700 pl-2"
                               title="Report message"
                             >
                               🚩
@@ -3569,7 +3569,7 @@ export default function Home() {
                   {uploading ? (
                     <div className="py-4 flex flex-col items-center space-y-1">
                       <span className="animate-spin text-xl">☁️</span>
-                      <span className="text-xs text-orange-400 font-semibold">Compressing & Uploading (~50KB)...</span>
+                      <span className="text-xs text-orange-700 font-semibold">Compressing & Uploading (~50KB)...</span>
                     </div>
                   ) : proofImage ? (
                     <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
@@ -3662,7 +3662,7 @@ export default function Home() {
                     <div className="flex justify-between items-center">
                       <button
                         onClick={() => inspectProfile(item.handle)}
-                        className="text-xs font-bold text-orange-400 hover:underline"
+                        className="text-xs font-bold text-orange-700 hover:underline"
                       >
                         @{item.handle || 'Explorer'}
                       </button>
@@ -3678,7 +3678,7 @@ export default function Home() {
                         )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
-                          className="text-[10px] text-stone-400 hover:text-orange-400"
+                          className="text-[10px] text-stone-400 hover:text-orange-700"
                           title="Report post"
                         >
                           🚩
@@ -3724,12 +3724,12 @@ export default function Home() {
               onBlur={(e) => saveHandle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
               autoFocus
-              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-400 font-bold focus:outline-none"
+              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-700 font-bold focus:outline-none"
             />
           ) : (
             <button
               onClick={() => setIsEditingHandle(true)}
-              className="text-xs font-bold text-orange-400 hover:underline flex items-center space-x-1"
+              className="text-xs font-bold text-orange-700 hover:underline flex items-center space-x-1"
             >
               <span>@{handle}</span>
               <span className="text-[10px] text-stone-500 font-medium">· {getRankTitle(totalXp)}</span>
@@ -3761,7 +3761,7 @@ export default function Home() {
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
                 onClick={handleSignOut}
-                className="text-[10px] text-orange-400 hover:underline font-semibold"
+                className="text-[10px] text-orange-700 hover:underline font-semibold"
               >
                 Sign Out
               </button>
@@ -3771,7 +3771,7 @@ export default function Home() {
                   setAuthModalReason('');
                   setShowAuthModal(true);
                 }}
-                className="text-[10px] text-orange-400 hover:underline font-semibold"
+                className="text-[10px] text-orange-700 hover:underline font-semibold"
               >
                 Verify
               </button>
@@ -3791,12 +3791,12 @@ export default function Home() {
         <div className="flex justify-around text-center border-t border-stone-200/60 pt-2">
           <div>
             <p className="text-xs text-stone-500">Loop Streak</p>
-            <p className="text-lg font-bold text-stone-800">{streak} Days 🔥</p>
+            <p className="text-xl font-bold font-['Space_Grotesk'] text-stone-800">{streak} Days 🔥</p>
           </div>
           <div className="w-px bg-stone-100" />
           <div>
             <p className="text-xs text-stone-500">Total IRL XP</p>
-            <p className="text-lg font-bold text-orange-400">{savedMins} XP ⚡</p>
+            <p className="text-xl font-bold font-['Space_Grotesk'] text-orange-700">{savedMins} XP ⚡</p>
           </div>
         </div>
 
