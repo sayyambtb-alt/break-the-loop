@@ -139,6 +139,7 @@ export default function PrivacyPolicy() {
 
           <H2>4. Who we share it with</H2>
           <P><strong className="text-stone-800">Supabase</strong> (our database and authentication provider) stores your data on our behalf, as a data processor. Supabase's own security practices apply to how this data is stored.</P>
+          <P><strong className="text-stone-800">PostHog</strong> (our analytics provider) receives anonymized usage data — which features you use, whether a mission is completed or abandoned, and your public handle (never your email) — so we can understand how the App is actually used and fix what isn't working. It does not receive your photos, chat messages, or email address.</P>
           <P><strong className="text-stone-800">Other users</strong> can see your handle, badges, streak, public mission history, and anything you post to the public feed or submit as a quest/gem suggestion. They cannot see your email address.</P>
           <P>We do not sell or rent your data to third parties for marketing.</P>
           <P>We may disclose information if required by law, or to protect the safety of our users (for example, in response to a valid legal request).</P>
