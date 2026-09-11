@@ -194,6 +194,7 @@ export default function Home() {
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [saveProgressEmail, setSaveProgressEmail] = useState('');
   const [showRecoverModal, setShowRecoverModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
   const [recoverEmail, setRecoverEmail] = useState('');
   const [recoverOtpInput, setRecoverOtpInput] = useState('');
   const [isRecoverOtpSent, setIsRecoverOtpSent] = useState(false);
@@ -263,6 +264,24 @@ export default function Home() {
   useEffect(() => {
     initAnalytics();
   }, []);
+
+  // A brand-new visitor has never seen this before -- show it once, then
+  // never again. Deliberately client-side/localStorage-based rather than
+  // tied to the account, so it works identically for guests.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!localStorage.getItem('btl_has_seen_welcome')) {
+      setShowWelcomeModal(true);
+    }
+  }, []);
+
+  const dismissWelcomeModal = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('btl_has_seen_welcome', 'true');
+    }
+    setShowWelcomeModal(false);
+    track('welcome_dismissed');
+  };
 
   // Re-identifies whenever the handle actually changes, rather than needing
   // a call at every one of the several places handle gets set.
@@ -2102,7 +2121,7 @@ export default function Home() {
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
-          colors: ["#f43f5e", "#10b981", "#f59e0b", "#8b5cf6"],
+          colors: ["#EA580C", "#F97316", "#FACC15", "#78716C"],
         });
 
         setIsCompleted(true);
@@ -2990,6 +3009,28 @@ export default function Home() {
       )}
 
       {/* Sign In / Recover Account Modal */}
+      {showWelcomeModal && (
+        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-gradient-to-b from-white to-stone-50 border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+            <div className="text-4xl">👋</div>
+            <h2 className="text-xl font-black text-stone-900">Welcome to Break The Loop</h2>
+            <p className="text-sm text-stone-600 leading-relaxed">
+              Tap the big button. Get handed a real, random micro-mission near you.
+              Do it, snap a photo, earn XP. That's the whole game.
+            </p>
+            <p className="text-xs text-stone-500">
+              Bring friends into it later — for now, let's get your first one done.
+            </p>
+            <button
+              onClick={dismissWelcomeModal}
+              className="w-full bg-orange-600 text-white font-black py-3 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
+            >
+              I'm in →
+            </button>
+          </div>
+        </div>
+      )}
+
       {showRecoverModal && (
         <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
