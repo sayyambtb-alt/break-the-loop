@@ -1748,44 +1748,111 @@ export default function Home() {
     // duplicate logic.
   };
 
+  // Reads the JPEG's EXIF orientation tag by walking its raw bytes -- no
+  // library needed for just this one field. Returns 1 (normal) if the file
+  // isn't a JPEG or has no EXIF block, which is a safe no-op default.
+  const getExifOrientation = (arrayBuffer: ArrayBuffer): number => {
+    const view = new DataView(arrayBuffer);
+    if (view.getUint16(0, false) !== 0xFFD8) return 1;
+
+    const length = view.byteLength;
+    let offset = 2;
+    while (offset < length - 1) {
+      const marker = view.getUint16(offset, false);
+      offset += 2;
+      if (marker === 0xFFE1) {
+        if (view.getUint32(offset + 2, false) !== 0x45786966) return 1;
+        const little = view.getUint16(offset + 8, false) === 0x4949;
+        const tiffOffset = offset + 8;
+        const dirOffset = tiffOffset + view.getUint32(tiffOffset + 4, little);
+        const tags = view.getUint16(dirOffset, little);
+        for (let i = 0; i < tags; i++) {
+          const entryOffset = dirOffset + i * 12 + 2;
+          if (view.getUint16(entryOffset, little) === 0x0112) {
+            return view.getUint16(entryOffset + 8, little);
+          }
+        }
+        return 1;
+      } else if ((marker & 0xFF00) !== 0xFF00) {
+        break;
+      } else {
+        offset += view.getUint16(offset, false);
+      }
+    }
+    return 1;
+  };
+
   const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
     return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = () => {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
+      const exifReader = new FileReader();
+      exifReader.readAsArrayBuffer(file);
+      exifReader.onload = (exifEvent) => {
+        // Orientation-detection is a nice-to-have, not something that should
+        // ever be able to block the actual upload -- if parsing fails for
+        // any reason (corrupt file, unexpected format), fall back to "no
+        // rotation" rather than leaving compressImage's promise hanging.
+        let orientation = 1;
+        try {
+          orientation = getExifOrientation(exifEvent.target?.result as ArrayBuffer);
+        } catch {
+          orientation = 1;
+        }
 
-          if (width > maxWidth) {
-            height = Math.round((height * maxWidth) / width);
-            width = maxWidth;
-          }
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+          const img = new Image();
+          img.src = event.target?.result as string;
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
 
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Canvas context not available'));
-            return;
-          }
+            if (width > maxWidth) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            }
 
-          ctx.drawImage(img, 0, 0, width, height);
-          canvas.toBlob(
-            (blob) => {
-              if (blob) resolve(blob);
-              else reject(new Error('Canvas compression failed'));
-            },
-            'image/jpeg',
-            quality
-          );
+            // Orientations 5-8 involve a 90-degree turn, so the canvas
+            // itself needs swapped dimensions before we rotate into it.
+            const swapDimensions = orientation >= 5 && orientation <= 8;
+            canvas.width = swapDimensions ? height : width;
+            canvas.height = swapDimensions ? width : height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) {
+              reject(new Error('Canvas context not available'));
+              return;
+            }
+
+            // Undoes exactly what each EXIF orientation value says was done
+            // to the raw pixels, so the compressed output always comes out
+            // right-side-up regardless of how the phone stored it.
+            switch (orientation) {
+              case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
+              case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
+              case 4: ctx.transform(1, 0, 0, -1, 0, height); break;
+              case 5: ctx.transform(0, 1, 1, 0, 0, 0); break;
+              case 6: ctx.transform(0, 1, -1, 0, height, 0); break;
+              case 7: ctx.transform(0, -1, -1, 0, height, width); break;
+              case 8: ctx.transform(0, -1, 1, 0, 0, width); break;
+              default: break;
+            }
+
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob(
+              (blob) => {
+                if (blob) resolve(blob);
+                else reject(new Error('Canvas compression failed'));
+              },
+              'image/jpeg',
+              quality
+            );
+          };
+          img.onerror = (err) => reject(err);
         };
-        img.onerror = (err) => reject(err);
+        reader.onerror = (err) => reject(err);
       };
-      reader.onerror = (err) => reject(err);
+      exifReader.onerror = (err) => reject(err);
     });
   };
 
@@ -2693,7 +2760,7 @@ export default function Home() {
             </div>
             <button
               onClick={() => saveHandleDirect(newHandleInput || handle)}
-              className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
             >
               Claim Tag & Start
             </button>
@@ -2736,7 +2803,7 @@ export default function Home() {
                 />
                 <button
                   onClick={handleSendEmailOtp}
-                  className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
                 >
                   Send 6-Digit Code
                 </button>
@@ -2764,7 +2831,7 @@ export default function Home() {
                 />
                 <button
                   onClick={handleVerifyEmailOtp}
-                  className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
                 >
                   Verify & Continue
                 </button>
@@ -2806,7 +2873,7 @@ export default function Home() {
               />
               <button
                 onClick={() => handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
               >
                 Send Confirmation Link
               </button>
@@ -2856,7 +2923,7 @@ export default function Home() {
               />
               <button
                 onClick={handleSubmitQuestSuggestion}
-                className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
               >
                 Submit for Review
               </button>
@@ -2972,7 +3039,7 @@ export default function Home() {
                   />
                   <button
                     onClick={handleVerifyRecoverOtp}
-                    className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95"
+                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
                   >
                     Verify & Sign In
                   </button>
@@ -3113,7 +3180,7 @@ export default function Home() {
                           disabled={!isOnline || sendingInviteTo === f.handle}
                           className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
                             isOnline
-                              ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-lg shadow-orange-600/30 active:scale-95'
+                              ? 'bg-orange-600 text-white shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]'
                               : 'bg-white text-stone-400 border border-stone-200 cursor-not-allowed'
                           }`}
                         >
@@ -3149,7 +3216,7 @@ export default function Home() {
             )}
             <button
               onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-xs shadow-lg shadow-orange-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
             >
               <span>📲</span>
               <span>Share Recap to Story / WhatsApp</span>
@@ -3306,7 +3373,7 @@ export default function Home() {
                   <div className="flex flex-col items-center space-y-2 pt-2">
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-lg shadow-orange-600/20 transition-all active:scale-95"
+                      className="bg-orange-600 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
                     >
                       <span>📲</span>
                       <span>Invite Friend via WhatsApp Now</span>
@@ -3519,7 +3586,7 @@ export default function Home() {
 
                   <button
                     onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-orange-600 hover:bg-orange-500 text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-orange-600/30 transition-all active:scale-95 flex items-center justify-center space-x-2"
+                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
                   >
                     <span>📲</span>
                     <span>Share to Instagram Story / WhatsApp</span>
