@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import { initAnalytics, track, identifyUser } from './lib/analytics';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
@@ -256,6 +257,17 @@ export default function Home() {
   const currentUserIdRef = useRef<string | null>(null);
   const isQueueCreatorRef = useRef<boolean>(false);
   const accessTokenRef = useRef<string | null>(null);
+
+  // Fires once on mount; no-ops entirely until a PostHog key is configured.
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  // Re-identifies whenever the handle actually changes, rather than needing
+  // a call at every one of the several places handle gets set.
+  useEffect(() => {
+    if (handle && handle !== 'Explorer') identifyUser(handle);
+  }, [handle]);
 
   useEffect(() => {
     currentUserIdRef.current = currentUserId;
@@ -582,6 +594,7 @@ export default function Home() {
 
     setShowSuggestQuestModal(false);
     setSuggestQuestText('');
+    track('quest_suggested', { mode: suggestQuestMode });
     showToast('Thanks! Your quest is awaiting review.', 'success');
   };
 
@@ -736,6 +749,7 @@ export default function Home() {
     setSuggestGemName('');
     setSuggestGemNeighborhood('');
     setSuggestGemDescription('');
+    track('gem_submitted', { neighborhood: suggestGemNeighborhood });
     showToast('Thanks! Your spot is awaiting review.', 'success');
   };
 
@@ -1322,6 +1336,7 @@ export default function Home() {
 
   const handleAbandonMission = async () => {
     if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
+      track('mission_abandoned', { mode, track: isExplorerMode ? 'explore' : 'quest' });
       await cancelSearch();
       setActiveQuest(null);
       setActiveGem(null);
@@ -1463,6 +1478,8 @@ export default function Home() {
   };
 
   const onStartMatchingClick = () => {
+    track('mission_started', { mode, track: isExplorerMode ? 'explore' : 'quest' });
+
     if (isExplorerMode && mode === 'solo') {
       handleRevealGem();
       return;
@@ -2006,6 +2023,13 @@ export default function Home() {
       }
 
       if (data && data.success) {
+        track('mission_completed', {
+          mode: isExplorerMode ? 'explorer' : mode,
+          track: isExplorerMode ? 'explore' : 'quest',
+          rarity: activeQuestRarity,
+          xp_earned: activeQuestXp
+        });
+
         confetti({
           particleCount: 120,
           spread: 70,
