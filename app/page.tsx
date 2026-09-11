@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
@@ -3707,6 +3708,16 @@ export default function Home() {
             </button>
           </div>
         )}
+
+        <div className="flex items-center justify-center gap-3 pt-2">
+          <Link href="/privacy" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
+            Privacy
+          </Link>
+          <span className="text-[10px] text-stone-300">·</span>
+          <Link href="/terms" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
+            Terms
+          </Link>
+        </div>
       </footer>
     </main>
   );
