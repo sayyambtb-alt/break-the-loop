@@ -3,7 +3,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
-import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
+import MissionTicket, { GemDetails, Rarity } from './components/MissionTicket';
+import RollingOverlay from './components/RollingOverlay';
+import BottomNav, { BtlTab } from './components/BottomNav';
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
@@ -19,6 +21,7 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 const ADMIN_EMAIL = 'sayyambtb@gmail.com';
+const MISSION_MINUTES = 45;
 
 const RANK_TIERS: { minXp: number; title: string }[] = [
   { minXp: 0, title: 'Fresh Escapee' },
@@ -35,6 +38,41 @@ const getRankTitle = (totalXp: number): string => {
   }
   return title;
 };
+
+function getRankProgress(xp: number) {
+  let idx = 0;
+  for (let i = 0; i < RANK_TIERS.length; i++) {
+    if (xp >= RANK_TIERS[i].minXp) idx = i;
+  }
+  const current = RANK_TIERS[idx];
+  const next = RANK_TIERS[idx + 1] || null;
+  const pct = next
+    ? Math.max(0, Math.min(100, Math.round(((xp - current.minXp) / (next.minXp - current.minXp)) * 100)))
+    : 100;
+  return {
+    current,
+    next,
+    pct,
+    label: next ? `${xp} / ${next.minXp} XP` : `${xp} XP`,
+    nextLabel: next ? `${next.minXp - xp} XP to ${next.title}` : 'Top rank. Nothing left to prove.'
+  };
+}
+
+// Strips a leading emoji (or any other non-letter/non-digit lead-in, plus the
+// space after it) from badge strings like "🌱 First Step" -- render-time
+// only, the stored profiles.badges values are never rewritten.
+function stripBadgeEmoji(badge: string): string {
+  const stripped = badge.replace(/^[^\p{L}\p{N}]+\s*/u, '').trim();
+  return stripped || badge;
+}
+
+function dayPartLabel(): string {
+  const now = new Date();
+  const day = now.toLocaleDateString('en-US', { weekday: 'long' }).toUpperCase();
+  const h = now.getHours();
+  const part = h < 5 ? 'LATE NIGHT' : h < 12 ? 'MORNING' : h < 17 ? 'AFTERNOON' : h < 21 ? 'EVENING' : 'NIGHT';
+  return `${day} ${part}`;
+}
 
 interface FeedItem {
   id: string;
@@ -72,38 +110,6 @@ interface IncomingInvite {
   quest_text: string;
 }
 
-interface ReportItem {
-  id: string;
-  reporter_handle: string;
-  reported_type: string;
-  target_id: string;
-  reason: string;
-  created_at: string;
-  content_text?: string | null;
-  content_photo_url?: string | null;
-  offender_handle?: string | null;
-  offender_user_id?: string | null;
-}
-
-interface PendingQuest {
-  id: string;
-  mode: string;
-  quest_text: string;
-  submitted_by_handle: string;
-  created_at: string;
-}
-
-interface PendingGem {
-  id: string;
-  name: string;
-  neighborhood: string;
-  description: string;
-  submitted_by_handle: string;
-  created_at: string;
-  status?: string;
-  is_active?: boolean;
-}
-
 interface PublicProfileData {
   found: boolean;
   handle?: string;
@@ -127,6 +133,14 @@ interface ToastItem {
   type: 'success' | 'error' | 'info';
 }
 
+interface GemPreview {
+  gem: GemDetails;
+  rarity: Rarity;
+  xp: number;
+  credit: string | null;
+  questText: string;
+}
+
 export default function Home() {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastIdRef = useRef(0);
@@ -139,22 +153,18 @@ export default function Home() {
     }, 4000);
   };
 
-  const [tab, setTab] = useState<'quest' | 'feed'>('quest');
+  const [tab, setTab] = useState<BtlTab>('tonight');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isExplorerMode, setIsExplorerMode] = useState(false);
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
   const [hiddenGemSubmittedBy, setHiddenGemSubmittedBy] = useState<string | null>(null);
   const [activeGem, setActiveGem] = useState<GemDetails | null>(null);
+  const [gemPreview, setGemPreview] = useState<GemPreview | null>(null);
+  const [gemLoading, setGemLoading] = useState(false);
   const [showSuggestGemModal, setShowSuggestGemModal] = useState(false);
   const [suggestGemName, setSuggestGemName] = useState('');
   const [suggestGemNeighborhood, setSuggestGemNeighborhood] = useState('');
   const [suggestGemDescription, setSuggestGemDescription] = useState('');
-  const [showPendingGemsModal, setShowPendingGemsModal] = useState(false);
-  const [pendingGems, setPendingGems] = useState<PendingGem[]>([]);
-  const [dirtyGemIds, setDirtyGemIds] = useState<string[]>([]);
-  const [savedGemIds, setSavedGemIds] = useState<string[]>([]);
-  const [pendingGemCount, setPendingGemCount] = useState<number>(0);
-  const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
   const MUMBAI_NEIGHBORHOODS = [
     'Colaba', 'Fort', 'Marine Drive', 'Dadar', 'Matunga', 'Mahim', 'Wadala', 'Sewri',
@@ -162,10 +172,10 @@ export default function Home() {
   ];
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
-  const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
+  const [activeQuestRarity, setActiveQuestRarity] = useState<Rarity>('common');
   const [activeQuestXp, setActiveQuestXp] = useState(15);
   const [activeQuestCredit, setActiveQuestCredit] = useState<string | null>(null);
-  const [isMissionAccepted, setIsMissionAccepted] = useState(false);
+  const [rerollsLeft, setRerollsLeft] = useState(1);
   const [roomId, setRoomId] = useState<string>('');
   const [pendingInviteRoomId, setPendingInviteRoomId] = useState<string | null>(null);
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
@@ -174,11 +184,34 @@ export default function Home() {
   const [streak, setStreak] = useState(1);
   const [savedMins, setSavedMins] = useState(15);
   const [totalXp, setTotalXp] = useState(0);
+  const [freezesAvailable, setFreezesAvailable] = useState(1);
   const [handle, setHandle] = useState('Explorer');
   const [badges, setBadges] = useState<string[]>(['🌱 First Step']);
   const [isEditingHandle, setIsEditingHandle] = useState(false);
   const [isCompleted, setIsCompleted] = useState(false);
   const [cardDataUrl, setCardDataUrl] = useState<string | null>(null);
+  const [completedAtLabel, setCompletedAtLabel] = useState('');
+  const [earnedXp, setEarnedXp] = useState(0);
+  const [memberSince, setMemberSince] = useState('');
+  const [lastMissionAt, setLastMissionAt] = useState<number | null>(null);
+  const [missionsLoggedCount, setMissionsLoggedCount] = useState(0);
+  const [spotsFoundCount, setSpotsFoundCount] = useState(0);
+
+  // Mission countdown -- an absolute deadline, not a tick counter, so it
+  // survives a backgrounded PWA. `nowTick` just forces a re-render once a
+  // second (and immediately on visibilitychange); the remaining time is
+  // always derived fresh from Date.now() at render time.
+  const [missionExpiresAt, setMissionExpiresAt] = useState<number | null>(null);
+  const [missionExpired, setMissionExpired] = useState(false);
+  const [nowTick, setNowTick] = useState<number>(() => Date.now());
+  const prevActiveQuestRef = useRef<string | null>(null);
+
+  // Boredom o'clock -- a client-side scheduled Notification (no push backend
+  // exists in this codebase), pinned to 9:30 PM to match the copy in the
+  // design spec exactly. Persisted locally per-device.
+  const [alarmEnabled, setAlarmEnabled] = useState(false);
+  const [rollingCaptionIdx, setRollingCaptionIdx] = useState(0);
+  const ROLL_CAPTIONS = ['scanning dadar…', 'checking who is out…', 'rolling rarity…', 'measuring the walk…', 'locking it in…'];
 
   // Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -203,21 +236,11 @@ export default function Home() {
   const [showHandleModal, setShowHandleModal] = useState(false);
   const [newHandleInput, setNewHandleInput] = useState('');
   const [showSafetyModal, setShowSafetyModal] = useState(false);
-  const [showDevModal, setShowDevModal] = useState(false);
-  const devTimerRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Admin Reports Modal
-  const [showReportsModal, setShowReportsModal] = useState(false);
-  const [adminReports, setAdminReports] = useState<ReportItem[]>([]);
-  const [loadingReports, setLoadingReports] = useState(false);
 
   // Quest Suggestions
   const [showSuggestQuestModal, setShowSuggestQuestModal] = useState(false);
   const [suggestQuestMode, setSuggestQuestMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [suggestQuestText, setSuggestQuestText] = useState('');
-  const [showPendingQuestsModal, setShowPendingQuestsModal] = useState(false);
-  const [pendingQuests, setPendingQuests] = useState<PendingQuest[]>([]);
-  const [loadingPendingQuests, setLoadingPendingQuests] = useState(false);
 
   // Explorer Profile Modal
   const [selectedProfile, setSelectedProfile] = useState<PublicProfileData | null>(null);
@@ -261,19 +284,20 @@ export default function Home() {
   const isQueueCreatorRef = useRef<boolean>(false);
   const accessTokenRef = useRef<string | null>(null);
 
-  // Fires once on mount; no-ops entirely until a PostHog key is configured.
+  const phase: 'idle' | 'rolling' | 'active' | 'done' =
+    isCompleted ? 'done' : activeQuest ? 'active' : isSearching ? 'rolling' : 'idle';
+
   useEffect(() => {
     initAnalytics();
   }, []);
 
-  // A brand-new visitor has never seen this before -- show it once, then
-  // never again. Deliberately client-side/localStorage-based rather than
-  // tied to the account, so it works identically for guests.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!localStorage.getItem('btl_has_seen_welcome')) {
       setShowWelcomeModal(true);
     }
+    const savedAlarm = localStorage.getItem('btl_alarm_enabled');
+    if (savedAlarm === '1') setAlarmEnabled(true);
   }, []);
 
   const dismissWelcomeModal = () => {
@@ -284,8 +308,6 @@ export default function Home() {
     track('welcome_dismissed');
   };
 
-  // Re-identifies whenever the handle actually changes, rather than needing
-  // a call at every one of the several places handle gets set.
   useEffect(() => {
     if (handle && handle !== 'Explorer') identifyUser(handle);
   }, [handle]);
@@ -305,9 +327,6 @@ export default function Home() {
     return () => subscription.unsubscribe();
   }, []);
 
-  // Best-effort cleanup so a closed tab / dropped connection doesn't leave an
-  // orphaned matchmaking_queue row behind — React's unmount cleanup never
-  // runs on a real tab close, only pagehide does.
   useEffect(() => {
     const releaseQueueOnUnload = () => {
       const queueId = myQueueEntryIdRef.current;
@@ -346,9 +365,6 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       const urlRoom = params.get('room');
 
-      // Don't set match state directly from URL params -- the room may
-      // have filled up, expired, or moved on since the link was shared.
-      // join_room_by_id is the source of truth once auth resolves below.
       if (urlRoom) {
         setPendingInviteRoomId(urlRoom);
       }
@@ -384,9 +400,6 @@ export default function Home() {
     };
   }, []);
 
-  // Resolve a shared invite link once we actually have an authenticated
-  // user and handle -- never trust the URL's own claims about mode/quest,
-  // since the room may have moved on since the link was shared.
   useEffect(() => {
     if (!pendingInviteRoomId || !currentUserId || !handle || inviteLinkJoinedRef.current) return;
     inviteLinkJoinedRef.current = true;
@@ -416,9 +429,6 @@ export default function Home() {
       setIsQueueCreator(false);
       if (joinResult.roster) setSquadRoster(joinResult.roster);
 
-      // An invite link to an Explore room needs to land the joiner on the
-      // Explore track with the right neighborhood selected, not silently
-      // treated as a regular Quest match.
       if (joinResult.neighborhood) {
         setIsExplorerMode(true);
         setSelectedNeighborhood(joinResult.neighborhood);
@@ -433,8 +443,8 @@ export default function Home() {
         setActiveQuestRarity(joinResult.neighborhood ? 'common' : joinResult.rarity);
         setActiveQuestXp(joinResult.xp_reward);
         setActiveQuestCredit(null);
-        setIsMissionAccepted(false);
         setIsSearching(false);
+        setTab('tonight');
         if (joinResult.neighborhood) {
           setActiveGem({
             name: joinResult.gem_name,
@@ -486,17 +496,17 @@ export default function Home() {
         const state = presenceChannel.presenceState();
         setOnlineUserIds(new Set<string>(Object.keys(state)));
       })
-      .on('presence', { event: 'join' }, ({ key }) => {
+      .on('presence', { event: 'join' }, ({ key }: any) => {
         setOnlineUserIds((prev) => new Set([...Array.from(prev), key]));
       })
-      .on('presence', { event: 'leave' }, ({ key }) => {
+      .on('presence', { event: 'leave' }, ({ key }: any) => {
         setOnlineUserIds((prev) => {
           const updated = new Set(prev);
           updated.delete(key);
           return updated;
         });
       })
-      .subscribe(async (status) => {
+      .subscribe(async (status: string) => {
         if (status === 'SUBSCRIBED') {
           await presenceChannel.track({ online_at: new Date().toISOString() });
         }
@@ -530,24 +540,6 @@ export default function Home() {
     invitesChannelRef.current = invitesChannel;
   };
 
-  const handleDevPressStart = () => {
-    if (userEmail !== ADMIN_EMAIL) return;
-
-    devTimerRef.current = setTimeout(() => {
-      setShowDevModal(true);
-      if (typeof window !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate(100);
-      }
-    }, 2000);
-  };
-
-  const handleDevPressEnd = () => {
-    if (devTimerRef.current) {
-      clearTimeout(devTimerRef.current);
-      devTimerRef.current = null;
-    }
-  };
-
   const inspectProfile = async (targetHandle: string) => {
     const cleanHandle = targetHandle.replace('@', '').trim();
     if (!cleanHandle) return;
@@ -572,30 +564,6 @@ export default function Home() {
     }
   };
 
-  const fetchAdminReports = async () => {
-    if (userEmail !== ADMIN_EMAIL) return;
-    setLoadingReports(true);
-    try {
-      const { data, error } = await supabase.rpc('admin_get_reports');
-      if (data) {
-        setAdminReports(data);
-        setShowReportsModal(true);
-      }
-    } catch {
-    } finally {
-      setLoadingReports(false);
-    }
-  };
-
-  const handleResolveReport = async (reportId: string) => {
-    const { error } = await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
-    if (error) {
-      showToast(`Couldn't resolve report: ${error.message}`, 'error');
-      return;
-    }
-    setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
-  };
-
   const handleSubmitQuestSuggestion = async () => {
     const trimmed = suggestQuestText.trim();
     if (trimmed.length < 15 || trimmed.length > 300) {
@@ -617,125 +585,6 @@ export default function Home() {
     setSuggestQuestText('');
     track('quest_suggested', { mode: suggestQuestMode });
     showToast('Thanks! Your quest is awaiting review.', 'success');
-  };
-
-  const fetchPendingQuests = async () => {
-    if (userEmail !== ADMIN_EMAIL) return;
-    setLoadingPendingQuests(true);
-    try {
-      const { data, error } = await supabase.rpc('admin_get_pending_quests');
-      if (data) {
-        setPendingQuests(data);
-        setShowPendingQuestsModal(true);
-      }
-    } catch {
-    } finally {
-      setLoadingPendingQuests(false);
-    }
-  };
-
-  const handleApproveQuest = async (questId: string) => {
-    const { error } = await supabase.rpc('admin_approve_quest', { p_quest_id: questId });
-    if (error) {
-      showToast(`Couldn't approve quest: ${error.message}`, 'error');
-      return;
-    }
-    setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
-  };
-
-  const handleRejectQuest = async (questId: string) => {
-    const { error } = await supabase.rpc('admin_reject_quest', { p_quest_id: questId });
-    if (error) {
-      showToast(`Couldn't reject quest: ${error.message}`, 'error');
-      return;
-    }
-    setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
-  };
-
-  // Despite the name, this now fetches every gem regardless of status --
-  // approved ones need to stay editable/removable too, not just pending ones.
-  const fetchPendingGems = async () => {
-    if (userEmail !== ADMIN_EMAIL) return;
-    setLoadingPendingGems(true);
-    try {
-      const { data } = await supabase.rpc('admin_get_all_gems');
-      if (data) {
-        setPendingGems(data);
-        // Any in-progress edits are discarded by a refetch, so clear the
-        // dirty markers too rather than leaving them pointing at stale edits.
-        setDirtyGemIds([]);
-        setSavedGemIds([]);
-        setPendingGemCount(data.filter((g: PendingGem) => g.status === 'pending').length);
-        setShowPendingGemsModal(true);
-      }
-    } catch {
-    } finally {
-      setLoadingPendingGems(false);
-    }
-  };
-
-  const markGemDirty = (gemId: string) => {
-    setDirtyGemIds((prev) => prev.includes(gemId) ? prev : [...prev, gemId]);
-    setSavedGemIds((prev) => prev.filter((id) => id !== gemId));
-  };
-
-  // Surfaces the pending-submission count on the header badge without
-  // needing to open the panel first.
-  useEffect(() => {
-    if (userEmail !== ADMIN_EMAIL) return;
-    (async () => {
-      const { data } = await supabase.rpc('admin_get_pending_gem_count');
-      if (typeof data === 'number') setPendingGemCount(data);
-    })();
-  }, [userEmail]);
-
-  const handleApproveGem = async (gem: PendingGem) => {
-    const { error } = await supabase.rpc('admin_approve_gem', {
-      p_gem_id: gem.id,
-      p_name: gem.name,
-      p_neighborhood: gem.neighborhood,
-      p_description: gem.description
-    });
-    if (error) {
-      showToast(`Couldn't approve spot: ${error.message}`, 'error');
-      return;
-    }
-    // Approving doesn't remove the gem, it flips it to live -- keep it in
-    // the list so it stays editable, and drop the pending badge count.
-    setPendingGems((prev) => prev.map((g) => g.id === gem.id ? { ...g, status: 'approved', is_active: true } : g));
-    setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
-    setPendingGemCount((prev) => Math.max(0, prev - 1));
-    showToast(`"${gem.name}" is now live in ${gem.neighborhood}.`, 'success');
-  };
-
-  const handleRejectGem = async (gemId: string) => {
-    const wasPending = pendingGems.find((g) => g.id === gemId)?.status === 'pending';
-    const { error } = await supabase.rpc('admin_reject_gem', { p_gem_id: gemId });
-    if (error) {
-      showToast(`Couldn't remove spot: ${error.message}`, 'error');
-      return;
-    }
-    setPendingGems((prev) => prev.filter((g) => g.id !== gemId));
-    setDirtyGemIds((prev) => prev.filter((id) => id !== gemId));
-    if (wasPending) setPendingGemCount((prev) => Math.max(0, prev - 1));
-    showToast('Spot removed.', 'success');
-  };
-
-  // Edits an already-approved gem in place, without re-triggering approval.
-  const handleUpdateGem = async (gem: PendingGem) => {
-    const { error } = await supabase.rpc('admin_update_gem', {
-      p_gem_id: gem.id,
-      p_name: gem.name,
-      p_neighborhood: gem.neighborhood,
-      p_description: gem.description
-    });
-    if (error) {
-      showToast(`Couldn't save changes: ${error.message}`, 'error');
-      return;
-    }
-    setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
-    setSavedGemIds((prev) => prev.includes(gem.id) ? prev : [...prev, gem.id]);
-    showToast(`Saved — "${gem.name}" now lives in ${gem.neighborhood}.`, 'success');
   };
 
   const handleSubmitGemSuggestion = async () => {
@@ -791,22 +640,6 @@ export default function Home() {
     }
   };
 
-  const handleAdminDeleteChatMessage = async (messageId: string) => {
-    if (!window.confirm('ADMIN: Are you sure you want to permanently remove this chat message?')) {
-      return;
-    }
-
-    try {
-      const { error } = await supabase.rpc('admin_delete_chat_message', { p_message_id: messageId });
-      if (!error) {
-        showToast('Message removed successfully.', 'success');
-      } else {
-        showToast(`Failed to delete message: ${error.message}`, 'error');
-      }
-    } catch {
-    }
-  };
-
   const acceptDirectInvite = async () => {
     if (!incomingInvite) return;
     try {
@@ -826,6 +659,7 @@ export default function Home() {
       setIncomingInvite(null);
       setShowFriendsModal(false);
       setMessages([]);
+      setTab('tonight');
     } catch {
     }
   };
@@ -879,6 +713,7 @@ export default function Home() {
       setIsSearching(false);
       setShowFriendsModal(false);
       setMessages([]);
+      setTab('tonight');
       showToast(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`, 'success');
     } catch {
       showToast('Could not send raid invite. Please try again.', 'error');
@@ -892,12 +727,114 @@ export default function Home() {
     const permission = await Notification.requestPermission();
     if (permission === 'granted') {
       setNotificationsEnabled(true);
-      new Notification('Break The Loop 🔥', {
-        body: 'In-app notifications are active!',
-        icon: '/icon.png'
-      });
     }
   };
+
+  // Boredom o'clock -- schedules a single client-side Notification for the
+  // next occurrence of 9:30 PM, then reschedules itself. Recomputed on
+  // mount and on visibilitychange so a backgrounded/suspended tab catches up
+  // instead of silently missing the fire time.
+  const toggleAlarm = async () => {
+    if (!alarmEnabled) {
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission !== 'granted') {
+        await requestNotificationPermission();
+      }
+      setAlarmEnabled(true);
+      if (typeof window !== 'undefined') localStorage.setItem('btl_alarm_enabled', '1');
+    } else {
+      setAlarmEnabled(false);
+      if (typeof window !== 'undefined') localStorage.setItem('btl_alarm_enabled', '0');
+    }
+  };
+
+  useEffect(() => {
+    if (!alarmEnabled || typeof window === 'undefined') return;
+    let timer: ReturnType<typeof setTimeout>;
+
+    const scheduleNext = () => {
+      const now = new Date();
+      const next = new Date(now);
+      next.setHours(21, 30, 0, 0);
+      if (next.getTime() <= now.getTime()) next.setDate(next.getDate() + 1);
+      const ms = next.getTime() - now.getTime();
+      timer = setTimeout(() => {
+        if (
+          document.visibilityState !== 'visible' &&
+          'Notification' in window &&
+          Notification.permission === 'granted'
+        ) {
+          new Notification('Break The Loop', {
+            body: "Bored? You've got a mission waiting.",
+            icon: '/icons/icon-192.png'
+          });
+        }
+        scheduleNext();
+      }, ms);
+    };
+
+    scheduleNext();
+    const onVis = () => {
+      clearTimeout(timer);
+      scheduleNext();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [alarmEnabled]);
+
+  // Mission countdown -- recompute from Date.now() every second, plus
+  // immediately on visibilitychange so a backgrounded tab catches up the
+  // instant it's foregrounded rather than waiting for the next tick.
+  useEffect(() => {
+    if (!missionExpiresAt) return;
+    const tick = () => setNowTick(Date.now());
+    tick();
+    const id = setInterval(tick, 1000);
+    const onVis = () => tick();
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [missionExpiresAt]);
+
+  useEffect(() => {
+    if (!missionExpiresAt) {
+      setMissionExpired(false);
+      return;
+    }
+    setMissionExpired(nowTick >= missionExpiresAt);
+  }, [nowTick, missionExpiresAt]);
+
+  // A fresh mission (activeQuest transitioning from nothing to something)
+  // gets a brand-new expiry + full reroll allowance; a reroll of an
+  // already-active mission keeps both, since activeQuest never goes
+  // through a falsy state during a reroll.
+  useEffect(() => {
+    const wasActive = !!prevActiveQuestRef.current;
+    const isActive = !!activeQuest;
+    if (!wasActive && isActive) {
+      setRerollsLeft(1);
+      setMissionExpiresAt(Date.now() + MISSION_MINUTES * 60000);
+      setMissionExpired(false);
+    }
+    if (!isActive) {
+      setMissionExpiresAt(null);
+      setMissionExpired(false);
+    }
+    prevActiveQuestRef.current = activeQuest;
+  }, [activeQuest]);
+
+  // Cycles the "rolling" caption for a solo/invite roll -- duo/squad shows a
+  // steady waiting-room caption instead (rendered directly, no cycling).
+  useEffect(() => {
+    if (!isSearching || (mode !== 'solo' && !isInviteSession)) return;
+    setRollingCaptionIdx(0);
+    const id = setInterval(() => setRollingCaptionIdx((i) => i + 1), 240);
+    return () => clearInterval(id);
+  }, [isSearching, mode, isInviteSession]);
 
   const handleGuestLogin = async (e: React.MouseEvent) => {
     e.preventDefault();
@@ -1035,12 +972,31 @@ export default function Home() {
     setHandle('Explorer');
     setStreak(1);
     setSavedMins(15);
+    setFreezesAvailable(1);
     setBadges(['🌱 First Step']);
     setFriendsList([]);
     if (uid) {
       loadOrCreateProfile(uid, 'guest@breaktheloop.app');
       fetchFriends(uid);
       setupUserChannels(uid);
+    }
+  };
+
+  const fetchYouStats = async (userId: string) => {
+    try {
+      const { count: totalCount } = await supabase
+        .from('mission_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId);
+      setMissionsLoggedCount(totalCount || 0);
+
+      const { count: exploreCount } = await supabase
+        .from('mission_logs')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('mode', 'explorer');
+      setSpotsFoundCount(exploreCount || 0);
+    } catch {
     }
   };
 
@@ -1055,7 +1011,11 @@ export default function Home() {
         setStreak(data.streak || 1);
         setSavedMins(data.time_saved_mins || 15);
         setTotalXp(data.total_xp || 0);
+        setFreezesAvailable(typeof data.freezes_available === 'number' ? data.freezes_available : 1);
         if (data.badges) setBadges(data.badges);
+        if (data.created_at) {
+          setMemberSince(new Date(data.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+        }
         if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
           setShowHandleModal(true);
         }
@@ -1066,11 +1026,13 @@ export default function Home() {
         ]);
         setHandle(defaultHandle);
         if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', defaultHandle);
+        setMemberSince(new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
         if (email !== 'guest@breaktheloop.app') {
           setNewHandleInput(defaultHandle);
           setShowHandleModal(true);
         }
       }
+      fetchYouStats(userId);
     } catch {
     }
   };
@@ -1152,6 +1114,23 @@ export default function Home() {
     }
   };
 
+  const resetMissionToIdle = () => {
+    setIsCompleted(false);
+    setActiveQuest(null);
+    setActiveGem(null);
+    setActiveQuestCredit(null);
+    setHiddenGemSubmittedBy(null);
+    setGemPreview(null);
+    setProofImage(null);
+    setCardDataUrl(null);
+    setRoomId('');
+    setSquadRoster([]);
+    setMessages([]);
+    setIsInviteSession(false);
+    setMissionExpired(false);
+    setMissionExpiresAt(null);
+  };
+
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
     if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
       setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${selectedMode.toUpperCase()} mode.`);
@@ -1159,9 +1138,6 @@ export default function Home() {
       return;
     }
 
-    // Switching mode tabs mid-match would otherwise leave the old match's
-    // realtime connection open in the background — same cleanup
-    // handleCompleteMission does once a mission genuinely ends.
     if (queueSubscriptionRef.current) {
       supabase.removeChannel(queueSubscriptionRef.current);
       queueSubscriptionRef.current = null;
@@ -1183,52 +1159,255 @@ export default function Home() {
     setSquadCapacity(selectedMode === 'squad' ? 8 : 2);
   };
 
-  const handleSelectQuestTrack = () => {
-    if (queueSubscriptionRef.current) {
-      supabase.removeChannel(queueSubscriptionRef.current);
-      queueSubscriptionRef.current = null;
-    }
-    if (participantsSubRef.current) {
-      supabase.removeChannel(participantsSubRef.current);
-      participantsSubRef.current = null;
-    }
-
-    setIsExplorerMode(false);
-    setActiveQuest(null);
-    setActiveGem(null);
-    setRoomId('');
-    setProofImage(null);
-    setIsCompleted(false);
-    setIsInviteSession(false);
-    setIsSearching(false);
-    setSquadRoster([]);
-    setHiddenGemSubmittedBy(null);
+  const rollRarity = (): { rarity: Rarity; xp: number } => {
+    const roll = Math.random() * 100;
+    if (roll > 85) return { rarity: 'legendary', xp: 75 };
+    if (roll > 60) return { rarity: 'rare', xp: 35 };
+    return { rarity: 'common', xp: 15 };
   };
 
-  const handleSelectExplorer = () => {
-    if (queueSubscriptionRef.current) {
-      supabase.removeChannel(queueSubscriptionRef.current);
-      queueSubscriptionRef.current = null;
-    }
-    if (participantsSubRef.current) {
-      supabase.removeChannel(participantsSubRef.current);
-      participantsSubRef.current = null;
-    }
+  const pickRandomQuest = async () => {
+    try {
+      const { data: dbQuests } = await supabase
+        .from('quests')
+        .select('quest_text, submitted_by_handle')
+        .eq('mode', mode)
+        .eq('is_active', true);
 
-    setIsExplorerMode(true);
+      if (dbQuests && dbQuests.length > 0) {
+        const { rarity, xp } = rollRarity();
+        setActiveQuestRarity(rarity);
+        setActiveQuestXp(xp);
+        const chosen = dbQuests[Math.floor(Math.random() * dbQuests.length)];
+        setActiveQuestCredit(chosen.submitted_by_handle || null);
+        setActiveQuest(chosen.quest_text);
+      } else {
+        const { rarity, xp } = rollRarity();
+        setActiveQuestRarity(rarity);
+        setActiveQuestXp(xp);
+        setActiveQuestCredit(null);
+        setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
+      }
+    } catch (e) {
+      const { rarity, xp } = rollRarity();
+      setActiveQuestRarity(rarity);
+      setActiveQuestXp(xp);
+      setActiveQuestCredit(null);
+      setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
+    }
+  };
+
+  const executeMatchmaking = async () => {
+    setShowSafetyModal(false);
+    setIsSearching(true);
     setActiveQuest(null);
-    setRoomId('');
     setProofImage(null);
     setIsCompleted(false);
-    setIsInviteSession(false);
-    setIsSearching(false);
+    setCardDataUrl(null);
+    setMessages([]);
     setSquadRoster([]);
     setSquadCapacity(mode === 'squad' ? 8 : 2);
-    setHiddenGemSubmittedBy(null);
-    setActiveGem(null);
+
+    if (mode === 'solo' || isInviteSession) {
+      // Fixed minimum so the "rolling" ceremony always plays for at least
+      // 1.5s even though picking a quest client-side is effectively instant.
+      const rollStart = Date.now();
+      await pickRandomQuest();
+      const remain = 1500 - (Date.now() - rollStart);
+      if (remain > 0) await new Promise((r) => setTimeout(r, remain));
+      setIsSearching(false);
+      setTab('tonight');
+      return;
+    }
+
+    if (!currentUserId) {
+      setIsSearching(false);
+      return;
+    }
+
+    try {
+      const { data: matchResult, error } = await supabase.rpc('find_or_create_match', {
+        p_user_id: currentUserId,
+        p_mode: mode,
+        p_handle: handle,
+        p_city: 'mumbai'
+      });
+
+      if (error) {
+        console.error('Matchmaking error:', error);
+        showToast(`Matchmaking error: ${error.message || JSON.stringify(error)}`, 'error');
+        setIsSearching(false);
+        return;
+      }
+
+      if (matchResult && matchResult.error === 'banned') {
+        showToast('Your account has been suspended from multiplayer missions.', 'error');
+        setIsSearching(false);
+        return;
+      }
+
+      if (matchResult) {
+        setRoomId(matchResult.room_id);
+        setSquadCapacity(matchResult.max_players || 2);
+        setIsQueueCreator(matchResult.is_creator || false);
+        if (matchResult.roster) setSquadRoster(matchResult.roster);
+
+        if (matchResult.queue_id) {
+          myQueueEntryIdRef.current = matchResult.queue_id;
+        }
+
+        if (matchResult.matched) {
+          setActiveQuest(matchResult.quest_text);
+          setActiveQuestRarity(matchResult.rarity);
+          setActiveQuestXp(matchResult.xp_reward);
+          setActiveQuestCredit(null);
+          setIsSearching(false);
+          setTab('tonight');
+          if (matchResult.queue_id) {
+            subscribeToQueueUpdates(matchResult.queue_id);
+          }
+        } else if (matchResult.queue_id) {
+          subscribeToQueueUpdates(matchResult.queue_id);
+
+          const rosterChannel = supabase
+            .channel(`roster_${matchResult.room_id}`)
+            .on(
+              'postgres_changes',
+              {
+                event: '*',
+                schema: 'public',
+                table: 'matchmaking_participants'
+              },
+              (payload: any) => {
+                if (payload.new && payload.new.room_id === matchResult.room_id) {
+                  setSquadRoster((prev) => {
+                    if (prev.some((p) => p.user_id === payload.new.user_id)) return prev;
+                    return [...prev, { user_id: payload.new.user_id, handle: payload.new.handle }];
+                  });
+                }
+              }
+            )
+            .subscribe();
+
+          participantsSubRef.current = rosterChannel;
+        }
+      }
+    } catch (err: any) {
+      console.error('Catastrophic match error:', err);
+      showToast(`Connection error: ${err.message || err}`, 'error');
+      setIsSearching(false);
+    }
   };
 
-  const handleRevealGem = async () => {
+  const cancelSearch = async () => {
+    if (queueSubscriptionRef.current) {
+      supabase.removeChannel(queueSubscriptionRef.current);
+      queueSubscriptionRef.current = null;
+    }
+    if (participantsSubRef.current) {
+      supabase.removeChannel(participantsSubRef.current);
+      participantsSubRef.current = null;
+    }
+
+    if (myQueueEntryIdRef.current && currentUserId) {
+      try {
+        await supabase.rpc('leave_match_queue', {
+          p_queue_id: myQueueEntryIdRef.current,
+          p_user_id: currentUserId,
+          p_is_creator: isQueueCreator
+        });
+      } catch {
+      }
+      myQueueEntryIdRef.current = null;
+    }
+    setIsSearching(false);
+    setActiveQuest(null);
+    setRoomId('');
+  };
+
+  const handleAbandonMission = async () => {
+    if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
+      track('mission_abandoned', { mode, track: isExplorerMode ? 'explore' : 'quest' });
+      await cancelSearch();
+      resetMissionToIdle();
+    }
+  };
+
+  const fetchRoster = async (rId: string) => {
+    const { data } = await supabase
+      .from('matchmaking_participants')
+      .select('user_id, handle')
+      .eq('room_id', rId);
+    if (data && data.length > 0) {
+      setSquadRoster(data);
+    }
+  };
+
+  const subscribeToQueueUpdates = (queueId: string) => {
+    const queueChannel = supabase
+      .channel(`queue_${queueId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'matchmaking_queue',
+          filter: `id=eq.${queueId}`
+        },
+        async (payload: any) => {
+          if (!payload.new) return;
+
+          const prevCount = payload.old?.current_players ?? 0;
+          const newCount = payload.new.current_players ?? 0;
+
+          const justRevealed = prevCount < 2 && newCount >= 2;
+          if (justRevealed) {
+            setRoomId(payload.new.room_id);
+            setIsSearching(false);
+            setTab('tonight');
+          }
+
+          if (newCount !== prevCount) {
+            await fetchRoster(payload.new.room_id);
+          }
+
+          setActiveQuest(payload.new.quest_text);
+          setActiveQuestRarity(payload.new.rarity);
+          setActiveQuestXp(payload.new.xp_reward);
+          setActiveQuestCredit(null);
+
+          if (payload.new.neighborhood) {
+            setActiveGem({
+              name: payload.new.gem_name,
+              neighborhood: payload.new.neighborhood,
+              description: payload.new.gem_description
+            });
+            setHiddenGemSubmittedBy(payload.new.gem_submitted_by || null);
+          } else {
+            setActiveGem(null);
+          }
+        }
+      )
+      .subscribe();
+
+    queueSubscriptionRef.current = queueChannel;
+  };
+
+  const handleSharedReroll = async () => {
+    if (rerollsLeft < 1) return;
+    setRerollsLeft((r) => Math.max(0, r - 1));
+    const { error } = await supabase.rpc('reroll_shared_quest', {
+      p_queue_id: myQueueEntryIdRef.current
+    });
+    if (error) {
+      showToast(`Couldn't reroll: ${error.message}`, 'error');
+    }
+  };
+
+  // Reroll for an already-active solo Explore mission -- distinct from
+  // previewGem() below, which is the *first* discovery step on the Explore
+  // tab and does not touch the active mission at all.
+  const rerollActiveGem = async () => {
     if (!selectedNeighborhood) return;
     const { data, error } = await supabase.rpc('get_random_hidden_gem', { p_neighborhood: selectedNeighborhood });
 
@@ -1236,7 +1415,6 @@ export default function Home() {
       showToast('Could not load a hidden gem right now — try again.', 'error');
       return;
     }
-
     if (!data || !data.found) {
       showToast(`No hidden gems submitted for ${selectedNeighborhood} yet — be the first!`, 'error');
       return;
@@ -1247,19 +1425,79 @@ export default function Home() {
     setActiveQuestXp(xp);
     setActiveQuestCredit(null);
     setHiddenGemSubmittedBy(data.submitted_by_handle || null);
-    setIsMissionAccepted(false);
     setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description });
-    // activeQuest still drives photo-proof, completion logging and the share
-    // card, so it stays set even though the gem card renders from activeGem.
     setActiveQuest(`📍 ${data.name} (${data.neighborhood}) — ${data.description}`);
+  };
+
+  const handleTicketReroll = () => {
+    if (rerollsLeft < 1) return;
+    setRerollsLeft((r) => Math.max(0, r - 1));
+    if (mode === 'solo') {
+      if (isExplorerMode) rerollActiveGem(); else pickRandomQuest();
+    } else {
+      handleSharedReroll();
+    }
+  };
+
+  // Explore tab, stage one: a preview-only reveal. Nothing here touches
+  // activeQuest/activeGem -- "I'm going" (confirmGemPreview) is what turns
+  // this into a real, tracked mission.
+  const previewGem = async (neighborhood: string) => {
+    setGemLoading(true);
+    setGemPreview(null);
+    try {
+      const { data, error } = await supabase.rpc('get_random_hidden_gem', { p_neighborhood: neighborhood });
+      if (error) {
+        showToast('Could not load a hidden gem right now — try again.', 'error');
+        return;
+      }
+      if (!data || !data.found) {
+        showToast(`No hidden gems submitted for ${neighborhood} yet — be the first!`, 'error');
+        return;
+      }
+      const { rarity, xp } = rollRarity();
+      setGemPreview({
+        gem: { name: data.name, neighborhood: data.neighborhood, description: data.description },
+        rarity,
+        xp,
+        credit: data.submitted_by_handle || null,
+        questText: `📍 ${data.name} (${data.neighborhood}) — ${data.description}`
+      });
+    } finally {
+      setGemLoading(false);
+    }
+  };
+
+  const confirmGemPreview = () => {
+    if (!gemPreview) return;
+    setActiveGem(gemPreview.gem);
+    setActiveQuestRarity(gemPreview.rarity);
+    setActiveQuestXp(gemPreview.xp);
+    setActiveQuestCredit(null);
+    setHiddenGemSubmittedBy(gemPreview.credit);
+    setActiveQuest(gemPreview.questText);
+    setGemPreview(null);
+    setTab('tonight');
+  };
+
+  const selectNeighborhood = (n: string) => {
+    setSelectedNeighborhood(n);
+    setGemPreview(null);
+    if (mode === 'solo') {
+      setIsExplorerMode(true);
+      previewGem(n);
+    }
   };
 
   // Duo/Squad Explore -- mirrors executeMatchmaking's multiplayer path
   // closely, but matches people wanting the same neighborhood (not the
-  // same generic mode) and sources content from hidden_gems.
-  const handleExploreMatchmaking = async () => {
+  // same generic mode) and sources content from hidden_gems. Unlike solo,
+  // a multiplayer match goes straight to "active" (matching itself was
+  // already the commitment step, made behind the Safety Modal).
+  const handleExploreMatchmaking = async (neighborhoodOverride?: string) => {
     setShowSafetyModal(false);
-    if (!selectedNeighborhood) {
+    const neighborhood = neighborhoodOverride ?? selectedNeighborhood;
+    if (!neighborhood) {
       showToast('Pick a neighborhood first.', 'error');
       return;
     }
@@ -1280,7 +1518,7 @@ export default function Home() {
         p_user_id: currentUserId,
         p_mode: mode,
         p_handle: handle,
-        p_neighborhood: selectedNeighborhood
+        p_neighborhood: neighborhood
       });
 
       if (error) {
@@ -1297,7 +1535,7 @@ export default function Home() {
       }
 
       if (matchResult && matchResult.error === 'no_gems_for_neighborhood') {
-        showToast(`No hidden gems submitted for ${selectedNeighborhood} yet — be the first!`, 'error');
+        showToast(`No hidden gems submitted for ${neighborhood} yet — be the first!`, 'error');
         setIsSearching(false);
         return;
       }
@@ -1323,8 +1561,8 @@ export default function Home() {
           setActiveQuestRarity('common');
           setActiveQuestXp(matchResult.xp_reward);
           setActiveQuestCredit(null);
-          setIsMissionAccepted(false);
           setIsSearching(false);
+          setTab('tonight');
           if (matchResult.queue_id) {
             subscribeToQueueUpdates(matchResult.queue_id);
           }
@@ -1355,26 +1593,47 @@ export default function Home() {
     }
   };
 
-  const handleAbandonMission = async () => {
-    if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
-      track('mission_abandoned', { mode, track: isExplorerMode ? 'explore' : 'quest' });
-      await cancelSearch();
-      setActiveQuest(null);
-      setActiveGem(null);
-      setRoomId('');
-      setProofImage(null);
-      setIsCompleted(false);
-      setIsInviteSession(false);
-      setIsSearching(false);
-      setMessages([]);
-      setSquadRoster([]);
-      setSquadCapacity(2);
+  const startExploreReveal = () => {
+    setIsExplorerMode(true);
+    track('mission_started', { mode, track: 'explore' });
+    if (!selectedNeighborhood) {
+      showToast('Pick a neighbourhood first.', 'error');
+      return;
+    }
+    if (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app') {
+      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
+      setShowAuthModal(true);
+      return;
+    }
+    if (!isInviteSession) {
+      setShowSafetyModal(true);
+    } else {
+      handleExploreMatchmaking();
+    }
+  };
+
+  const startQuestRoll = () => {
+    setIsExplorerMode(false);
+    track('mission_started', { mode, track: 'quest' });
+    if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
+      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
+      setShowAuthModal(true);
+      return;
+    }
+    if (mode !== 'solo' && !isInviteSession) {
+      setShowSafetyModal(true);
+    } else {
+      executeMatchmaking();
     }
   };
 
   useEffect(() => {
     if (tab === 'feed') fetchGallery();
   }, [tab]);
+
+  useEffect(() => {
+    if (tab === 'you' && currentUserId) fetchLeaderboard();
+  }, [tab, currentUserId]);
 
   useEffect(() => {
     if (showFriendsModal && leaderboardTab === 'leaderboard') fetchLeaderboard();
@@ -1447,7 +1706,6 @@ export default function Home() {
     }
   };
 
-  // Realtime Live Chat Subscription
   useEffect(() => {
     if (!activeQuest || mode === 'solo' || !roomId) return;
 
@@ -1501,276 +1759,6 @@ export default function Home() {
     window.open(`https://wa.me/?text=${text}`, '_blank');
   };
 
-  const onStartMatchingClick = () => {
-    track('mission_started', { mode, track: isExplorerMode ? 'explore' : 'quest' });
-
-    if (isExplorerMode && mode === 'solo') {
-      handleRevealGem();
-      return;
-    }
-
-    if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
-      setShowAuthModal(true);
-      return;
-    }
-
-    if (mode !== 'solo' && !isInviteSession) {
-      setShowSafetyModal(true);
-    } else if (isExplorerMode) {
-      handleExploreMatchmaking();
-    } else {
-      executeMatchmaking();
-    }
-  };
-
-  const fetchRoster = async (rId: string) => {
-    const { data } = await supabase
-      .from('matchmaking_participants')
-      .select('user_id, handle')
-      .eq('room_id', rId);
-    if (data && data.length > 0) {
-      setSquadRoster(data);
-    }
-  };
-
-  // Kept open for the lifetime of a Duo/Squad match (not just until matching
-  // completes) so both the initial match AND every later shared reroll keep
-  // syncing to every participant, not just whoever triggered it.
-  const subscribeToQueueUpdates = (queueId: string) => {
-    const queueChannel = supabase
-      .channel(`queue_${queueId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'matchmaking_queue',
-          filter: `id=eq.${queueId}`
-        },
-        async (payload: any) => {
-          if (!payload.new) return;
-
-          const prevCount = payload.old?.current_players ?? 0;
-          const newCount = payload.new.current_players ?? 0;
-
-          // Reveal the mission the moment the room hits its minimum viable
-          // size (2) -- not when it's full. A Squad room keeps accepting
-          // joiners up to its cap long after this fires.
-          const justRevealed = prevCount < 2 && newCount >= 2;
-          if (justRevealed) {
-            setRoomId(payload.new.room_id);
-            setIsSearching(false);
-          }
-
-          // Keep the visible roster live as people keep trickling in,
-          // not just at the initial reveal moment.
-          if (newCount !== prevCount) {
-            await fetchRoster(payload.new.room_id);
-          }
-
-          setActiveQuest(payload.new.quest_text);
-          setActiveQuestRarity(payload.new.rarity);
-          setActiveQuestXp(payload.new.xp_reward);
-          setActiveQuestCredit(null);
-          setIsMissionAccepted(false);
-
-          // Explore rooms carry gem fields on the same row -- keep every
-          // participant's structured gem card in sync too, whether this
-          // update is the initial group reveal or a later shared reroll.
-          if (payload.new.neighborhood) {
-            setActiveGem({
-              name: payload.new.gem_name,
-              neighborhood: payload.new.neighborhood,
-              description: payload.new.gem_description
-            });
-            setHiddenGemSubmittedBy(payload.new.gem_submitted_by || null);
-          } else {
-            setActiveGem(null);
-          }
-        }
-      )
-      .subscribe();
-
-    queueSubscriptionRef.current = queueChannel;
-  };
-
-  const executeMatchmaking = async () => {
-    setShowSafetyModal(false);
-    setIsSearching(true);
-    setActiveQuest(null);
-    setProofImage(null);
-    setIsCompleted(false);
-    setCardDataUrl(null);
-    setMessages([]);
-    setSquadRoster([]);
-    setSquadCapacity(mode === 'squad' ? 8 : 2);
-
-    if (mode === 'solo' || isInviteSession) {
-      await pickRandomQuest();
-      setIsSearching(false);
-      return;
-    }
-
-    if (!currentUserId) {
-      setIsSearching(false);
-      return;
-    }
-
-    try {
-      const { data: matchResult, error } = await supabase.rpc('find_or_create_match', {
-        p_user_id: currentUserId,
-        p_mode: mode,
-        p_handle: handle,
-        p_city: 'mumbai'
-      });
-
-      if (error) {
-        console.error('Matchmaking error:', error);
-        showToast(`Matchmaking error: ${error.message || JSON.stringify(error)}`, 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult && matchResult.error === 'banned') {
-        showToast('Your account has been suspended from multiplayer missions.', 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult) {
-        setRoomId(matchResult.room_id);
-        setSquadCapacity(matchResult.max_players || 2);
-        setIsQueueCreator(matchResult.is_creator || false);
-        if (matchResult.roster) setSquadRoster(matchResult.roster);
-
-        if (matchResult.queue_id) {
-          myQueueEntryIdRef.current = matchResult.queue_id;
-        }
-
-        if (matchResult.matched) {
-          setActiveQuest(matchResult.quest_text);
-          setActiveQuestRarity(matchResult.rarity);
-          setActiveQuestXp(matchResult.xp_reward);
-          setActiveQuestCredit(null);
-          setIsMissionAccepted(false);
-          setIsSearching(false);
-          if (matchResult.queue_id) {
-            subscribeToQueueUpdates(matchResult.queue_id);
-          }
-        } else if (matchResult.queue_id) {
-          subscribeToQueueUpdates(matchResult.queue_id);
-
-          const rosterChannel = supabase
-            .channel(`roster_${matchResult.room_id}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'matchmaking_participants'
-              },
-              (payload: any) => {
-                if (payload.new && payload.new.room_id === matchResult.room_id) {
-                  setSquadRoster((prev) => {
-                    if (prev.some((p) => p.user_id === payload.new.user_id)) return prev;
-                    return [...prev, { user_id: payload.new.user_id, handle: payload.new.handle }];
-                  });
-                }
-              }
-            )
-            .subscribe();
-
-          participantsSubRef.current = rosterChannel;
-        }
-      }
-    } catch (err: any) {
-      console.error('Catastrophic match error:', err);
-      showToast(`Connection error: ${err.message || err}`, 'error');
-      setIsSearching(false);
-    }
-  };
-
-  const cancelSearch = async () => {
-    if (queueSubscriptionRef.current) {
-      supabase.removeChannel(queueSubscriptionRef.current);
-      queueSubscriptionRef.current = null;
-    }
-    if (participantsSubRef.current) {
-      supabase.removeChannel(participantsSubRef.current);
-      participantsSubRef.current = null;
-    }
-
-    if (myQueueEntryIdRef.current && currentUserId) {
-      try {
-        await supabase.rpc('leave_match_queue', {
-          p_queue_id: myQueueEntryIdRef.current,
-          p_user_id: currentUserId,
-          p_is_creator: isQueueCreator
-        });
-      } catch {
-      }
-      myQueueEntryIdRef.current = null;
-    }
-    setIsSearching(false);
-    setActiveQuest(null);
-    setRoomId('');
-  };
-
-  const rollRarity = (): { rarity: 'common' | 'rare' | 'legendary'; xp: number } => {
-    const roll = Math.random() * 100;
-    if (roll > 85) return { rarity: 'legendary', xp: 75 };
-    if (roll > 60) return { rarity: 'rare', xp: 35 };
-    return { rarity: 'common', xp: 15 };
-  };
-
-  const pickRandomQuest = async () => {
-    try {
-      const { data: dbQuests } = await supabase
-        .from('quests')
-        .select('quest_text, submitted_by_handle')
-        .eq('mode', mode)
-        .eq('is_active', true);
-
-      if (dbQuests && dbQuests.length > 0) {
-        const { rarity, xp } = rollRarity();
-        setActiveQuestRarity(rarity);
-        setActiveQuestXp(xp);
-        const chosen = dbQuests[Math.floor(Math.random() * dbQuests.length)];
-        setActiveQuestCredit(chosen.submitted_by_handle || null);
-        setIsMissionAccepted(false);
-        setActiveQuest(chosen.quest_text);
-      } else {
-        const { rarity, xp } = rollRarity();
-        setActiveQuestRarity(rarity);
-        setActiveQuestXp(xp);
-        setActiveQuestCredit(null);
-        setIsMissionAccepted(false);
-        setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
-      }
-    } catch (e) {
-      const { rarity, xp } = rollRarity();
-      setActiveQuestRarity(rarity);
-      setActiveQuestXp(xp);
-      setActiveQuestCredit(null);
-      setIsMissionAccepted(false);
-      setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
-    }
-  };
-
-  const handleSharedReroll = async () => {
-    const { error } = await supabase.rpc('reroll_shared_quest', {
-      p_queue_id: myQueueEntryIdRef.current
-    });
-    if (error) {
-      showToast(`Couldn't reroll: ${error.message}`, 'error');
-    }
-    // No need to setActiveQuest here directly — the realtime subscription from
-    // subscribeToQueueUpdates will deliver the update to this client too, the
-    // same way it delivers it to the partner. Single source of truth, no
-    // duplicate logic.
-  };
-
   // Reads the JPEG's EXIF orientation tag by walking its raw bytes -- no
   // library needed for just this one field. Returns 1 (normal) if the file
   // isn't a JPEG or has no EXIF block, which is a safe no-op default.
@@ -1810,10 +1798,6 @@ export default function Home() {
       const exifReader = new FileReader();
       exifReader.readAsArrayBuffer(file);
       exifReader.onload = (exifEvent) => {
-        // Orientation-detection is a nice-to-have, not something that should
-        // ever be able to block the actual upload -- if parsing fails for
-        // any reason (corrupt file, unexpected format), fall back to "no
-        // rotation" rather than leaving compressImage's promise hanging.
         let orientation = 1;
         try {
           orientation = getExifOrientation(exifEvent.target?.result as ArrayBuffer);
@@ -1836,8 +1820,6 @@ export default function Home() {
               width = maxWidth;
             }
 
-            // Orientations 5-8 involve a 90-degree turn, so the canvas
-            // itself needs swapped dimensions before we rotate into it.
             const swapDimensions = orientation >= 5 && orientation <= 8;
             canvas.width = swapDimensions ? height : width;
             canvas.height = swapDimensions ? width : height;
@@ -1847,9 +1829,6 @@ export default function Home() {
               return;
             }
 
-            // Undoes exactly what each EXIF orientation value says was done
-            // to the raw pixels, so the compressed output always comes out
-            // right-side-up regardless of how the phone stored it.
             switch (orientation) {
               case 2: ctx.transform(-1, 0, 0, 1, width, 0); break;
               case 3: ctx.transform(-1, 0, 0, -1, width, height); break;
@@ -1879,10 +1858,7 @@ export default function Home() {
     });
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const handleImageUpload = async (file: File) => {
     setUploading(true);
     try {
       const compressedBlob = await compressImage(file, 800, 0.6);
@@ -1913,91 +1889,53 @@ export default function Home() {
     }
   };
 
-  const generateShareCard = (newStreak: number, newSavedMins: number) => {
+  // Restyled to the redesign's ink/ember/paper share-card composition
+  // (README: "Tonight — complete" screen) -- same 1080x1920 share-image
+  // layout as before, new palette and type.
+  const generateShareCard = (newStreak: number, earnedXp: number) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
-    bgGradient.addColorStop(0, '#090d16');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = '#17140F';
     ctx.fillRect(0, 0, 1080, 1920);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
-    ctx.beginPath();
-    ctx.arc(540, 400, 350, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '800 44px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('BREAK / THE / LOOP', 90, 180);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 52px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 220);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 360, 880, 1100, 40);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.roundRect(140, 420, 800, 80, 20);
-    ctx.fill();
-
-    ctx.fillStyle = '#fda4af';
-    ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '600 42px sans-serif';
-    const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '700 62px sans-serif';
+    const text = activeQuest || 'Completed a local real-world mission in Mumbai';
     const words = text.split(' ');
     let line = '';
-    let y = 600;
-
+    let y = 480;
+    const lines: string[] = [];
     for (let i = 0; i < words.length; i++) {
       const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > 780 && i > 0) {
-        ctx.fillText(line, 540, y);
+      if (ctx.measureText(testLine).width > 880 && i > 0) {
+        lines.push(line);
         line = words[i] + ' ';
-        y += 60;
       } else {
         line = testLine;
       }
     }
-    ctx.fillText(line, 540, y);
+    lines.push(line);
+    lines.forEach((l) => {
+      ctx.fillText(l, 90, y);
+      y += 78;
+    });
 
-    const statsY = Math.max(y + 100, 1050);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('IRL XP GAINED', 760, statsY);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
-
-    ctx.fillStyle = '#e2e8f0';
+    ctx.fillStyle = '#E5511C';
     ctx.font = '700 40px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
+    ctx.fillText(`@${handle} · +${earnedXp} XP · ${selectedNeighborhood || 'MUMBAI'}`.toUpperCase(), 90, 1720);
 
-    ctx.fillStyle = '#64748b';
+    ctx.fillStyle = 'rgba(247,244,238,0.55)';
     ctx.font = '500 32px sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
+    ctx.fillText(`${newStreak} day streak · breaktheloopapp.in`, 90, 1790);
 
     setCardDataUrl(canvas.toDataURL('image/png'));
   };
@@ -2009,85 +1947,63 @@ export default function Home() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
-    bgGradient.addColorStop(0, '#0f172a');
-    bgGradient.addColorStop(0.3, '#1e1b4b');
-    bgGradient.addColorStop(0.7, '#881337');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = '#17140F';
     ctx.fillRect(0, 0, 1080, 1920);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+    ctx.fillStyle = 'rgba(229,81,28,0.16)';
     ctx.beginPath();
-    ctx.arc(200, 300, 250, 0, Math.PI * 2);
+    ctx.arc(200, 260, 260, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(191,29,99,0.14)';
+    ctx.beginPath();
+    ctx.arc(900, 1500, 340, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-    ctx.beginPath();
-    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 48px sans-serif';
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '800 46px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 200);
+    ctx.fillText('BREAK / THE / LOOP', 540, 190);
 
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 340, 880, 1250, 40);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 56px sans-serif';
-    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} XP`, 540, 680);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '900 80px sans-serif';
-    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
-
-    const topBadge = badges[badges.length - 1] || '🌱 First Step';
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(topBadge, 540, 1120);
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = 'rgba(247,244,238,0.6)';
     ctx.font = '600 30px sans-serif';
-    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
+    ctx.fillText('YOUR IRL RECAP', 540, 240);
 
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
-    ctx.fillStyle = '#cbd5e1';
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '800 54px sans-serif';
+    ctx.fillText('YOU DESTROYED ROUTINE', 540, 440);
+
+    ctx.fillStyle = '#E5511C';
+    ctx.font = '800 88px sans-serif';
+    ctx.fillText(`${totalXp} XP`, 540, 620);
+    ctx.fillStyle = 'rgba(247,244,238,0.6)';
     ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
+    ctx.fillText('TOTAL IRL XP', 540, 670);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '800 76px sans-serif';
+    ctx.fillText(`${streak} DAY STREAK`, 540, 840);
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
+    const topBadge = stripBadgeEmoji(badges[badges.length - 1] || 'First Step');
+    ctx.fillStyle = '#BF1D63';
+    ctx.font = '800 58px sans-serif';
+    ctx.fillText(topBadge.toUpperCase(), 540, 1020);
+    ctx.fillStyle = 'rgba(247,244,238,0.6)';
+    ctx.font = '600 28px sans-serif';
+    ctx.fillText('HIGHEST BADGE UNLOCKED', 540, 1070);
+
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '800 58px sans-serif';
+    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1240);
+    ctx.fillStyle = 'rgba(247,244,238,0.6)';
+    ctx.font = '600 28px sans-serif';
+    ctx.fillText('CONNECTED IN MUMBAI SQUAD', 540, 1290);
+
+    ctx.fillStyle = '#F7F4EE';
+    ctx.font = '700 38px sans-serif';
+    ctx.fillText(`@${handle} · ${getRankTitle(totalXp).toUpperCase()}`, 540, 1500);
+    ctx.fillStyle = 'rgba(247,244,238,0.5)';
+    ctx.font = '500 28px sans-serif';
+    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1550);
 
     const url = canvas.toDataURL('image/png');
     setWrappedCardDataUrl(url);
@@ -2116,7 +2032,6 @@ export default function Home() {
       if (data && data.success) {
         track('mission_completed', {
           mode: isExplorerMode ? 'explorer' : mode,
-          track: isExplorerMode ? 'explore' : 'quest',
           rarity: activeQuestRarity,
           xp_earned: activeQuestXp
         });
@@ -2125,14 +2040,13 @@ export default function Home() {
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
-          colors: ["#EA580C", "#F97316", "#FACC15", "#78716C"],
+          colors: ["#E5511C", "#17140F", "#BF1D63", "#F7F4EE"],
         });
 
         setIsCompleted(true);
+        setCompletedAtLabel(new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+        setLastMissionAt(Date.now());
 
-        // The match is over — tear down the persistent Duo/Squad channels
-        // (same cleanup cancelSearch does when backing out early) so they
-        // don't keep delivering reroll/roster updates after this point.
         if (queueSubscriptionRef.current) {
           supabase.removeChannel(queueSubscriptionRef.current);
           queueSubscriptionRef.current = null;
@@ -2146,11 +2060,16 @@ export default function Home() {
         const wasLegendary = activeQuestRarity === 'legendary';
         const oldRankTitle = getRankTitle(totalXp);
 
-        // Safely check for data before setting state so the page does not crash
         if (data.new_streak !== undefined) setStreak(data.new_streak);
         if (data.new_saved_mins !== undefined) setSavedMins(data.new_saved_mins);
         if (data.badges !== undefined) setBadges(data.badges);
         if (data.new_total_xp !== undefined) setTotalXp(data.new_total_xp);
+        if (typeof data.freezes_available === 'number') setFreezesAvailable(data.freezes_available);
+        if (data.used_freeze) {
+          showToast('❄️ Streak freeze used — one missed day forgiven.', 'info');
+        }
+        setMissionsLoggedCount((c) => c + 1);
+        if (isExplorerMode) setSpotsFoundCount((c) => c + 1);
 
         if (data.new_total_xp !== undefined) {
           const newRankTitle = getRankTitle(data.new_total_xp);
@@ -2159,14 +2078,13 @@ export default function Home() {
           }
         }
 
-        // Wrap card generation in try/catch and provide fallback 0 values
+        const gainedXp = typeof data.xp_earned === 'number' ? data.xp_earned : activeQuestXp;
+        setEarnedXp(gainedXp);
         try {
-          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+          generateShareCard(data.new_streak || 0, gainedXp);
         } catch {
         }
 
-        // Auto-surface the Recap at a genuine peak moment, after the completion
-        // animation has had time to play rather than instantly on top of it.
         if (justEarnedNewBadge || wasLegendary) {
           setTimeout(() => {
             generateSpotifyWrappedCard();
@@ -2187,7 +2105,7 @@ export default function Home() {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: 'Break The Loop 🔥',
+          title: 'Break The Loop',
           text: 'I just broke the reel addiction loop in Mumbai! Check this out.'
         });
       } else {
@@ -2204,8 +2122,30 @@ export default function Home() {
     }
   };
 
+  const rankProgress = getRankProgress(totalXp);
+  const remainingSecs = missionExpiresAt ? Math.max(0, Math.round((missionExpiresAt - nowTick) / 1000)) : 0;
+  const timerPct = missionExpiresAt
+    ? Math.max(0, Math.min(100, Math.round((remainingSecs / (MISSION_MINUTES * 60)) * 100)))
+    : 0;
+  const clockLabel = `${String(Math.floor(remainingSecs / 60)).padStart(2, '0')}:${String(remainingSecs % 60).padStart(2, '0')}`;
+  const modeLabel = mode === 'solo' ? 'Solo' : mode === 'duo' ? 'Duo raid' : 'Squad raid';
+  const rollMeta = `${MISSION_MINUTES} MIN · PHOTO PROOF · ${mode.toUpperCase()}`;
+  const hoursSinceMoved = lastMissionAt ? Math.max(0, Math.round((Date.now() - lastMissionAt) / 3600000)) : null;
+  const eyebrowText =
+    hoursSinceMoved !== null
+      ? `${dayPartLabel()} · ${hoursSinceMoved}H SINCE YOU MOVED`
+      : `${dayPartLabel()} · READY WHEN YOU ARE`;
+  const rollingCaption =
+    mode === 'solo' || isInviteSession
+      ? ROLL_CAPTIONS[rollingCaptionIdx % ROLL_CAPTIONS.length]
+      : squadRoster.length > 0
+      ? `LOBBY (${squadRoster.length}/${squadCapacity})`
+      : isExplorerMode
+      ? `SEARCHING ${(selectedNeighborhood || '').toUpperCase()}…`
+      : `SEARCHING ${mode.toUpperCase()}…`;
+
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] text-stone-900 flex flex-col items-center justify-between pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans select-none">
+    <main className="min-h-screen bg-paper text-ink flex flex-col font-sans select-none">
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
@@ -2213,10 +2153,10 @@ export default function Home() {
             key={t.id}
             className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
               t.type === 'error'
-                ? 'bg-orange-950/95 border-orange-500/40 text-orange-200'
+                ? 'bg-ink/95 border-legendary/40 text-white'
                 : t.type === 'success'
-                ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-white border-stone-300 text-stone-800'
+                ? 'bg-ink/95 border-ember/40 text-white'
+                : 'bg-card border-hairline text-ink'
             }`}
           >
             {t.message}
@@ -2224,108 +2164,40 @@ export default function Home() {
         ))}
       </div>
 
-      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-stone-200">
-        <h1
-          onMouseDown={handleDevPressStart}
-          onMouseUp={handleDevPressEnd}
-          onTouchStart={handleDevPressStart}
-          onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-black tracking-tight font-['Space_Grotesk'] text-orange-600 drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
-          title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
-        >
-          BREAK THE LOOP
-        </h1>
-        <div className="flex items-center flex-wrap gap-2">
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchAdminReports}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Admin Moderation Queue"
-            >
-              🚩 Reports
-            </button>
-          )}
-
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingQuests}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Pending Quest Suggestions"
-            >
-              📝 Quests
-            </button>
-          )}
-
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingGems}
-              className="relative bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Manage Hidden Gems"
-            >
-              🗺️ Gems
-              {pendingGemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-orange-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
-                  {pendingGemCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          <button
-            onClick={requestNotificationPermission}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
-              notificationsEnabled
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
-                : 'bg-white border-stone-200 text-stone-600 hover:text-stone-900'
-            }`}
-            title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
-          >
-            {notificationsEnabled ? '🔔' : '🔕'}
-          </button>
-
-          <div className="flex bg-white border border-stone-200 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setTab('quest')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'quest' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Quest
-            </button>
-            <button
-              onClick={() => setTab('feed')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'feed' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Feed
-            </button>
+      {/* Persistent app bar -- wordmark, streak pill, avatar. Shared across
+          all four tabs (matches the prototype's chrome, which sits above the
+          per-tab scroll area rather than inside any one screen). */}
+      <header
+        className="sticky top-0 z-30 flex justify-between items-center px-5 bg-paper/96 backdrop-blur-sm"
+        style={{ paddingTop: 'max(14px, env(safe-area-inset-top))', paddingBottom: 12 }}
+      >
+        <div className="font-display font-extrabold text-[13px] tracking-[.14em] leading-none">
+          BREAK<span className="text-ember">/</span>THE<span className="text-ember">/</span>LOOP
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 bg-ink text-paper px-2.5 py-[5px] rounded-full font-mono text-[11px] font-bold">
+            <span className="w-1.5 h-1.5 rounded-full bg-ember animate-btl-blink" />
+            <span>{streak}d</span>
+          </div>
+          <div className="w-[30px] h-[30px] rounded-full bg-ember text-white grid place-items-center font-display font-extrabold text-[13px]">
+            {(handle[0] || 'E').toUpperCase()}
           </div>
         </div>
       </header>
 
       {/* Incoming Live Raid Invite Banner */}
       {incomingInvite && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-orange-950 border-2 border-orange-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(249,115,22,0.5)] animate-bounce text-center space-y-2">
-          <div className="text-2xl">⚡</div>
-          <h3 className="font-extrabold text-sm text-stone-100">
+        <div className="fixed top-16 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-ink border-2 border-ember p-4 rounded-3xl z-50 shadow-2xl text-center space-y-2">
+          <h3 className="font-display font-extrabold text-sm text-paper">
             @{incomingInvite.sender_handle} challenged you to a Duo Raid!
           </h3>
-          <p className="text-[11px] text-orange-200 italic">
-            "{incomingInvite.quest_text}"
-          </p>
+          <p className="text-[11px] text-paper/70 italic">"{incomingInvite.quest_text}"</p>
           <div className="flex space-x-2 pt-2">
-            <button
-              onClick={declineDirectInvite}
-              className="flex-1 bg-white text-stone-700 py-2 rounded-xl text-xs font-bold"
-            >
+            <button onClick={declineDirectInvite} className="flex-1 bg-white text-ink py-2 rounded-xl text-xs font-bold">
               Decline
             </button>
-            <button
-              onClick={acceptDirectInvite}
-              className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-orange-600/40"
-            >
-              Accept Raid 🔥
+            <button onClick={acceptDirectInvite} className="flex-1 bg-ember text-white py-2 rounded-xl text-xs font-bold shadow-lg">
+              Accept Raid
             </button>
           </div>
         </div>
@@ -2333,24 +2205,20 @@ export default function Home() {
 
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-5 space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-5 space-y-4 shadow-2xl relative">
             <button
               onClick={() => setSelectedProfile(null)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
             >
               ✕
             </button>
 
             <div className="text-center space-y-1">
-              <div className="text-3xl">👤</div>
-              <h2 className="text-base font-extrabold text-orange-700">
+              <h2 className="text-base font-display font-extrabold text-ember">
                 @{selectedProfile.handle}{' '}
-                <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
+                <span className="text-ink-muted font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
               </h2>
-              <p className="text-[10px] text-stone-500">
-                Explorer • Active Mumbai Loop Destroyer
-              </p>
             </div>
 
             {selectedProfile.handle !== handle && (
@@ -2365,52 +2233,52 @@ export default function Home() {
                     showToast('Could not block this user.', 'error');
                   }
                 }}
-                className="w-full bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-orange-700 text-[10px] font-bold py-2 rounded-lg border border-stone-200 transition-all"
+                className="w-full bg-paper-deep hover:bg-hairline-soft text-ink-muted hover:text-ember text-[10px] font-bold py-2 rounded-lg border border-hairline transition-all"
               >
-                🚫 Block this Explorer
+                Block this Explorer
               </button>
             )}
 
-            <div className="flex justify-around bg-stone-50 p-3 rounded-2xl border border-stone-200 text-center">
+            <div className="flex justify-around bg-paper-deep p-3 rounded-2xl border border-hairline text-center">
               <div>
-                <p className="text-[10px] text-stone-500 font-semibold">STREAK</p>
-                <p className="text-sm font-black text-stone-800">{selectedProfile.streak} Days 🔥</p>
+                <p className="text-[10px] text-ink-muted font-semibold">STREAK</p>
+                <p className="text-sm font-display font-black text-ink">{selectedProfile.streak} Days</p>
               </div>
-              <div className="w-px bg-stone-100" />
+              <div className="w-px bg-hairline" />
               <div>
-                <p className="text-[10px] text-stone-500 font-semibold">IRL XP</p>
-                <p className="text-sm font-black text-orange-700">{selectedProfile.time_saved_mins} ⚡</p>
+                <p className="text-[10px] text-ink-muted font-semibold">TOTAL XP</p>
+                <p className="text-sm font-display font-black text-ember">{selectedProfile.total_xp ?? 0} XP</p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-stone-600 uppercase">Unlocked Badges</span>
+              <span className="text-[10px] font-bold text-ink-muted uppercase">Unlocked Badges</span>
               <div className="flex flex-wrap gap-1">
                 {selectedProfile.badges?.map((b, i) => (
-                  <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                    {b}
+                  <span key={i} className="bg-ember/10 border border-ember/20 text-ember text-[10px] px-2 py-0.5 rounded-full font-medium">
+                    {stripBadgeEmoji(b)}
                   </span>
                 ))}
               </div>
             </div>
 
             <div className="space-y-2">
-              <span className="text-[10px] font-bold text-stone-600 uppercase">Recent Missions Conquered</span>
+              <span className="text-[10px] font-bold text-ink-muted uppercase">Recent Missions Conquered</span>
               <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
                 {selectedProfile.history && selectedProfile.history.length > 0 ? (
                   selectedProfile.history.map((h) => (
-                    <div key={h.id} className="bg-stone-50 p-2 rounded-xl border border-stone-200 flex space-x-2 items-center">
+                    <div key={h.id} className="bg-paper-deep p-2 rounded-xl border border-hairline flex space-x-2 items-center">
                       {h.photo_url && (
                         <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
                       )}
                       <div className="text-left overflow-hidden">
-                        <p className="text-[10px] text-stone-700 truncate font-medium">"{h.quest_text}"</p>
-                        <span className="text-[9px] text-orange-700/80 uppercase font-mono font-bold">{h.mode} Mission</span>
+                        <p className="text-[10px] text-ink-body truncate font-medium">"{h.quest_text}"</p>
+                        <span className="text-[9px] text-ember/80 uppercase font-mono font-bold">{h.mode} Mission</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[10px] text-stone-400 text-center py-2">No public missions logged yet.</p>
+                  <p className="text-[10px] text-ink-faint text-center py-2">No public missions logged yet.</p>
                 )}
               </div>
             </div>
@@ -2418,372 +2286,28 @@ export default function Home() {
         </div>
       )}
 
-      {/* Admin Moderation Queue Modal */}
-      {showReportsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🛡️ Moderation Reports Queue ({adminReports.length})
-              </h2>
-              <button
-                onClick={() => setShowReportsModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {adminReports.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">Queue clear! Zero reported content.</p>
-              ) : (
-                adminReports.map((r) => (
-                  <div key={r.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="text-orange-700 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <p className="text-stone-700 text-[11px]">
-                      <strong>Reason:</strong> "{r.reason}"
-                    </p>
-                    {r.content_text && (
-                      <p className="text-stone-800 text-[11px] bg-white border border-stone-200 rounded-lg p-2">
-                        <strong className="text-amber-700">Reported content:</strong> "{r.content_text}"
-                      </p>
-                    )}
-                    {r.content_photo_url && (
-                      <img
-                        src={r.content_photo_url}
-                        alt="Reported proof photo"
-                        className="w-full max-h-40 object-cover rounded-lg border border-stone-200"
-                      />
-                    )}
-                    <p className="text-stone-500 text-[10px]">
-                      Reported by @{r.reporter_handle}
-                      {r.offender_handle ? ` • Posted by @${r.offender_handle}` : ''}
-                    </p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
-                      {r.reported_type === 'feed' && (
-                        <button
-                          onClick={() => {
-                            handleAdminDeleteFeedPost(r.target_id);
-                            handleResolveReport(r.id);
-                          }}
-                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                        >
-                          Delete Post
-                        </button>
-                      )}
-                      {r.reported_type === 'chat' && (
-                        <button
-                          onClick={() => {
-                            handleAdminDeleteChatMessage(r.target_id);
-                            handleResolveReport(r.id);
-                          }}
-                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                        >
-                          Delete Message
-                        </button>
-                      )}
-                      {r.offender_user_id && (
-                        <button
-                          onClick={async () => {
-                            if (!window.confirm(`ADMIN: Permanently ban @${r.offender_handle || 'this user'}? They will be unable to start or join any match.`)) return;
-                            const { data, error } = await supabase.rpc('admin_ban_user', { p_user_id: r.offender_user_id });
-                            if (!error && data && data.success) {
-                              showToast(`@${r.offender_handle || 'User'} has been banned.`, 'success');
-                            } else {
-                              showToast('Failed to ban user.', 'error');
-                            }
-                          }}
-                          className="bg-red-950 hover:bg-red-900 text-red-300 text-[10px] px-3 py-1 rounded-lg font-bold border border-red-500/40 transition-all"
-                        >
-                          Ban User
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleResolveReport(r.id)}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                      >
-                        Dismiss Flag
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Admin Pending Quest Suggestions Modal */}
-      {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                📝 Pending Quest Suggestions ({pendingQuests.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={fetchPendingQuests}
-                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
-                  title="Refresh"
-                >
-                  🔄
-                </button>
-                <button
-                  onClick={() => setShowPendingQuestsModal(false)}
-                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {loadingPendingQuests ? (
-                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
-              ) : pendingQuests.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">No quests awaiting review.</p>
-              ) : (
-                pendingQuests.map((q) => (
-                  <div key={q.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                        {q.mode}
-                      </span>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <p className="text-stone-700 text-[11px]">"{q.quest_text}"</p>
-                    <p className="text-stone-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
-                      <button
-                        onClick={() => handleApproveQuest(q.id)}
-                        className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                      >
-                        Approve
-                      </button>
-                      <button
-                        onClick={() => handleRejectQuest(q.id)}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                      >
-                        Reject
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🗺️ Manage Hidden Gems ({pendingGems.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={fetchPendingGems}
-                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
-                  title="Refresh"
-                >
-                  🔄
-                </button>
-                <button
-                  onClick={() => setShowPendingGemsModal(false)}
-                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
-              {loadingPendingGems ? (
-                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
-              ) : pendingGems.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">No spots awaiting review.</p>
-              ) : (
-                pendingGems.map((g) => (
-                  <div key={g.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          value={g.neighborhood}
-                          onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
-                          className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
-                        >
-                          {MUMBAI_NEIGHBORHOODS.map((n) => (
-                            <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
-                          ))}
-                        </select>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          g.status === 'pending' ? 'bg-stone-100 text-stone-600' : 'bg-orange-500/10 text-orange-700'
-                        }`}>
-                          {g.status === 'pending' ? 'Pending' : 'Live'}
-                        </span>
-                        {dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-100 text-amber-800">
-                            Unsaved
-                          </span>
-                        )}
-                        {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-800">
-                            ✓ Saved
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
-                    </div>
-                    <input
-                      type="text"
-                      value={g.name}
-                      onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
-                      maxLength={100}
-                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-800 text-[11px] font-bold focus:outline-none focus:border-amber-500"
-                    />
-                    <textarea
-                      value={g.description}
-                      onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
-                      maxLength={300}
-                      rows={3}
-                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-700 text-[11px] resize-none focus:outline-none focus:border-amber-500"
-                    />
-                    <p className="text-stone-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
-                      {g.status === 'pending' ? (
-                        <>
-                          <button
-                            onClick={() => handleApproveGem(g)}
-                            className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                          >
-                            Approve
-                          </button>
-                          <button
-                            onClick={() => handleRejectGem(g.id)}
-                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                          >
-                            Reject
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            onClick={() => handleUpdateGem(g)}
-                            disabled={!dirtyGemIds.includes(g.id)}
-                            className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
-                              dirtyGemIds.includes(g.id)
-                                ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
-                                : 'bg-stone-100 text-stone-500 cursor-not-allowed'
-                            }`}
-                          >
-                            {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
-                          </button>
-                          <button
-                            onClick={() => {
-                              if (window.confirm(`Permanently remove "${g.name}" from Explorer mode?`)) {
-                                handleRejectGem(g.id);
-                              }
-                            }}
-                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Developer Access Modal */}
-      {showDevModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🛠️ Developer Tools ({userEmail})
-              </h2>
-              <button
-                onClick={() => setShowDevModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="text-[10px] font-mono bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-stone-600 space-y-1">
-              <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
-              <p><strong>Session:</strong> {userEmail}</p>
-              <p><strong>Room:</strong> {roomId || 'None'}</p>
-              <p><strong>Queue Ref:</strong> {myQueueEntryIdRef.current || 'None'}</p>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                onClick={async () => {
-                  if (myQueueEntryIdRef.current && currentUserId) {
-                    await supabase.rpc('leave_match_queue', {
-                      p_queue_id: myQueueEntryIdRef.current,
-                      p_user_id: currentUserId,
-                      p_is_creator: isQueueCreator
-                    });
-                    showToast('Queue locks released.', 'success');
-                  }
-                }}
-                className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 py-2 rounded-xl text-xs font-mono font-bold border border-orange-300"
-              >
-                Force Clear Queue Locks
-              </button>
-
-              <button
-                onClick={() => {
-                  localStorage.clear();
-                  sessionStorage.clear();
-                  window.location.reload();
-                }}
-                className="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-xs font-mono font-bold border border-red-300"
-              >
-                Hard Reset Local Storage & Reload
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Handle Setup Modal */}
       {showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-3xl">🏷️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
-            <p className="text-xs text-stone-600">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-ember/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <h2 className="text-lg font-display font-extrabold text-ink">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-xs text-ink-muted">
               Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
-              <span className="absolute left-4 top-3 text-orange-700 font-bold text-sm">@</span>
+              <span className="absolute left-4 top-3 text-ember font-bold text-sm">@</span>
               <input
                 type="text"
                 placeholder="ExplorerTag"
                 value={newHandleInput}
                 onChange={(e) => setNewHandleInput(e.target.value)}
                 maxLength={20}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-stone-900 font-bold focus:outline-none focus:border-orange-500"
+                className="w-full bg-paper-deep border border-hairline rounded-xl pl-8 pr-4 py-2.5 text-sm text-ink font-bold focus:outline-none focus:border-ember"
               />
             </div>
             <button
               onClick={() => saveHandleDirect(newHandleInput || handle)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
+              className="w-full bg-ember text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
             >
               Claim Tag & Start
             </button>
@@ -2793,26 +2317,25 @@ export default function Home() {
 
       {/* Auth Modal */}
       {(!isLoggedIn || showAuthModal) && !showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
             {isLoggedIn && (
               <button
                 onClick={() => setShowAuthModal(false)}
-                className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+                className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
               >
                 ✕
               </button>
             )}
-            <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-stone-900">
+            <h2 className="text-xl font-display font-extrabold text-ink">
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs text-ink-muted">
               {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
 
             {authError && (
-              <p className="text-xs text-orange-700 bg-orange-500/10 p-2 rounded-xl font-medium">{authError}</p>
+              <p className="text-xs text-ember bg-ember/10 p-2 rounded-xl font-medium">{authError}</p>
             )}
 
             {!isOtpSent ? (
@@ -2822,25 +2345,25 @@ export default function Home() {
                   placeholder="yourname@gmail.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                  className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink text-center focus:outline-none focus:border-ember"
                 />
                 <button
                   onClick={handleSendEmailOtp}
-                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
+                  className="w-full bg-ember text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
                 >
                   Send 6-Digit Code
                 </button>
 
                 <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-stone-200"></div></div>
-                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-2 text-stone-500">Or</span></div>
+                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-hairline"></div></div>
+                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-card px-2 text-ink-muted">Or</span></div>
                 </div>
 
                 <button
                   onClick={handleGuestLogin}
-                  className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
+                  className="w-full bg-paper-deep hover:bg-hairline-soft text-ink py-3 rounded-xl font-bold text-sm border border-hairline transition-all active:scale-95"
                 >
-                  ⚡ Continue as Guest (Solo Mode Only)
+                  Continue as Guest (Solo Mode Only)
                 </button>
               </div>
             ) : (
@@ -2850,17 +2373,17 @@ export default function Home() {
                   placeholder="Enter 6-digit Email Code"
                   value={otpInput}
                   onChange={(e) => setOtpInput(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
+                  className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink font-mono text-center focus:outline-none focus:border-ember"
                 />
                 <button
                   onClick={handleVerifyEmailOtp}
-                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
+                  className="w-full bg-ember text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
                 >
                   Verify & Continue
                 </button>
                 <button
                   onClick={() => setIsOtpSent(false)}
-                  className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
+                  className="text-xs text-ink-muted hover:underline pt-2 block mx-auto"
                 >
                   Change Email
                 </button>
@@ -2872,17 +2395,16 @@ export default function Home() {
 
       {/* Save My Progress Modal */}
       {showSaveProgressModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSaveProgressModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
             >
               ✕
             </button>
-            <div className="text-3xl">💾</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SAVE MY PROGRESS</h2>
-            <p className="text-xs text-stone-600">
+            <h2 className="text-lg font-display font-extrabold text-ink">SAVE MY PROGRESS</h2>
+            <p className="text-xs text-ink-muted">
               Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
             </p>
             <div className="space-y-3">
@@ -2892,11 +2414,11 @@ export default function Home() {
                 value={saveProgressEmail}
                 onChange={(e) => setSaveProgressEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink text-center focus:outline-none focus:border-ember"
               />
               <button
                 onClick={() => handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
+                className="w-full bg-ember text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
               >
                 Send Confirmation Link
               </button>
@@ -2907,29 +2429,26 @@ export default function Home() {
 
       {/* Suggest a Quest Modal */}
       {showSuggestQuestModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestQuestModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
             >
               ✕
             </button>
-            <div className="text-3xl">✍️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A QUEST</h2>
-            <p className="text-xs text-stone-600">
+            <h2 className="text-lg font-display font-extrabold text-ink">SUGGEST A QUEST</h2>
+            <p className="text-xs text-ink-muted">
               Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
             </p>
             <div className="space-y-3">
-              <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
+              <div className="flex bg-paper-deep p-1 rounded-xl border border-hairline w-full justify-between">
                 {(['solo', 'duo', 'squad'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setSuggestQuestMode(m)}
                     className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                      suggestQuestMode === m
-                        ? 'bg-orange-600 text-white'
-                        : 'text-stone-600 hover:text-stone-900'
+                      suggestQuestMode === m ? 'bg-ember text-white' : 'text-ink-muted hover:text-ink'
                     }`}
                   >
                     {m}
@@ -2942,11 +2461,11 @@ export default function Home() {
                 onChange={(e) => setSuggestQuestText(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-orange-500 resize-none"
+                className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-ember resize-none"
               />
               <button
                 onClick={handleSubmitQuestSuggestion}
-                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
+                className="w-full bg-ember text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
               >
                 Submit for Review
               </button>
@@ -2956,17 +2475,16 @@ export default function Home() {
       )}
 
       {showSuggestGemModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestGemModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
             >
               ✕
             </button>
-            <div className="text-3xl">🗺️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A HIDDEN GEM</h2>
-            <p className="text-xs text-stone-600">
+            <h2 className="text-lg font-display font-extrabold text-ink">SUGGEST A HIDDEN GEM</h2>
+            <p className="text-xs text-ink-muted">
               A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
             </p>
             <div className="space-y-3">
@@ -2976,7 +2494,7 @@ export default function Home() {
                 value={suggestGemName}
                 onChange={(e) => setSuggestGemName(e.target.value)}
                 maxLength={100}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500"
+                className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-legendary"
               />
               <div className="flex flex-wrap gap-2 justify-center">
                 {MUMBAI_NEIGHBORHOODS.map((n) => (
@@ -2985,8 +2503,8 @@ export default function Home() {
                     onClick={() => setSuggestGemNeighborhood(n)}
                     className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
                       suggestGemNeighborhood === n
-                        ? 'bg-amber-500 text-stone-950 border-amber-500'
-                        : 'bg-stone-50 text-stone-600 border-stone-200'
+                        ? 'bg-legendary text-white border-legendary'
+                        : 'bg-paper-deep text-ink-muted border-hairline'
                     }`}
                   >
                     {n}
@@ -2999,11 +2517,11 @@ export default function Home() {
                 onChange={(e) => setSuggestGemDescription(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500 resize-none"
+                className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink focus:outline-none focus:border-legendary resize-none"
               />
               <button
                 onClick={handleSubmitGemSuggestion}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 transition-all active:scale-95"
+                className="w-full bg-legendary hover:opacity-90 text-white py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95"
               >
                 Submit for Review
               </button>
@@ -3012,22 +2530,21 @@ export default function Home() {
         </div>
       )}
 
-      {/* Sign In / Recover Account Modal */}
+      {/* Welcome Modal */}
       {showWelcomeModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-gradient-to-b from-white to-stone-50 border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <div className="text-4xl">👋</div>
-            <h2 className="text-xl font-black text-stone-900">Welcome to Break The Loop</h2>
-            <p className="text-sm text-stone-600 leading-relaxed">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+            <h2 className="text-xl font-display font-black text-ink">Welcome to Break The Loop</h2>
+            <p className="text-sm text-ink-body leading-relaxed">
               Tap the big button. Get handed a real, random micro-mission near you.
               Do it, snap a photo, earn XP. That's the whole game.
             </p>
-            <p className="text-xs text-stone-500">
+            <p className="text-xs text-ink-muted">
               Bring friends into it later — for now, let's get your first one done.
             </p>
             <button
               onClick={dismissWelcomeModal}
-              className="w-full bg-orange-600 text-white font-black py-3 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
+              className="w-full bg-ember text-white font-display font-black py-3 rounded-xl shadow-[0_4px_0_0_#A8360C] active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px] transition-all"
             >
               I'm in →
             </button>
@@ -3036,19 +2553,18 @@ export default function Home() {
       )}
 
       {showRecoverModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowRecoverModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
             >
               ✕
             </button>
-            <div className="text-3xl">🔑</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SIGN IN ON THIS DEVICE</h2>
+            <h2 className="text-lg font-display font-extrabold text-ink">SIGN IN ON THIS DEVICE</h2>
             {!isRecoverOtpSent ? (
               <>
-                <p className="text-xs text-stone-600">
+                <p className="text-xs text-ink-muted">
                   Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
                 </p>
                 <div className="space-y-3">
@@ -3058,11 +2574,11 @@ export default function Home() {
                     value={recoverEmail}
                     onChange={(e) => setRecoverEmail(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                    className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink text-center focus:outline-none focus:border-ember"
                   />
                   <button
                     onClick={() => handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
+                    className="w-full bg-paper-deep hover:bg-hairline-soft text-ink py-3 rounded-xl font-bold text-sm border border-hairline transition-all active:scale-95"
                   >
                     Send Sign-In Code
                   </button>
@@ -3070,7 +2586,7 @@ export default function Home() {
               </>
             ) : (
               <>
-                <p className="text-xs text-stone-600">
+                <p className="text-xs text-ink-muted">
                   Enter the 6-digit code we emailed to {recoverEmail}.
                 </p>
                 <div className="space-y-3">
@@ -3080,17 +2596,17 @@ export default function Home() {
                     value={recoverOtpInput}
                     onChange={(e) => setRecoverOtpInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
+                    className="w-full bg-paper-deep border border-hairline rounded-xl px-4 py-3 text-sm text-ink font-mono text-center focus:outline-none focus:border-ember"
                   />
                   <button
                     onClick={handleVerifyRecoverOtp}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
+                    className="w-full bg-ember text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
                   >
                     Verify & Sign In
                   </button>
                   <button
                     onClick={() => setIsRecoverOtpSent(false)}
-                    className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
+                    className="text-xs text-ink-muted hover:underline pt-2 block mx-auto"
                   >
                     Change Email
                   </button>
@@ -3103,11 +2619,10 @@ export default function Home() {
 
       {/* Safety Modal */}
       {showSafetyModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-3xl">🛡️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SAFETY FIRST</h2>
-            <div className="text-xs text-stone-700 text-left space-y-2 bg-stone-50 p-3 rounded-xl border border-stone-200">
+        <div className="fixed inset-0 bg-ink/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-ember/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <h2 className="text-lg font-display font-extrabold text-ink">SAFETY FIRST</h2>
+            <div className="text-xs text-ink-body text-left space-y-2 bg-paper-deep p-3 rounded-xl border border-hairline">
               <p>• <strong>Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
               <p>• <strong>Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
               <p>• <strong>Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
@@ -3115,13 +2630,13 @@ export default function Home() {
             <div className="flex space-x-2 pt-2">
               <button
                 onClick={() => setShowSafetyModal(false)}
-                className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl font-bold text-xs"
+                className="flex-1 bg-paper-deep hover:bg-hairline-soft text-ink py-2.5 rounded-xl font-bold text-xs"
               >
                 Cancel
               </button>
               <button
-                onClick={() => isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking()}
-                className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-orange-600/30"
+                onClick={() => (isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking())}
+                className="flex-1 bg-ember hover:opacity-90 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg"
               >
                 I Agree & Search
               </button>
@@ -3130,29 +2645,29 @@ export default function Home() {
         </div>
       )}
 
-      {/* Friends List Modal */}
+      {/* Friends List Modal -- interactive squad management (add/raid-invite),
+          kept as a modal reachable from You; the read-only weekly leaderboard
+          itself renders inline on the You tab per the design spec. */}
       {showFriendsModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-sm font-bold text-stone-800">🤝 Raid Squad ({friendsList.length})</h2>
+        <div className="fixed inset-0 bg-ink/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-hairline rounded-3xl p-6 space-y-4 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-hairline pb-2">
+              <h2 className="text-sm font-bold text-ink">🤝 Raid Squad ({friendsList.length})</h2>
               <button
                 onClick={() => setShowFriendsModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
+                className="text-ink-muted hover:text-ink text-sm font-bold"
               >
                 ✕
               </button>
             </div>
 
-            <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
+            <div className="flex bg-paper-deep p-1 rounded-xl border border-hairline w-full justify-between">
               {(['squad', 'leaderboard'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setLeaderboardTab(t)}
                   className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                    leaderboardTab === t
-                      ? 'bg-orange-600 text-white'
-                      : 'text-stone-600 hover:text-stone-900'
+                    leaderboardTab === t ? 'bg-ember text-white' : 'text-ink-muted hover:text-ink'
                   }`}
                 >
                   {t === 'squad' ? 'Squad' : 'Leaderboard'}
@@ -3166,83 +2681,79 @@ export default function Home() {
                   <div
                     key={entry.handle}
                     className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
-                      entry.is_self
-                        ? 'bg-orange-500/10 border-orange-500/40'
-                        : 'bg-stone-50 border-stone-200'
+                      entry.is_self ? 'bg-ember/10 border-ember/40' : 'bg-paper-deep border-hairline'
                     }`}
                   >
                     <div className="flex items-center space-x-2">
-                      <span className="text-stone-500 font-bold w-4 text-center">{i + 1}</span>
+                      <span className="text-ink-muted font-bold w-4 text-center">{i + 1}</span>
                       <div>
                         <button
                           onClick={() => inspectProfile(entry.handle)}
-                          className="font-bold text-orange-700 hover:underline"
+                          className="font-bold text-ember hover:underline"
                         >
                           @{entry.handle}
                         </button>
-                        <span className="block text-[9px] text-stone-500">{getRankTitle(entry.total_xp)}</span>
+                        <span className="block text-[9px] text-ink-muted">{getRankTitle(entry.total_xp)}</span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="font-bold text-stone-800">{entry.total_xp} XP</p>
-                      <p className="text-[9px] text-stone-500">{entry.streak} Days 🔥</p>
+                      <p className="font-bold text-ink">{entry.total_xp} XP</p>
+                      <p className="text-[9px] text-ink-muted">{entry.streak} Days</p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
-              {friendsList.length === 0 ? (
-                <div className="text-center py-8 space-y-2">
-                  <div className="text-3xl">🤝</div>
-                  <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
-                    No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!
-                  </p>
-                </div>
-              ) : (
-                friendsList.map((f, i) => {
-                  const isOnline = onlineUserIds.has(f.friend_user_id);
-                  return (
-                    <div key={i} className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 flex justify-between items-center text-xs">
-                      <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-stone-300'}`} />
+              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+                {friendsList.length === 0 ? (
+                  <div className="text-center py-8 space-y-2">
+                    <p className="text-xs text-ink-muted max-w-[220px] mx-auto">
+                      No squad friends added yet. Complete a Duo/Squad mission and add a friend!
+                    </p>
+                  </div>
+                ) : (
+                  friendsList.map((f, i) => {
+                    const isOnline = onlineUserIds.has(f.friend_user_id);
+                    return (
+                      <div key={i} className="bg-paper-deep p-2.5 rounded-xl border border-hairline flex justify-between items-center text-xs">
+                        <div>
+                          <div className="flex items-center space-x-1.5">
+                            <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-ember' : 'bg-hairline'}`} />
+                            <button
+                              onClick={() => inspectProfile(f.handle)}
+                              className="font-bold text-ember hover:underline"
+                            >
+                              @{f.handle}
+                            </button>
+                          </div>
+                          <span className="block text-[9px] text-ink-muted pl-3.5">
+                            {isOnline ? 'Online in App' : 'Offline'}
+                          </span>
+                        </div>
+                        <div className="flex space-x-1.5">
                           <button
                             onClick={() => inspectProfile(f.handle)}
-                            className="font-bold text-orange-700 hover:underline"
+                            className="bg-card hover:bg-paper-deep text-ink text-[10px] px-2 py-1 rounded-lg border border-hairline font-bold"
                           >
-                            @{f.handle}
+                            Profile
+                          </button>
+                          <button
+                            onClick={() => sendDirectRaidInvite(f)}
+                            disabled={!isOnline || sendingInviteTo === f.handle}
+                            className={`px-2.5 py-1 rounded-lg font-bold text-[10px] transition-all ${
+                              isOnline
+                                ? 'bg-ember text-white shadow-[0_4px_0_0_#A8360C] active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]'
+                                : 'bg-card text-ink-faint border border-hairline cursor-not-allowed'
+                            }`}
+                          >
+                            {sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Raid' : 'Offline'}
                           </button>
                         </div>
-                        <span className="block text-[9px] text-stone-500 pl-3.5">
-                          {isOnline ? 'Online in App' : 'Offline'}
-                        </span>
                       </div>
-                      <div className="flex space-x-1.5">
-                        <button
-                          onClick={() => inspectProfile(f.handle)}
-                          className="bg-white hover:bg-stone-100 text-stone-700 text-[10px] px-2 py-1 rounded-lg border border-stone-200 font-bold"
-                        >
-                          Profile
-                        </button>
-                        <button
-                          onClick={() => sendDirectRaidInvite(f)}
-                          disabled={!isOnline || sendingInviteTo === f.handle}
-                          className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
-                            isOnline
-                              ? 'bg-orange-600 text-white shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]'
-                              : 'bg-white text-stone-400 border border-stone-200 cursor-not-allowed'
-                          }`}
-                        >
-                          <span>⚡</span>
-                          <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Raid' : 'Offline'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+                    );
+                  })
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -3250,616 +2761,669 @@ export default function Home() {
 
       {/* Journey Recap Modal */}
       {showWrappedModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
+        <div className="fixed inset-0 bg-ink/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="w-full max-w-sm bg-card border border-ember/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
             <button
               onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+              className="absolute top-4 right-4 text-ink-muted hover:text-ink text-sm font-bold"
             >
               ✕
             </button>
-            <h2 className="text-sm font-black text-orange-700 uppercase tracking-wider">🎧 Your IRL Recap</h2>
+            <h2 className="text-sm font-display font-black text-ember uppercase tracking-wider">Your IRL Recap</h2>
             {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
+              <div className="rounded-2xl overflow-hidden border border-hairline bg-paper-deep">
                 <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
               </div>
             )}
             <button
               onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
+              className="w-full bg-ember text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#A8360C] transition-all active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px]"
             >
-              <span>📲</span>
-              <span>Share Recap to Story / WhatsApp</span>
+              Share Recap to Story / WhatsApp
             </button>
           </div>
         </div>
       )}
 
-      {tab === 'quest' ? (
-        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-gradient-to-b from-white to-stone-50 p-1.5 rounded-2xl border border-stone-200 w-full justify-between shadow-xl shadow-stone-900/10">
-            <button
-              onClick={handleSelectQuestTrack}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
-                !isExplorerMode
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Quest
-            </button>
-            <button
-              onClick={handleSelectExplorer}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
-                isExplorerMode
-                  ? 'bg-amber-500 text-stone-950 shadow-lg shadow-amber-500/30'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Explore
-            </button>
-          </div>
+      {/* Main content, one screen per tab */}
+      <div className="flex-1 overflow-y-auto pb-28">
+        {tab === 'tonight' && (
+          <div className="px-5 pt-1.5 pb-7">
+            {phase === 'idle' && (
+              <div className="animate-btl-rise">
+                <p className="mt-2.5 mb-0 font-mono text-[11px] tracking-[.14em] text-ink-muted uppercase">
+                  {eyebrowText}
+                </p>
+                <h1 className="mt-2 mb-0 font-display font-extrabold text-[38px] leading-[1.02] tracking-[-0.02em]">
+                  Something<br />small.<br /><span className="text-ember">Right now.</span>
+                </h1>
 
-          {/* Deliberately lighter-weight than the Quest/Explore choice above --
-              this is a refinement of that choice, not a second equal decision. */}
-          <div className="flex items-center justify-center gap-1">
-            {(['solo', 'duo', 'squad'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleSelectMode(m)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
-                  mode === m
-                    ? 'bg-stone-800 text-white'
-                    : 'text-stone-500 hover:text-stone-900'
-                }`}
-              >
-                {m === 'squad' ? 'Squad (2-8)' : m}
-              </button>
-            ))}
-          </div>
+                <div className="grid grid-cols-3 gap-2 mt-6">
+                  {(['solo', 'duo', 'squad'] as const).map((m) => {
+                    const selected = mode === m;
+                    const sub = m === 'solo' ? 'just you' : m === 'duo' ? '1 friend' : '2–8 out';
+                    return (
+                      <button
+                        key={m}
+                        onClick={() => handleSelectMode(m)}
+                        className={`p-[10px_12px] py-3 rounded-[14px] border-[1.5px] flex flex-col gap-[3px] transition-all ${
+                          selected ? 'bg-ink border-ink text-paper' : 'bg-card border-hairline text-[#5A5149]'
+                        }`}
+                      >
+                        <span className="font-display font-bold text-[15px] tracking-[-0.01em] capitalize">{m}</span>
+                        <span className="text-[11px] opacity-72 font-medium">{sub}</span>
+                      </button>
+                    );
+                  })}
+                </div>
 
-          {isExplorerMode && !activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <p className="text-sm text-stone-700 font-semibold">
-                Pick a neighborhood to discover a hidden gem someone local actually knows about.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {MUMBAI_NEIGHBORHOODS.map((n) => (
+                <div className="relative mt-5">
+                  <div
+                    aria-hidden="true"
+                    className="absolute -inset-3.5 rounded-[26px] bg-ember/20 blur-2xl animate-btl-pulse pointer-events-none"
+                  />
+                  <button
+                    onClick={startQuestRoll}
+                    className="relative block w-full text-left bg-ember text-white rounded-[20px] py-[26px] px-[22px] transition-transform active:translate-y-[5px]"
+                    style={{ boxShadow: '0 6px 0 0 #A8360C' }}
+                  >
+                    <span className="block font-display font-extrabold text-[30px] tracking-[-0.02em] leading-none">
+                      Roll a mission
+                    </span>
+                    <span className="block mt-2 font-mono text-[11px] tracking-[.1em] opacity-85">{rollMeta}</span>
+                  </button>
+                </div>
+
+                <div className="mt-[18px] bg-card border border-hairline rounded-2xl p-[14px_16px] flex flex-col gap-3">
+                  <div className="flex justify-between items-baseline">
+                    <span className="font-display font-bold text-[15px]">Loop streak</span>
+                    <span className="font-mono text-xs text-ink-muted">{streak} / 14 days</span>
+                  </div>
+                  <div className="flex gap-1">
+                    {Array.from({ length: 14 }, (_, i) => {
+                      const filled = i < streak;
+                      const freezeCell = i === streak && freezesAvailable > 0;
+                      return (
+                        <span
+                          key={i}
+                          className="flex-1 h-[26px] rounded-[5px] border"
+                          style={{
+                            background: filled
+                              ? '#E5511C'
+                              : freezeCell
+                              ? 'repeating-linear-gradient(135deg,#EFEAE1 0 4px,#fff 4px 8px)'
+                              : '#F2EDE4',
+                            borderColor: filled ? '#E5511C' : '#E7E0D5'
+                          }}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex justify-between items-center gap-2.5 pt-2.5 border-t border-dashed border-hairline">
+                    <div>
+                      <p className="m-0 text-[13px] font-semibold">Streak freeze</p>
+                      <p className="mt-0.5 mb-0 text-xs text-ink-muted">
+                        One missed day a week won't kill the streak. {freezesAvailable} left.
+                      </p>
+                    </div>
+                    <span className="flex-shrink-0 font-mono text-[11px] font-bold tracking-[.08em] bg-paper-deep border border-hairline px-2.5 py-1.5 rounded-full">
+                      NEW
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  onClick={toggleAlarm}
+                  className="w-full mt-2.5 bg-ink text-paper rounded-2xl px-4 py-3.5 flex justify-between items-center"
+                >
+                  <span className="text-left">
+                    <span className="block font-display font-bold text-[15px]">Boredom o'clock</span>
+                    <span className="block mt-0.5 text-xs opacity-62">
+                      {alarmEnabled ? 'Pings you at 9:30 PM — your usual scroll hour' : 'Off — no nudge tonight'}
+                    </span>
+                  </span>
+                  <span
+                    className="flex-shrink-0 w-11 h-[26px] rounded-full relative transition-colors"
+                    style={{ background: alarmEnabled ? '#E5511C' : 'rgba(247,244,238,.22)' }}
+                  >
+                    <span
+                      className="absolute top-[3px] w-5 h-5 rounded-full bg-white transition-all"
+                      style={{ left: alarmEnabled ? '21px' : '3px' }}
+                    />
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {phase === 'rolling' && (
+              <RollingOverlay
+                caption={rollingCaption}
+                showWaitingControls={mode !== 'solo' && !isInviteSession}
+                onInvite={handleWhatsAppInvite}
+                onCancel={cancelSearch}
+              />
+            )}
+
+            {phase === 'active' && (
+              <>
+                <MissionTicket
+                  questText={activeQuest || ''}
+                  rarity={activeQuestRarity}
+                  xp={activeQuestXp}
+                  modeLabel={isExplorerMode ? modeLabel : modeLabel}
+                  credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
+                  gem={isExplorerMode ? activeGem : null}
+                  expired={missionExpired}
+                  clockLabel={clockLabel}
+                  timerPct={timerPct}
+                  proofImage={proofImage}
+                  uploading={uploading}
+                  rerollsLeft={rerollsLeft}
+                  onImageSelected={handleImageUpload}
+                  onComplete={handleCompleteMission}
+                  onReroll={handleTicketReroll}
+                  onAbandon={handleAbandonMission}
+                  onExpiredReset={resetMissionToIdle}
+                />
+
+                {(mode === 'duo' || mode === 'squad') && !missionExpired && (
+                  <div className="mt-3 bg-card border border-hairline rounded-2xl p-3.5">
+                    <div className="flex justify-between items-center">
+                      <span className="font-mono text-[11px] tracking-[.14em] text-ink-muted">
+                        SQUAD · {squadRoster.length} IN
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5 mt-3">
+                      {squadRoster.map((p, idx) => (
+                        <div key={idx} className="flex-1 flex flex-col items-center gap-1.5">
+                          <button
+                            onClick={() => inspectProfile(p.handle)}
+                            className={`w-[34px] h-[34px] rounded-full grid place-items-center font-display font-extrabold text-[13px] ${
+                              p.user_id === currentUserId ? 'bg-ember text-white' : 'bg-paper-deep text-[#5A5149]'
+                            }`}
+                          >
+                            {(p.handle[0] || '?').toUpperCase()}
+                          </button>
+                          <span className="text-[10px] text-ink-muted font-medium">@{p.handle}</span>
+                          {p.user_id !== currentUserId && (
+                            <button
+                              onClick={() => handleAddFriend(p.user_id)}
+                              className="text-[9px] text-ink-muted hover:text-ember"
+                            >
+                              + friend
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {(mode === 'duo' || mode === 'squad') && !missionExpired && (
+                  <div className="bg-card border border-hairline rounded-2xl p-3 flex flex-col gap-2 mt-3 text-left">
+                    <div className="flex justify-between items-center border-b border-hairline pb-1">
+                      <span className="text-[10px] font-bold text-ember uppercase">Live {mode.toUpperCase()} Rally Chat</span>
+                      <button
+                        onClick={handleWhatsAppInvite}
+                        className="text-[10px] bg-ember/10 hover:bg-ember/20 text-ember border border-ember/30 px-2.5 py-1 rounded-lg font-bold transition-all"
+                      >
+                        Invite Friend
+                      </button>
+                    </div>
+                    <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
+                      {messages.length === 0 ? (
+                        <p className="text-[10px] text-ink-faint italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
+                      ) : (
+                        messages.map((m) => (
+                          <div key={m.id || Math.random()} className="bg-card p-2 rounded-xl border border-hairline-soft flex justify-between items-start">
+                            <div>
+                              <button
+                                onClick={() => inspectProfile(m.sender_handle)}
+                                className="text-[10px] font-bold text-ember hover:underline"
+                              >
+                                @{m.sender_handle}:
+                              </button>
+                              <span className="text-ink-body ml-1">{m.message}</span>
+                            </div>
+                            {m.sender_handle !== handle && (
+                              <button
+                                onClick={() => handleReport('chat', m.id || m.message)}
+                                className="text-[9px] text-ink-faint hover:text-ember pl-2"
+                                title="Report message"
+                              >
+                                report
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                      <div ref={chatBottomRef} />
+                    </div>
+                    <div className="flex space-x-2 pt-1">
+                      <input
+                        type="text"
+                        placeholder="Say something (max 300 chars)..."
+                        maxLength={300}
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                        className="flex-1 bg-paper-deep border border-hairline rounded-xl px-3 py-1.5 text-xs text-ink focus:outline-none focus:border-ember"
+                      />
+                      <button
+                        onClick={sendMessage}
+                        className="bg-ember hover:opacity-90 text-white text-xs font-bold px-3 py-1.5 rounded-xl"
+                      >
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {phase === 'done' && (
+              <div className="pt-6 text-center animate-btl-rise">
+                <p className="m-0 font-mono text-[11px] tracking-[.18em] text-ink-muted">
+                  MISSION LOGGED · {completedAtLabel}
+                </p>
+                <h2 className="mt-3 mb-0 font-display font-extrabold text-[42px] leading-[.98] tracking-[-0.03em]">
+                  LOOP
+                  <br />
+                  <span className="text-ember">BROKEN</span>
+                </h2>
+                <div className="flex justify-center gap-2 mt-[18px]">
+                  <span className="font-mono text-xs font-bold bg-ember text-white px-3 py-[7px] rounded-full">
+                    +{earnedXp} XP
+                  </span>
+                  <span className="font-mono text-xs font-bold bg-ink text-paper px-3 py-[7px] rounded-full">
+                    {streak} DAY STREAK
+                  </span>
+                </div>
+                <div className="mt-5 rounded-2xl overflow-hidden border border-hairline bg-card">
+                  {cardDataUrl ? (
+                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto bg-ink" />
+                  ) : (
+                    <div className="h-[230px] bg-ink" />
+                  )}
+                </div>
+                <div className="flex flex-col gap-2 mt-3.5">
+                  <button
+                    onClick={() => handleShareCard(cardDataUrl)}
+                    className="w-full py-4 rounded-2xl bg-ink text-paper font-display font-extrabold text-base"
+                  >
+                    Share the card
+                  </button>
+                  <button
+                    onClick={resetMissionToIdle}
+                    className="w-full py-3.5 rounded-2xl border border-hairline bg-card text-sm font-semibold text-ink"
+                  >
+                    Back home
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === 'explore' && (
+          <div className="px-5 pt-1.5 pb-7 animate-btl-rise">
+            <p className="mt-2.5 mb-0 font-mono text-[11px] tracking-[.14em] text-ink-muted">LOCAL KNOWLEDGE ONLY</p>
+            <h1 className="mt-2 mb-0 font-display font-extrabold text-[32px] leading-[1.04] tracking-[-0.02em]">
+              Places people
+              <br />
+              actually go.
+            </h1>
+            <div className="flex flex-wrap gap-[7px] mt-5">
+              {MUMBAI_NEIGHBORHOODS.map((n) => {
+                const selected = selectedNeighborhood === n;
+                return (
                   <button
                     key={n}
-                    onClick={() => setSelectedNeighborhood(n)}
-                    disabled={isSearching}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
-                      selectedNeighborhood === n
-                        ? 'bg-amber-500 text-stone-950 border-amber-500'
-                        : 'bg-stone-50 text-stone-600 border-stone-200 hover:text-stone-900'
+                    onClick={() => selectNeighborhood(n)}
+                    className={`px-3.5 py-2 rounded-full text-[13px] font-semibold border-[1.5px] transition-all ${
+                      selected ? 'bg-ink border-ink text-paper' : 'bg-card border-hairline text-[#5A5149]'
                     }`}
                   >
                     {n}
                   </button>
-                ))}
-              </div>
+                );
+              })}
+            </div>
+
+            {mode !== 'solo' && isSearching && (
+              <RollingOverlay
+                caption={rollingCaption}
+                showWaitingControls
+                onInvite={handleWhatsAppInvite}
+                onCancel={cancelSearch}
+              />
+            )}
+
+            {mode !== 'solo' && !isSearching && gemPreview === null && selectedNeighborhood && !activeQuest && (
               <button
-                onClick={onStartMatchingClick}
-                disabled={!selectedNeighborhood || isSearching}
-                className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 ${
-                  !selectedNeighborhood
-                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                    : 'bg-amber-500 hover:bg-amber-400 text-stone-950'
-                }`}
+                onClick={startExploreReveal}
+                className="w-full mt-5 text-center py-[15px] rounded-2xl bg-ember text-white font-display font-extrabold text-base"
+                style={{ boxShadow: '0 4px 0 0 #A8360C' }}
               >
-                {isSearching ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin">🌀</span>
-                    {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
-                  </span>
-                ) : !selectedNeighborhood ? (
-                  'Pick a neighborhood first'
-                ) : (
-                  '🗺️ Reveal a Hidden Gem'
-                )}
+                Reveal a hidden gem
               </button>
-              {!isSearching && (
-                <button
-                  onClick={() => setShowSuggestGemModal(true)}
-                  className="text-xs text-stone-500 hover:text-stone-900 font-semibold underline"
-                >
-                  Know a spot? Suggest your own hidden gem
-                </button>
-              )}
-            </div>
-          )}
+            )}
 
-          {!activeQuest && !isCompleted && !isExplorerMode && (
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative flex items-center justify-center">
-                <div
-                  aria-hidden="true"
-                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.3)_0%,rgba(234,88,12,0)_70%)] pointer-events-none"
-                />
-                {!isSearching && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-2 right-6 text-xl rotate-12 pointer-events-none select-none"
-                  >
-                    ✨
-                  </span>
-                )}
-                <button
-                  onClick={onStartMatchingClick}
-                  disabled={isSearching}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 border-4 border-white shadow-2xl shadow-orange-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
-                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/25 rotate-[-20deg]"
-                  />
-                  {isSearching ? (
-                    <div className="flex flex-col items-center space-y-1">
-                      <span className="text-2xl animate-spin">🌀</span>
-                      <span className="text-xs text-orange-200 font-mono font-normal">
-                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
-                      </span>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                      <span className="font-['Space_Grotesk'] font-medium text-sm text-orange-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-stone-600 font-medium">
-                  {isSearching
-                    ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
-                    : 'Tap to trigger a random real-world micro-mission.'}
-                </p>
-
-                {isSearching && (
-                  <div className="flex flex-col items-center space-y-2 pt-2">
-                    <button
-                      onClick={handleWhatsAppInvite}
-                      className="bg-orange-600 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                    >
-                      <span>📲</span>
-                      <span>Invite Friend via WhatsApp Now</span>
-                    </button>
-                    <button
-                      onClick={cancelSearch}
-                      className="text-[10px] text-stone-500 hover:underline"
-                    >
-                      Cancel Search
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <div className="flex justify-between items-center">
-                <span className="bg-orange-500/10 text-orange-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  {isExplorerMode ? 'Explorer' : mode} Mission Assigned
-                </span>
-                <span className="text-xs text-amber-700 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>Active Mission</span>
-                </span>
-              </div>
-
-              {squadRoster.length > 0 && (
-                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl text-left space-y-1.5">
-                  <div className="flex justify-between items-center text-[10px] text-stone-600 font-bold uppercase">
-                    <span>👑 Active Squad Roster ({squadRoster.length})</span>
-                    <span className="text-amber-700 font-mono">Live Lobby</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-white border border-stone-200 px-2 py-1 rounded-lg text-xs">
-                        <button
-                          onClick={() => inspectProfile(p.handle)}
-                          className="text-orange-700 font-bold hover:underline"
-                        >
-                          @{p.handle}
-                        </button>
-                        {p.user_id !== currentUserId && (
-                          <button
-                            onClick={() => handleAddFriend(p.user_id)}
-                            className="text-[10px] text-stone-600 hover:text-orange-700 pl-1"
-                            title="Add as Friend"
-                          >
-                            +🤝
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="my-4 flex justify-center">
-                <SuspenseMissionCard
-                  key={activeQuest}
-                  quest={{
-                    id: "active-quest",
-                    quest_text: activeQuest,
-                    mode: mode,
-                    rarity: activeQuestRarity,
-                    xp_reward: activeQuestXp
-                  }}
-                  credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
-                  gem={isExplorerMode ? activeGem : null}
-                  onReroll={() => mode === 'solo' ? (isExplorerMode ? handleRevealGem() : pickRandomQuest()) : handleSharedReroll()}
-                  onAcceptMission={() => {
-                    setIsMissionAccepted(true);
-                    // The upload box (and its file input) only mounts once
-                    // isMissionAccepted flips, so defer the click until after
-                    // that render commits.
-                    setTimeout(() => {
-                      const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
-                      if (fileInput) {
-                        fileInput.click();
-                      }
-                    }, 0);
-                  }}
-                />
-              </div>
-
-              {(mode === 'duo' || mode === 'squad') && (
-                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 flex flex-col space-y-2 text-left">
-                  <div className="flex justify-between items-center border-b border-stone-200 pb-1">
-                    <span className="text-[10px] font-bold text-orange-700 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
-                    <button
-                      onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-orange-600/20 hover:bg-orange-600/30 text-orange-700 border border-orange-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
-                    >
-                      <span>📲</span>
-                      <span>Invite Friend</span>
-                    </button>
-                  </div>
-                  <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
-                    {messages.length === 0 ? (
-                      <p className="text-[10px] text-stone-400 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
-                    ) : (
-                      messages.map((m) => (
-                        <div key={m.id || Math.random()} className="bg-white p-2 rounded-xl border border-stone-200/80 flex justify-between items-start">
-                          <div>
-                            <button
-                              onClick={() => inspectProfile(m.sender_handle)}
-                              className="text-[10px] font-bold text-orange-700 hover:underline"
-                            >
-                              @{m.sender_handle}: 
-                            </button>
-                            <span className="text-stone-700 ml-1">
-                              {m.message}
-                            </span>
-                          </div>
-                          {m.sender_handle !== handle && (
-                            <button
-                              onClick={() => handleReport('chat', m.id || m.message)}
-                              className="text-[9px] text-stone-400 hover:text-orange-700 pl-2"
-                              title="Report message"
-                            >
-                              🚩
-                            </button>
-                          )}
-                        </div>
-                      ))
-                    )}
-                    <div ref={chatBottomRef} />
-                  </div>
-                  <div className="flex space-x-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder="Say something (max 300 chars)..."
-                      maxLength={300}
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:border-orange-500"
-                    />
-                    <button
-                      onClick={sendMessage}
-                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {isMissionAccepted && (
-                <div className="border-2 border-dashed border-stone-200 rounded-2xl p-3 flex flex-col items-center justify-center bg-stone-50/50 space-y-1">
-                  {uploading ? (
-                    <div className="py-4 flex flex-col items-center space-y-1">
-                      <span className="animate-spin text-xl">☁️</span>
-                      <span className="text-xs text-orange-700 font-semibold">Compressing & Uploading (~50KB)...</span>
-                    </div>
-                  ) : proofImage ? (
-                    <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
-                      <span className="text-xl">📸</span>
-                      <span className="text-xs text-stone-600 font-semibold"></span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-col space-y-2 pt-1">
-                <button
-                  onClick={handleCompleteMission}
-                  disabled={uploading || !proofImage}
-                  className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
-                    proofImage && !uploading
-                      ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/30 cursor-pointer'
-                      : 'bg-stone-100 text-stone-500 cursor-not-allowed border border-stone-300'
-                  }`}
-                >
-                  {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
-                </button>
-                <button
-                  onClick={handleAbandonMission}
-                  className="text-xs text-stone-500 hover:text-stone-800 py-1 transition-colors"
-                >
-                  Abandon Mission
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isCompleted && (
-            <div className="w-full bg-white border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-              <div className="text-4xl">🎉</div>
-              <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
-              <p className="text-xs text-stone-700">
-                You broke routine and gained real-world experience today.
+            {mode === 'solo' && gemLoading && (
+              <p className="mt-6 text-center font-mono text-xs tracking-[.1em] text-ink-muted uppercase animate-pulse">
+                asking around the neighbourhood…
               </p>
+            )}
 
-              {cardDataUrl && (
-                <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-orange-500/30 shadow-xl bg-stone-50">
-                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
-                  </div>
-
+            {gemPreview && (
+              <div className="mt-5 bg-card border border-hairline rounded-[20px] overflow-hidden animate-btl-rise">
+                <div className="h-[132px] bg-paper-deep grid place-items-center">
+                  <span className="font-mono text-[11px] text-ink-muted">photo of the spot</span>
+                </div>
+                <div className="px-[18px] pt-4 pb-[18px]">
+                  <span className="font-mono text-[10px] font-bold tracking-[.14em] text-legendary uppercase">HIDDEN GEM</span>
+                  <h3 className="mt-2 mb-0 font-display font-extrabold text-[22px] tracking-[-0.02em]">{gemPreview.gem.name}</h3>
+                  <p className="mt-2 mb-0 text-sm leading-[1.5] text-ink-body">{gemPreview.gem.description}</p>
+                  {gemPreview.credit && (
+                    <p className="mt-3 mb-0 text-xs text-ink-muted">shared by @{gemPreview.credit}</p>
+                  )}
                   <button
-                    onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
+                    onClick={confirmGemPreview}
+                    className="block w-full text-center mt-4 py-[15px] rounded-2xl bg-ember text-white font-display font-extrabold text-base"
+                    style={{ boxShadow: '0 4px 0 0 #A8360C' }}
                   >
-                    <span>📲</span>
-                    <span>Share to Instagram Story / WhatsApp</span>
+                    I'm going
                   </button>
                 </div>
-              )}
-
-              <button
-                onClick={() => setIsCompleted(false)}
-                className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-              >
-                Back to Home
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="w-full max-w-md my-auto space-y-4">
-          <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-            <h2 className="text-sm font-bold text-stone-700">Community Proof Feed</h2>
-            <span className="text-xs text-stone-500">{feedItems.length} Missions Logged</span>
-          </div>
-
-          <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-            {loadingFeed ? (
-              [1, 2, 3].map((i) => (
-                <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3 animate-pulse">
-                  <div className="w-full h-48 bg-stone-100 rounded-xl" />
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="h-3 w-20 bg-stone-100 rounded" />
-                      <div className="h-3 w-6 bg-stone-100 rounded" />
-                    </div>
-                    <div className="h-3 w-full bg-stone-100 rounded" />
-                    <div className="h-3 w-2/3 bg-stone-100 rounded" />
-                  </div>
-                </div>
-              ))
-            ) : feedItems.length > 0 ? (
-              feedItems.map((item) => (
-                <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
-                  {item.photo_url && (
-                    <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <button
-                        onClick={() => inspectProfile(item.handle)}
-                        className="text-xs font-bold text-orange-700 hover:underline"
-                      >
-                        @{item.handle || 'Explorer'}
-                      </button>
-                      <div className="flex items-center space-x-2">
-                        {userEmail === ADMIN_EMAIL && (
-                          <button
-                            onClick={() => handleAdminDeleteFeedPost(item.id)}
-                            className="text-[10px] bg-red-950/80 border border-red-500/40 text-red-300 px-2 py-0.5 rounded-lg font-bold hover:bg-red-900"
-                            title="Admin: Delete post"
-                          >
-                            🗑️ Delete
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleReport('feed', item.id)}
-                          className="text-[10px] text-stone-400 hover:text-orange-700"
-                          title="Report post"
-                        >
-                          🚩
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-xs text-stone-800 italic font-medium">"{item.quest_text}"</p>
-
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200/80">
-                      <button
-                        onClick={() => handleReact(item.id, 'fire')}
-                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
-                      >
-                        <span>🔥</span>
-                        <span>{item.fire_count || 0}</span>
-                      </button>
-                      <button
-                        onClick={() => handleReact(item.id, 'five')}
-                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
-                      >
-                        <span>✋</span>
-                        <span>{item.five_count || 0}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-10 space-y-3">
-                <div className="text-4xl">📭</div>
-                <h3 className="text-sm font-bold text-stone-800">No missions logged yet</h3>
-                <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
-                  Be the first to complete one and show up here.
-                </p>
-                <button
-                  onClick={() => setTab('quest')}
-                  className="bg-orange-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
-                >
-                  Start a mission
-                </button>
               </div>
             )}
-          </div>
-        </div>
-      )}
 
-      <footer className="w-full max-w-md bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-stone-900/15">
-        <div className="flex justify-between items-center border-b border-stone-200/60 pb-2">
-          {isEditingHandle ? (
-            <input
-              type="text"
-              defaultValue={handle}
-              onBlur={(e) => saveHandle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
-              autoFocus
-              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-700 font-bold focus:outline-none"
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditingHandle(true)}
-              className="text-xs font-bold text-orange-700 hover:underline flex items-center space-x-1"
-            >
-              <span>@{handle}</span>
-              <span className="text-[10px] text-stone-500 font-medium">· {getRankTitle(totalXp)}</span>
-              <span className="text-[10px] text-stone-500">✏️</span>
-            </button>
-          )}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowFriendsModal(true)}
-              className="text-[10px] text-orange-700 hover:underline font-semibold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
-            >
-              🤝 Squad ({friendsList.length})
-            </button>
-            <button
-              onClick={generateSpotifyWrappedCard}
-              className="text-[10px] text-amber-700 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
-            >
-              🎧 Recap
-            </button>
-            <button
-              onClick={() => {
-                setSuggestQuestMode(mode);
-                setShowSuggestQuestModal(true);
-              }}
-              className="text-[10px] text-orange-700 hover:underline font-bold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
-            >
-              ✍️ Suggest Quest
-            </button>
-            {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
-              <button
-                onClick={handleSignOut}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
-              >
-                Sign Out
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthModalReason('');
-                  setShowAuthModal(true);
-                }}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
-              >
-                Verify
-              </button>
+            {!selectedNeighborhood && !gemPreview && (
+              <div className="mt-6 border-[1.5px] border-dashed border-[#DDD4C7] rounded-[20px] px-6 py-9 text-center">
+                <p className="m-0 text-sm text-ink-muted leading-relaxed">
+                  Pick a neighbourhood to pull up a spot a local put there.
+                </p>
+              </div>
             )}
-          </div>
-        </div>
 
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
-          <span className="text-stone-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
-          {badges.map((b, i) => (
-            <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
-              {b}
-            </span>
-          ))}
-        </div>
-
-        <div className="flex justify-around text-center border-t border-stone-200/60 pt-2">
-          <div>
-            <p className="text-xs text-stone-500">Loop Streak</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-stone-800">{streak} Days 🔥</p>
-          </div>
-          <div className="w-px bg-stone-100" />
-          <div>
-            <p className="text-xs text-stone-500">Total IRL XP</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-orange-700">{savedMins} XP ⚡</p>
-          </div>
-        </div>
-
-        {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center space-y-1.5 border-t border-stone-200/60 pt-2">
             <button
-              onClick={() => setShowSaveProgressModal(true)}
-              className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
+              onClick={() => setShowSuggestGemModal(true)}
+              className="block w-full text-center mt-3 py-3.5 rounded-2xl border border-hairline bg-card text-[13px] font-semibold text-ink"
             >
-              💾 Save My Progress
-            </button>
-            <button
-              onClick={() => setShowRecoverModal(true)}
-              className="text-[10px] text-stone-500 hover:underline"
-            >
-              Already have an account? Sign in
+              Add a spot you know
             </button>
           </div>
         )}
 
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Link href="/privacy" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
-            Privacy
-          </Link>
-          <span className="text-[10px] text-stone-300">·</span>
-          <Link href="/terms" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
-            Terms
-          </Link>
-        </div>
-      </footer>
+        {tab === 'feed' && (
+          <div className="px-5 pt-1.5 pb-7 animate-btl-rise">
+            <div className="flex justify-between items-baseline mt-2.5">
+              <h1 className="m-0 font-display font-extrabold text-[28px] tracking-[-0.02em]">Proof</h1>
+              <span className="font-mono text-[11px] text-ink-muted">{feedItems.length} TODAY</span>
+            </div>
+            <div className="flex flex-col gap-3.5 mt-4.5">
+              {loadingFeed ? (
+                [1, 2, 3].map((i) => (
+                  <div key={i} className="bg-card border border-hairline rounded-2xl overflow-hidden animate-pulse">
+                    <div className="w-full h-[180px] bg-paper-deep" />
+                    <div className="p-3.5 space-y-2">
+                      <div className="h-3 w-20 bg-paper-deep rounded" />
+                      <div className="h-3 w-full bg-paper-deep rounded" />
+                    </div>
+                  </div>
+                ))
+              ) : feedItems.length > 0 ? (
+                feedItems.map((item) => {
+                  const rarityColor =
+                    item.mode === 'legendary' ? '#BF1D63' : item.mode === 'rare' ? '#E5511C' : '#6B6259';
+                  return (
+                    <div key={item.id} className="bg-card border border-hairline rounded-2xl overflow-hidden">
+                      {item.photo_url ? (
+                        <img src={item.photo_url} alt="Proof" className="w-full h-[180px] object-cover" />
+                      ) : (
+                        <div className="w-full h-[180px] bg-paper-deep" />
+                      )}
+                      <div className="p-3.5 pt-3">
+                        <div className="flex justify-between items-center">
+                          <button
+                            onClick={() => inspectProfile(item.handle)}
+                            className="text-[13px] font-bold text-ink"
+                          >
+                            @{item.handle || 'Explorer'}
+                          </button>
+                          <div className="flex items-center gap-2">
+                            {userEmail === ADMIN_EMAIL && (
+                              <button
+                                onClick={() => handleAdminDeleteFeedPost(item.id)}
+                                className="text-[10px] bg-ink text-legendary px-2 py-0.5 rounded-lg font-bold"
+                                title="Admin: Delete post"
+                              >
+                                Delete
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleReport('feed', item.id)}
+                              className="text-[10px] text-ink-faint hover:text-ember"
+                              title="Report post"
+                            >
+                              report
+                            </button>
+                          </div>
+                        </div>
+                        <p className="mt-2 mb-0 text-sm leading-[1.45] text-ink-body">{item.quest_text}</p>
+                        <div className="flex gap-2 mt-3.5 items-center">
+                          <button
+                            onClick={() => handleReact(item.id, 'fire')}
+                            className="px-3.5 py-2 rounded-full border border-hairline bg-card font-mono text-xs font-bold text-ink-body"
+                          >
+                            FIRE {item.fire_count || 0}
+                          </button>
+                          <button
+                            onClick={() => handleReact(item.id, 'five')}
+                            className="px-3.5 py-2 rounded-full border border-hairline bg-card font-mono text-xs font-bold text-ink-body"
+                          >
+                            RESPECT {item.five_count || 0}
+                          </button>
+                          <span className="ml-auto text-[11px] text-ink-faint">
+                            {new Date(item.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-10 space-y-3">
+                  <h3 className="text-sm font-bold text-ink">No missions logged yet</h3>
+                  <p className="text-xs text-ink-muted max-w-[220px] mx-auto">
+                    Be the first to complete one and show up here.
+                  </p>
+                  <button
+                    onClick={() => setTab('tonight')}
+                    className="bg-ember text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-[0_4px_0_0_#A8360C] active:shadow-[0_1px_0_0_#A8360C] active:translate-y-[3px] transition-all"
+                  >
+                    Start a mission
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {tab === 'you' && (
+          <div className="px-5 pt-2.5 pb-8 animate-btl-rise">
+            <div className="flex items-center gap-3.5 mt-2.5">
+              <div className="w-14 h-14 rounded-full bg-ember text-white grid place-items-center font-display font-extrabold text-2xl">
+                {(handle[0] || 'E').toUpperCase()}
+              </div>
+              <div>
+                {isEditingHandle ? (
+                  <input
+                    type="text"
+                    defaultValue={handle}
+                    onBlur={(e) => saveHandle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
+                    autoFocus
+                    className="bg-paper-deep border border-ember/50 rounded-lg px-2 py-1 text-xl text-ember font-display font-extrabold focus:outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => setIsEditingHandle(true)}
+                    className="font-display font-extrabold text-2xl tracking-[-0.02em] text-ink"
+                  >
+                    @{handle}
+                  </button>
+                )}
+                <p className="mt-0.5 mb-0 text-[13px] text-ink-muted">
+                  {getRankTitle(totalXp)}{memberSince ? ` · since ${memberSince}` : ''}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 bg-ink text-paper rounded-[18px] p-[18px]">
+              <div className="flex justify-between items-baseline">
+                <span className="font-display font-bold text-base">{rankProgress.current.title}</span>
+                <span className="font-mono text-xs opacity-70">{rankProgress.label}</span>
+              </div>
+              <div className="mt-3 h-2 rounded-full bg-white/[0.14] overflow-hidden">
+                <div
+                  className="h-full bg-ember rounded-full transition-[width] duration-500 ease-out"
+                  style={{ width: `${rankProgress.pct}%` }}
+                />
+              </div>
+              <p className="mt-3 mb-0 text-[13px] opacity-66">{rankProgress.nextLabel}</p>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mt-3">
+              <div className="bg-card border border-hairline rounded-2xl px-3 py-3.5">
+                <p className="m-0 font-display font-extrabold text-2xl tracking-[-0.02em]">{streak}</p>
+                <p className="mt-1 mb-0 text-[11px] text-ink-muted font-medium leading-tight">day streak</p>
+              </div>
+              <div className="bg-card border border-hairline rounded-2xl px-3 py-3.5">
+                <p className="m-0 font-display font-extrabold text-2xl tracking-[-0.02em]">{missionsLoggedCount}</p>
+                <p className="mt-1 mb-0 text-[11px] text-ink-muted font-medium leading-tight">missions logged</p>
+              </div>
+              <div className="bg-card border border-hairline rounded-2xl px-3 py-3.5">
+                <p className="m-0 font-display font-extrabold text-2xl tracking-[-0.02em]">{spotsFoundCount}</p>
+                <p className="mt-1 mb-0 text-[11px] text-ink-muted font-medium leading-tight">spots found</p>
+              </div>
+            </div>
+
+            <p className="mt-6 mb-2.5 font-mono text-[11px] tracking-[.14em] text-ink-muted">BADGES</p>
+            <div className="flex flex-wrap gap-[7px]">
+              {badges.map((b, i) => {
+                const hot = badges.length > 1 && i === badges.length - 1;
+                return (
+                  <span
+                    key={i}
+                    className={`px-3 py-2 rounded-full text-xs font-semibold border ${
+                      hot ? 'bg-legendary text-white border-legendary' : 'bg-card text-ink-body border-hairline'
+                    }`}
+                  >
+                    {stripBadgeEmoji(b)}
+                  </span>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between mt-6 mb-2.5">
+              <p className="m-0 font-mono text-[11px] tracking-[.14em] text-ink-muted">SQUAD LEADERBOARD · THIS WEEK</p>
+              <button onClick={() => setShowFriendsModal(true)} className="text-[11px] font-bold text-ember">
+                🤝 Squad ({friendsList.length})
+              </button>
+            </div>
+            <div className="bg-card border border-hairline rounded-[18px] overflow-hidden">
+              {leaderboard.length === 0 ? (
+                <p className="text-xs text-ink-muted text-center py-6">No squad data yet — add friends to see a leaderboard.</p>
+              ) : (
+                leaderboard.map((entry, i) => (
+                  <div
+                    key={entry.handle}
+                    className={`flex items-center gap-3 px-4 py-[13px] border-b border-hairline-soft last:border-b-0 ${
+                      entry.is_self ? 'bg-tint' : ''
+                    }`}
+                  >
+                    <span className="font-mono text-xs text-ink-faint w-4">{i + 1}</span>
+                    <button
+                      onClick={() => inspectProfile(entry.handle)}
+                      className={`flex-1 text-left text-sm ${entry.is_self ? 'font-bold text-ember' : 'font-medium text-ink'}`}
+                    >
+                      @{entry.handle}
+                    </button>
+                    <span className="font-mono text-xs text-ink-muted">{entry.streak}d</span>
+                    <span className={`font-mono text-[13px] font-bold ${entry.is_self ? 'text-ember' : 'text-ink'}`}>
+                      {entry.total_xp} XP
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-6 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setSuggestQuestMode(mode);
+                  setShowSuggestQuestModal(true);
+                }}
+                className="w-full text-center py-2.5 rounded-xl border border-hairline bg-card text-xs font-bold text-ink"
+              >
+                Suggest a quest
+              </button>
+              <button
+                onClick={generateSpotifyWrappedCard}
+                className="w-full text-center py-2.5 rounded-xl border border-hairline bg-card text-xs font-bold text-ink"
+              >
+                View my recap
+              </button>
+              {userEmail === ADMIN_EMAIL && (
+                <Link
+                  href="/admin"
+                  className="block w-full text-center py-2.5 rounded-xl border border-hairline bg-card text-xs font-bold text-ink"
+                >
+                  Admin console →
+                </Link>
+              )}
+              {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
+                <button onClick={handleSignOut} className="w-full text-center py-2.5 text-xs font-semibold text-ink-muted">
+                  Sign Out
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setAuthModalReason('');
+                      setShowAuthModal(true);
+                    }}
+                    className="w-full text-center py-2.5 rounded-xl bg-ember text-white text-xs font-bold"
+                  >
+                    Verify
+                  </button>
+                  <button
+                    onClick={() => setShowSaveProgressModal(true)}
+                    className="w-full text-center py-2.5 text-xs font-bold text-ember"
+                  >
+                    Save my progress
+                  </button>
+                  <button
+                    onClick={() => setShowRecoverModal(true)}
+                    className="w-full text-center py-1.5 text-[11px] text-ink-muted"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center justify-center gap-3 pt-5">
+              <Link href="/privacy" className="text-[11px] text-ink-faint hover:underline">Privacy</Link>
+              <span className="text-[11px] text-hairline">·</span>
+              <Link href="/terms" className="text-[11px] text-ink-faint hover:underline">Terms</Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <BottomNav active={tab} onSelect={setTab} />
     </main>
   );
 }

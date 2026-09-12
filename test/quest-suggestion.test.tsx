@@ -31,7 +31,8 @@ describe('suggest a quest', () => {
 
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: /suggest quest/i }));
+    await user.click(screen.getByRole('button', { name: 'You' }));
+    await user.click(screen.getByRole('button', { name: /suggest a quest/i }));
     const heading = screen.getByText('SUGGEST A QUEST');
     expect(heading).toBeInTheDocument();
     const modal = within(heading.closest('div')!);
@@ -62,7 +63,8 @@ describe('suggest a quest', () => {
 
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: /suggest quest/i }));
+    await user.click(screen.getByRole('button', { name: 'You' }));
+    await user.click(screen.getByRole('button', { name: /suggest a quest/i }));
     await user.type(
       screen.getByPlaceholderText(/describe the mission/i),
       'Order the strangest thing on a street food menu and rate it out of ten.'
