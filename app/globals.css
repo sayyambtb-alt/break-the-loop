@@ -24,3 +24,12 @@ body {
   color: var(--foreground);
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
+
+/* Only when installed as a home-screen app -- a regular browser tab should
+   keep its normal pull-to-refresh/overscroll behavior, since that's what
+   people expect there. This is specifically for the installed-app feel. */
+@media (display-mode: standalone) {
+  html, body {
+    overscroll-behavior: none;
+  }
+}
