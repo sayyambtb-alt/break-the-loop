@@ -3291,13 +3291,13 @@ export default function Home() {
               <h2>Same city.<br />New <span>story.</span></h2>
               <p>Try something you wouldn’t usually do.<br className="desktop-break" /> We’ll give you the nudge. You make it yours.</p>
               <button className="primary-button start-button" onClick={onStartMatchingClick} disabled={isSearching}>
-                {isSearching ? 'Finding your company…' : 'Find my next mission'}<AppIcon name={isSearching ? 'refresh' : 'arrow'} size={22} />
+                {isSearching ? (mode === 'solo' ? 'Finding your mission…' : 'Finding your company…') : 'Find my next mission'}<AppIcon name={isSearching ? 'refresh' : 'arrow'} size={22} />
               </button>
               <div className="start-card-bottom"><span>{mode === 'solo' ? 'Solo adventures. No sign-up needed.' : mode === 'duo' ? 'One mission. Two explorers.' : 'Make a memory with your people.'}</span><span>GO MAKE A MEMORY ↗</span></div>
-              {isSearching && <div className="search-actions"><p>{squadRoster.length ? `Lobby: ${squadRoster.length}/${squadCapacity} explorers` : 'Looking for Mumbai explorers…'}</p><button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button><button onClick={cancelSearch}>Cancel Search</button></div>}
+              {isSearching && <div className="search-actions"><p role="status">{mode === 'solo' ? 'Picking a little adventure for you…' : squadRoster.length ? `Lobby: ${squadRoster.length}/${squadCapacity} explorers` : 'Looking for Mumbai explorers…'}</p>{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
             </section>
           )}
-          {isExplorerMode && isSearching && <div className="search-actions"><button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button><button onClick={cancelSearch}>Cancel Search</button></div>}
+          {isExplorerMode && isSearching && <div className="search-actions">{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
           {activeQuest && !isCompleted && (
             <div className="active-mission-panel w-full bg-white border border-stone-200 rounded-3xl p-5 space-y-4">
               <div className="flex justify-between items-center">
