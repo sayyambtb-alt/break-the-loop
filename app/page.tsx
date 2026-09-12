@@ -2629,12 +2629,12 @@ export default function Home() {
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
                         {dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-500/20 text-amber-300">
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-100 text-amber-800">
                             Unsaved
                           </span>
                         )}
                         {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-500/15 text-emerald-300">
+                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-800">
                             ✓ Saved
                           </span>
                         )}
@@ -2752,7 +2752,7 @@ export default function Home() {
                   sessionStorage.clear();
                   window.location.reload();
                 }}
-                className="w-full bg-red-950/50 hover:bg-red-900/50 text-red-300 py-2 rounded-xl text-xs font-mono font-bold border border-red-500/30"
+                className="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-xs font-mono font-bold border border-red-300"
               >
                 Hard Reset Local Storage & Reload
               </button>
