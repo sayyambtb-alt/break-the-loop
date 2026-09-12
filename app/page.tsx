@@ -2215,7 +2215,9 @@ export default function Home() {
       setIsMissionAccepted(false);
     }
     setTab('quest');
+    window.scrollTo({ top: 0 });
   };
+  const showFeed = () => { setTab('feed'); window.scrollTo({ top: 0 }); };
   const nextRank = RANK_TIERS.find(tier => tier.minXp > totalXp);
 
   return (
@@ -2248,7 +2250,7 @@ export default function Home() {
         <nav className="main-nav" aria-label="Main navigation">
           <button aria-current={tab === 'quest' && !isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(false)}><AppIcon name="bolt" />Today</button>
           <button aria-current={tab === 'quest' && isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(true)}><AppIcon name="compass" />Explore</button>
-          <button aria-current={tab === 'feed' ? 'page' : undefined} onClick={() => setTab('feed')}><AppIcon name="grid" />Feed</button>
+          <button aria-current={tab === 'feed' ? 'page' : undefined} onClick={showFeed}><AppIcon name="grid" />Feed</button>
           <a href="#saved-places"><AppIcon name="bookmark" /><span>Saved</span></a>
         </nav>
         <div className="header-utilities">
@@ -3597,7 +3599,7 @@ export default function Home() {
 
       {tab === 'quest' && !activeQuest && !isCompleted && <>
         {showWelcomeModal && <div className="how-it-works"><div className="how-title"><h3>Your first adventure, in three steps.</h3><button className="icon-button" onClick={dismissWelcomeModal} aria-label="Dismiss getting started guide"><AppIcon name="close" size={16} /></button></div><ol><li><span>01</span><strong>Pick a mission</strong><p>Let a little surprise in.</p></li><li><span>02</span><strong>Go live it</strong><p>Put the phone away.</p></li><li><span>03</span><strong>Keep the memory</strong><p>Add a photo. Earn XP.</p></li></ol></div>}
-        {!isExplorerMode && <div className="discovery-row"><button className="discovery-card places-card" onClick={() => goToTrack(true)}><span className="discovery-symbol"><AppIcon name="compass" size={28} /></span><span className="eyebrow">TAKE THE SCENIC ROUTE</span><h3>Mumbai has<br />a few secrets.</h3><p>Find a local spot worth stepping out for.</p><span className="card-link">Explore neighbourhoods <AppIcon name="arrow" size={18} /></span></button><button className="discovery-card community-card" onClick={() => setTab('feed')}><span className="discovery-symbol"><AppIcon name="camera" size={28} /></span><span className="eyebrow">OUT THERE, DOING THINGS</span><h3>Less content.<br />More connection.</h3><p>See the moments other explorers made.</p><span className="card-link">See the community <AppIcon name="arrow" size={18} /></span></button></div>}
+        {!isExplorerMode && <div className="discovery-row"><button className="discovery-card places-card" onClick={() => goToTrack(true)}><span className="discovery-symbol"><AppIcon name="compass" size={28} /></span><span className="eyebrow">TAKE THE SCENIC ROUTE</span><h3>Mumbai has<br />a few secrets.</h3><p>Find a local spot worth stepping out for.</p><span className="card-link">Explore neighbourhoods <AppIcon name="arrow" size={18} /></span></button><button className="discovery-card community-card" onClick={showFeed}><span className="discovery-symbol"><AppIcon name="camera" size={28} /></span><span className="eyebrow">OUT THERE, DOING THINGS</span><h3>Less content.<br />More connection.</h3><p>See the moments other explorers made.</p><span className="card-link">See the community <AppIcon name="arrow" size={18} /></span></button></div>}
       </>}
       </div>
       <aside className="personal-column" aria-label="Your explorer space">

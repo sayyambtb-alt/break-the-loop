@@ -49,7 +49,11 @@ describe('mission completion end-to-end', () => {
       () => expect(screen.getByText('Accept mission')).toBeInTheDocument(),
       { timeout: 3000 }
     );
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click');
     await user.click(screen.getByText('Accept mission'));
+    expect(inputClick).not.toHaveBeenCalled();
+    inputClick.mockRestore();
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
