@@ -50,8 +50,8 @@ describe('duo/squad shared reroll', () => {
 
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: 'duo' }));
-    await user.click(screen.getByRole('button', { name: /destroy/i }));
+    await user.click(screen.getByRole('button', { name: /^duo/i }));
+    await user.click(screen.getByRole('button', { name: /roll a mission/i }));
     await user.click(screen.getByRole('button', { name: 'I Agree & Search' }));
 
     await screen.findByText(/Original shared quest/, {}, { timeout: 3000 });
@@ -63,7 +63,7 @@ describe('duo/squad shared reroll', () => {
     const handler = queueEntry!.channel._handlers.find((h) => h.event === 'postgres_changes');
     expect(handler).toBeTruthy();
 
-    await user.click(screen.getByText('🔄 Reroll Quest'));
+    await user.click(screen.getByRole('button', { name: /^Reroll/ }));
 
     const rerollCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'reroll_shared_quest');
     expect(rerollCall?.args[0]).toMatchObject({ p_queue_id: 'queue-1' });
@@ -83,8 +83,8 @@ describe('duo/squad shared reroll', () => {
     });
 
     await screen.findByText(/Rerolled shared quest/, {}, { timeout: 3000 });
-    expect(screen.getByText('⚡ LEGENDARY QUEST')).toBeInTheDocument();
-    expect(screen.getByText('+75 IRL XP')).toBeInTheDocument();
+    expect(screen.getByText('LEGENDARY')).toBeInTheDocument();
+    expect(screen.getByText('+75 XP')).toBeInTheDocument();
   }, 15000); // Two sequential 3s-budget findByText calls plus a full app
              // render and several user-event clicks can add up past
              // Vitest's default 5s test timeout under any CI load, even

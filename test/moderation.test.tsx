@@ -31,12 +31,14 @@ beforeEach(() => {
   mockState.responses['feed_reactions'] = { data: [], error: null };
 });
 
+// Admin-only moderation (Reports/Quests/Gems) moved to app/admin/page.tsx --
+// see test/admin.test.tsx for that flow.
 describe('report flow (non-admin)', () => {
   it('lets a player report a feed post', async () => {
     const user = userEvent.setup();
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: 'Feed' }));
+    await user.click(screen.getByRole('button', { name: 'Proof' }));
     const reportButton = await screen.findByTitle('Report post');
     await user.click(reportButton);
 
@@ -57,55 +59,10 @@ describe('report flow (non-admin)', () => {
     vi.spyOn(window, 'prompt').mockImplementation(() => null);
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: 'Feed' }));
+    await user.click(screen.getByRole('button', { name: 'Proof' }));
     const reportButton = await screen.findByTitle('Report post');
     await user.click(reportButton);
 
     expect(mockState.calls.find((c) => c.table === 'reports')).toBeUndefined();
-  });
-});
-
-describe('moderation flow (admin)', () => {
-  beforeEach(() => {
-    mockState.session = {
-      user: { id: 'admin-user-id', email: 'sayyambtb@gmail.com' },
-      access_token: 'fake-admin-token'
-    };
-    mockState.responses['profiles'] = (builder) => {
-      const profile = { device_id: 'admin-user-id', handle: 'Admin', streak: 1, time_saved_mins: 15, badges: [] };
-      if (builder.method === 'select.single') return { data: profile, error: null };
-      if (builder.method === 'select') return { data: [profile], error: null };
-      return { data: null, error: null };
-    };
-    mockState.rpcResponses['admin_get_reports'] = {
-      data: [
-        { id: 'report-1', reporter_handle: 'Reporter', reported_type: 'feed', target_id: 'log-1', reason: 'Spam content', created_at: new Date().toISOString() }
-      ],
-      error: null
-    };
-    mockState.rpcResponses['admin_delete_feed_post'] = { data: null, error: null };
-    mockState.rpcResponses['admin_resolve_report'] = { data: null, error: null };
-  });
-
-  it('lets an admin review, delete, and resolve a reported post', async () => {
-    const user = userEvent.setup();
-    await renderApp();
-
-    const reportsButton = await screen.findByRole('button', { name: /reports/i });
-    await user.click(reportsButton);
-
-    await waitFor(() => expect(screen.getByText(/Moderation Reports Queue/i)).toBeInTheDocument());
-    expect(screen.getByText(/Spam content/)).toBeInTheDocument();
-
-    await user.click(screen.getByText('Delete Post'));
-
-    await waitFor(() => {
-      const deleteCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'admin_delete_feed_post');
-      expect(deleteCall?.args[0]).toMatchObject({ p_log_id: 'log-1' });
-    });
-    const resolveCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'admin_resolve_report');
-    expect(resolveCall?.args[0]).toMatchObject({ p_report_id: 'report-1' });
-
-    await waitFor(() => expect(screen.getByText(/Queue clear/i)).toBeInTheDocument());
   });
 });

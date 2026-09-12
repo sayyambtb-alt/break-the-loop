@@ -13,6 +13,12 @@ async function renderApp() {
   await waitFor(() => expect(screen.queryByText('JOIN BREAK THE LOOP')).not.toBeInTheDocument());
 }
 
+// Account actions (Verify/Sign Out/Save progress/Recover) live under the
+// "You" tab in the redesign, replacing the old footer HUD.
+async function goToYouTab(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'You' }));
+}
+
 beforeEach(() => {
   resetMockState();
   mockState.responses['profiles'] = (builder) => {
@@ -34,6 +40,7 @@ describe('email OTP sign-in (main Auth Modal)', () => {
     };
 
     await renderApp();
+    await goToYouTab(user);
 
     await user.click(screen.getByRole('button', { name: 'Verify' }));
     expect(screen.getByText('EMAIL VERIFICATION')).toBeInTheDocument();
@@ -59,6 +66,7 @@ describe('save my progress (email linking, no real email sent)', () => {
     mockState.rpcResponses['updateUser'] = { data: {}, error: null };
 
     await renderApp();
+    await goToYouTab(user);
 
     await user.click(screen.getByRole('button', { name: /save my progress/i }));
     expect(screen.getByText('SAVE MY PROGRESS')).toBeInTheDocument();
@@ -82,6 +90,7 @@ describe('save my progress (email linking, no real email sent)', () => {
     mockState.rpcResponses['updateUser'] = { data: null, error: { message: 'Email already in use' } };
 
     await renderApp();
+    await goToYouTab(user);
     await user.click(screen.getByRole('button', { name: /save my progress/i }));
     await user.type(screen.getByPlaceholderText('yourname@gmail.com'), 'taken@example.com');
     await user.click(screen.getByText('Send Confirmation Link'));
@@ -101,6 +110,7 @@ describe('recover account on this device (OTP code, not a magic link)', () => {
     };
 
     await renderApp();
+    await goToYouTab(user);
 
     await user.click(screen.getByText('Already have an account? Sign in'));
     expect(screen.getByText('SIGN IN ON THIS DEVICE')).toBeInTheDocument();
@@ -127,6 +137,7 @@ describe('recover account on this device (OTP code, not a magic link)', () => {
     mockState.rpcResponses['signInWithOtp'] = { data: null, error: { message: 'User not found' } };
 
     await renderApp();
+    await goToYouTab(user);
     await user.click(screen.getByText('Already have an account? Sign in'));
     await user.type(screen.getByPlaceholderText('yourname@gmail.com'), 'nobody@example.com');
     await user.click(screen.getByText('Send Sign-In Code'));

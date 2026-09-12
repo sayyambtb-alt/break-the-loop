@@ -33,6 +33,7 @@ describe('mission completion end-to-end', () => {
         success: true,
         new_streak: 2,
         new_saved_mins: 30,
+        xp_earned: 30,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -40,15 +41,15 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    const startButton = await screen.findByRole('button', { name: /destroy/i });
+    const startButton = await screen.findByRole('button', { name: /roll a mission/i });
     await user.click(startButton);
 
-    await waitFor(() => expect(screen.getByText(/mission assigned/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Take a photo of the nearest tree/)).toBeInTheDocument());
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Capture proof')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Capture proof'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
@@ -60,17 +61,17 @@ describe('mission completion end-to-end', () => {
     const uploadCall = mockState.calls.find((c) => c.type === 'storage-upload');
     expect(uploadCall?.args[0]).toBe('Proofs');
 
-    const completeButton = screen.getByText('Complete & Log Proof 🔥');
+    const completeButton = screen.getByText('Log it — loop broken');
     await user.click(completeButton);
 
-    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('BROKEN')).toBeInTheDocument());
 
     const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_mission');
     expect(rpcCall).toBeTruthy();
     expect(rpcCall?.args[0]).toMatchObject({ p_mode: 'solo' });
 
-    expect(screen.getByText('2 Days 🔥')).toBeInTheDocument();
-    expect(screen.getByText('30 XP ⚡')).toBeInTheDocument();
+    expect(screen.getByText('2 DAY STREAK')).toBeInTheDocument();
+    expect(screen.getByText('+30 XP')).toBeInTheDocument();
   });
 
   it('auto-surfaces the Recap card when a new badge is earned', async () => {
@@ -80,6 +81,7 @@ describe('mission completion end-to-end', () => {
         success: true,
         new_streak: 3,
         new_saved_mins: 45,
+        xp_earned: 15,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -87,22 +89,22 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /roll a mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Capture proof')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Capture proof'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
-    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+    await user.click(screen.getByText('Log it — loop broken'));
+    await waitFor(() => expect(screen.getByText('BROKEN')).toBeInTheDocument());
 
     await waitFor(
-      () => expect(screen.getByText('🎧 Your IRL Recap')).toBeInTheDocument(),
+      () => expect(screen.getByText('Your IRL Recap')).toBeInTheDocument(),
       { timeout: 4000 }
     );
     expect(screen.getByAltText('Recap')).toBeInTheDocument();
@@ -114,27 +116,27 @@ describe('mission completion end-to-end', () => {
     // one quest is mocked) to roll a legendary result: Math.random() * 100 = 90 > 85.
     vi.spyOn(Math, 'random').mockReturnValue(0.9);
     mockState.rpcResponses['complete_mission'] = {
-      data: { success: true, new_streak: 1, new_saved_mins: 90, badges: [] },
+      data: { success: true, new_streak: 1, new_saved_mins: 90, xp_earned: 75, badges: [] },
       error: null
     };
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /roll a mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Capture proof')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    expect(screen.getByText('⚡ LEGENDARY QUEST')).toBeInTheDocument();
-    expect(screen.getByText('+75 IRL XP')).toBeInTheDocument();
+    expect(screen.getByText('LEGENDARY')).toBeInTheDocument();
+    expect(screen.getByText('+75 XP')).toBeInTheDocument();
 
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Capture proof'));
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
-    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+    await user.click(screen.getByText('Log it — loop broken'));
+    await waitFor(() => expect(screen.getByText('BROKEN')).toBeInTheDocument());
 
     const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_mission');
     expect(rpcCall?.args[0]).toMatchObject({ p_xp_earned: 75 });
@@ -146,25 +148,25 @@ describe('mission completion end-to-end', () => {
     // test only exercises the rank-up path.
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
     mockState.rpcResponses['complete_mission'] = {
-      data: { success: true, new_streak: 2, new_saved_mins: 30, new_total_xp: 150, badges: ['🌱 First Step'] },
+      data: { success: true, new_streak: 2, new_saved_mins: 30, new_total_xp: 150, xp_earned: 15, badges: ['🌱 First Step'] },
       error: null
     };
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /roll a mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Capture proof')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Capture proof'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
-    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+    await user.click(screen.getByText('Log it — loop broken'));
+    await waitFor(() => expect(screen.getByText('BROKEN')).toBeInTheDocument());
 
     await screen.findByText(/Rank up! You're now a Chaos Local/);
   });
@@ -178,20 +180,20 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /roll a mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Capture proof')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Capture proof'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Log it — loop broken'));
 
     await screen.findByText(/Unauthorized/);
-    expect(screen.queryByText('LOOP BROKEN!')).not.toBeInTheDocument();
+    expect(screen.queryByText('BROKEN')).not.toBeInTheDocument();
   });
 });
