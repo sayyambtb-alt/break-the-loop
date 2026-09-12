@@ -33,6 +33,7 @@ describe('mission completion end-to-end', () => {
         success: true,
         new_streak: 2,
         new_saved_mins: 30,
+        new_total_xp: 30,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -40,15 +41,19 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    const startButton = await screen.findByRole('button', { name: /destroy/i });
+    const startButton = await screen.findByRole('button', { name: /find my next mission/i });
     await user.click(startButton);
 
     await waitFor(() => expect(screen.getByText(/mission assigned/i)).toBeInTheDocument());
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Accept mission')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    const inputClick = vi.spyOn(HTMLInputElement.prototype, 'click');
+    await user.click(screen.getByText('Accept mission'));
+    expect(inputClick).not.toHaveBeenCalled();
+    inputClick.mockRestore();
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     expect(fileInput).toBeTruthy();
@@ -69,8 +74,8 @@ describe('mission completion end-to-end', () => {
     expect(rpcCall).toBeTruthy();
     expect(rpcCall?.args[0]).toMatchObject({ p_mode: 'solo' });
 
-    expect(screen.getByText('2 Days 🔥')).toBeInTheDocument();
-    expect(screen.getByText('30 XP ⚡')).toBeInTheDocument();
+    expect(screen.getByText('Loop streak').parentElement).toHaveTextContent('2days');
+    expect(screen.getByText('Real-world XP').parentElement).toHaveTextContent('30XP');
   });
 
   it('auto-surfaces the Recap card when a new badge is earned', async () => {
@@ -87,12 +92,12 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /find my next mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Accept mission')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Accept mission'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
@@ -120,15 +125,15 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /find my next mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Accept mission')).toBeInTheDocument(),
       { timeout: 3000 }
     );
     expect(screen.getByText('⚡ LEGENDARY QUEST')).toBeInTheDocument();
     expect(screen.getByText('+75 IRL XP')).toBeInTheDocument();
 
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Accept mission'));
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
@@ -152,12 +157,12 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /find my next mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Accept mission')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Accept mission'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
@@ -178,12 +183,12 @@ describe('mission completion end-to-end', () => {
 
     await renderApp();
 
-    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await user.click(await screen.findByRole('button', { name: /find my next mission/i }));
     await waitFor(
-      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      () => expect(screen.getByText('Accept mission')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+    await user.click(screen.getByText('Accept mission'));
 
     const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
