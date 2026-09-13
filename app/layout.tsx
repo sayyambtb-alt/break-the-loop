@@ -9,7 +9,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Break The Loop",
-  description: "Discover real-world missions, hidden Mumbai places, and people to explore with. Less scrolling. More living.",
+  description: "Discover real-world missions, local hidden gems, and people to explore with. Less scrolling. More living.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,

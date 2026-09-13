@@ -6,6 +6,7 @@ import AppIcon from './components/AppIcon';
 import SavedPlaces from './components/SavedPlaces';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
 import { createStoryCard, type StoryCardData } from './lib/story-cards';
+import { CURRENT_CITY } from './lib/city';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
@@ -28,7 +29,7 @@ const RANK_TIERS: { minXp: number; title: string }[] = [
   { minXp: 100, title: 'Chaos Local' },
   { minXp: 300, title: 'Boredom Slayer' },
   { minXp: 700, title: 'Street Legend' },
-  { minXp: 1500, title: 'Mumbai Made' },
+  { minXp: 1500, title: 'Loop Breaker' },
 ];
 
 const getRankTitle = (totalXp: number): string => {
@@ -160,10 +161,6 @@ export default function Home() {
   const [pendingGemCount, setPendingGemCount] = useState<number>(0);
   const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
-  const MUMBAI_NEIGHBORHOODS = [
-    'Colaba', 'Fort', 'Marine Drive', 'Dadar', 'Matunga', 'Mahim', 'Wadala', 'Sewri',
-    'Bandra', 'Worli', 'Andheri', 'Juhu', 'Powai', 'Borivali'
-  ];
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
@@ -443,7 +440,8 @@ export default function Home() {
           setActiveGem({
             name: joinResult.gem_name,
             neighborhood: joinResult.neighborhood,
-            description: joinResult.gem_description
+            description: joinResult.gem_description,
+            city: CURRENT_CITY.name
           });
           setHiddenGemSubmittedBy(joinResult.gem_submitted_by || null);
         }
@@ -1156,7 +1154,7 @@ export default function Home() {
 
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
     if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${selectedMode.toUpperCase()} mode.`);
+      setAuthModalReason(`Verify your email to match with other ${CURRENT_CITY.name} explorers in ${selectedMode.toUpperCase()} mode.`);
       setShowAuthModal(true);
       return;
     }
@@ -1250,7 +1248,7 @@ export default function Home() {
     setActiveQuestCredit(null);
     setHiddenGemSubmittedBy(data.submitted_by_handle || null);
     setIsMissionAccepted(false);
-    setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description });
+    setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description, city: CURRENT_CITY.name });
     // activeQuest still drives photo-proof, completion logging and the share
     // card, so it stays set even though the gem card renders from activeGem.
     setActiveQuest(`📍 ${data.name} (${data.neighborhood}) — ${data.description}`);
@@ -1318,7 +1316,8 @@ export default function Home() {
           setActiveGem({
             name: matchResult.gem_name,
             neighborhood: matchResult.neighborhood,
-            description: matchResult.gem_description
+            description: matchResult.gem_description,
+            city: CURRENT_CITY.name
           });
           setHiddenGemSubmittedBy(matchResult.gem_submitted_by || null);
           setActiveQuest(matchResult.quest_text);
@@ -1512,7 +1511,7 @@ export default function Home() {
     }
 
     if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
+      setAuthModalReason(`Verify your email to match with other ${CURRENT_CITY.name} explorers in ${mode.toUpperCase()} mode.`);
       setShowAuthModal(true);
       return;
     }
@@ -1584,7 +1583,8 @@ export default function Home() {
             setActiveGem({
               name: payload.new.gem_name,
               neighborhood: payload.new.neighborhood,
-              description: payload.new.gem_description
+              description: payload.new.gem_description,
+              city: CURRENT_CITY.name
             });
             setHiddenGemSubmittedBy(payload.new.gem_submitted_by || null);
           } else {
@@ -1624,7 +1624,7 @@ export default function Home() {
         p_user_id: currentUserId,
         p_mode: mode,
         p_handle: handle,
-        p_city: 'mumbai'
+        p_city: CURRENT_CITY.slug
       });
 
       if (error) {
@@ -1917,7 +1917,7 @@ export default function Home() {
 
   const generateRecapCard = () => {
     try {
-      const url = createStoryCard({ kind: 'recap', handle, streak, totalXp, rank: getRankTitle(totalXp), friendCount: friendsList.length });
+      const url = createStoryCard({ kind: 'recap', handle, cityName: CURRENT_CITY.name, streak, totalXp, rank: getRankTitle(totalXp), friendCount: friendsList.length });
       if (!url) throw new Error('Canvas unavailable');
       setWrappedCardDataUrl(url);
       setShowWrappedModal(true);
@@ -2012,6 +2012,7 @@ export default function Home() {
 
         const completedStats = {
           handle,
+          cityName: CURRENT_CITY.name,
           streak: data.new_streak ?? streak,
           totalXp: data.new_total_xp ?? totalXp,
           rank: getRankTitle(data.new_total_xp ?? totalXp),
@@ -2022,7 +2023,7 @@ export default function Home() {
           setCardDataUrl(createStoryCard({
             kind: 'mission',
             ...completedStats,
-            quest: activeQuest || 'Completed a local real-world mission in Mumbai',
+            quest: activeQuest || 'Completed a real-world adventure',
             mode: isExplorerMode ? 'explorer' : mode,
             xpEarned: data.xp_earned ?? activeQuestXp,
           }));
@@ -2049,7 +2050,7 @@ export default function Home() {
         await navigator.share({
           files: [file],
           title: 'Break The Loop 🔥',
-          text: 'I just broke the reel addiction loop in Mumbai! Check this out.'
+          text: 'I made time for a little adventure with Break The Loop. Come find yours.'
         });
       } else {
         const a = document.createElement('a');
@@ -2112,7 +2113,7 @@ export default function Home() {
           <a href="#saved-places"><AppIcon name="bookmark" /><span>Saved</span></a>
         </nav>
         <div className="header-utilities">
-          <span className="city-label"><AppIcon name="pin" size={16} />Mumbai</span>
+          <span className="city-label"><AppIcon name="pin" size={16} />{CURRENT_CITY.name}</span>
           <button className="icon-button" onClick={requestNotificationPermission} aria-label={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}><AppIcon name="bell" /></button>
           <a className="profile-avatar" href="#your-progress" aria-label="Your profile">{handle.charAt(0).toUpperCase()}</a>
         </div>
@@ -2166,7 +2167,7 @@ export default function Home() {
                 <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
               </h2>
               <p className="text-[10px] text-stone-500">
-                Explorer • Active Mumbai Loop Destroyer
+                Explorer • Making time for real life
               </p>
             </div>
 
@@ -2436,7 +2437,7 @@ export default function Home() {
                           onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
                           className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
                         >
-                          {MUMBAI_NEIGHBORHOODS.map((n) => (
+                          {CURRENT_CITY.neighborhoods.map((n) => (
                             <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
                           ))}
                         </select>
@@ -2585,7 +2586,7 @@ export default function Home() {
             <div className="text-3xl">🏷️</div>
             <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
             <p className="text-xs text-stone-600">
-              Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
+              Pick a unique handle so other explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
               <span className="absolute left-4 top-3 text-orange-700 font-bold text-sm">@</span>
@@ -2796,7 +2797,7 @@ export default function Home() {
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500"
               />
               <div className="neighborhood-chips">
-                {MUMBAI_NEIGHBORHOODS.filter(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())).map((n) => (
+                {CURRENT_CITY.neighborhoods.filter(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())).map((n) => (
                   <button
                     key={n}
                     onClick={() => setSuggestGemNeighborhood(n)}
@@ -3069,7 +3070,7 @@ export default function Home() {
         <div><p className="eyebrow"><span className="tiny-rule" />LESS SCROLLING. MORE LIVING.</p>
           <h1>{tab === 'feed' ? <>Life, actually <em>lived.</em></> : isExplorerMode ? <>Your city. <em>Rediscovered.</em></> : <>Make room for <em>real life.</em></>}</h1>
           <p>{tab === 'feed' ? 'Small adventures, shared by the people doing them.' : isExplorerMode ? 'Good places, passed from one local to another.' : 'A small adventure is all it takes to change your day.'}</p>
-        </div><span className="edition-label">THE MUMBAI EDITION <AppIcon name="sun" size={23} /></span>
+        </div><span className="edition-label">YOUR EVERYDAY ESCAPE <AppIcon name="sun" size={23} /></span>
       </div>
       <div className="app-grid">
       <div className="activity-column" id="activity" tabIndex={-1}>
@@ -3090,7 +3091,7 @@ export default function Home() {
               <p>Choose an area. We’ll pick a local discovery for you.</p>
               <label className="neighborhood-search"><AppIcon name="search" /><input type="search" aria-label="Search neighbourhoods" placeholder="Find your neighbourhood" value={neighborhoodSearch} onChange={e => setNeighborhoodSearch(e.target.value)} /></label>
               <div className="neighborhood-chips">
-                {MUMBAI_NEIGHBORHOODS.filter(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())).map((n) => (
+                {CURRENT_CITY.neighborhoods.filter(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())).map((n) => (
                   <button
                     key={n}
                     onClick={() => setSelectedNeighborhood(n)}
@@ -3106,7 +3107,7 @@ export default function Home() {
                   </button>
                 ))}
               </div>
-              {!MUMBAI_NEIGHBORHOODS.some(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())) && <p role="status">No matching neighbourhood. Try another name.</p>}
+              {!CURRENT_CITY.neighborhoods.some(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())) && <p role="status">No matching neighbourhood. Try another name.</p>}
               <button
                 onClick={onStartMatchingClick}
                 disabled={!selectedNeighborhood || isSearching}
@@ -3147,7 +3148,7 @@ export default function Home() {
                 {isSearching ? (mode === 'solo' ? 'Finding your mission…' : 'Finding your company…') : 'Find my next mission'}<AppIcon name={isSearching ? 'refresh' : 'arrow'} size={22} />
               </button>
               <div className="start-card-bottom"><span>{mode === 'solo' ? 'Solo adventures. No sign-up needed.' : mode === 'duo' ? 'One mission. Two explorers.' : 'Make a memory with your people.'}</span><span>GO MAKE A MEMORY ↗</span></div>
-              {isSearching && <div className="search-actions"><p role="status">{mode === 'solo' ? 'Picking a little adventure for you…' : squadRoster.length ? `Lobby: ${squadRoster.length}/${squadCapacity} explorers` : 'Looking for Mumbai explorers…'}</p>{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
+              {isSearching && <div className="search-actions"><p role="status">{mode === 'solo' ? 'Picking a little adventure for you…' : squadRoster.length ? `Lobby: ${squadRoster.length}/${squadCapacity} explorers` : `Looking for ${CURRENT_CITY.name} explorers…`}</p>{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
             </section>
           )}
           {isExplorerMode && isSearching && <div className="search-actions">{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
@@ -3450,7 +3451,7 @@ export default function Home() {
 
       {tab === 'quest' && !activeQuest && !isCompleted && <>
         {showWelcomeModal && <div className="how-it-works"><div className="how-title"><h3>Your first adventure, in three steps.</h3><button className="icon-button" onClick={dismissWelcomeModal} aria-label="Dismiss getting started guide"><AppIcon name="close" size={16} /></button></div><ol><li><span>01</span><strong>Pick a mission</strong><p>Let a little surprise in.</p></li><li><span>02</span><strong>Go live it</strong><p>Put the phone away.</p></li><li><span>03</span><strong>Keep the memory</strong><p>Add a photo. Earn XP.</p></li></ol></div>}
-        {!isExplorerMode && <div className="discovery-row"><button className="discovery-card places-card" onClick={() => goToTrack(true)}><span className="discovery-symbol"><AppIcon name="compass" size={28} /></span><span className="eyebrow">TAKE THE SCENIC ROUTE</span><h3>Mumbai has<br />a few secrets.</h3><p>Find a local spot worth stepping out for.</p><span className="card-link">Explore neighbourhoods <AppIcon name="arrow" size={18} /></span></button><button className="discovery-card community-card" onClick={showFeed}><span className="discovery-symbol"><AppIcon name="camera" size={28} /></span><span className="eyebrow">OUT THERE, DOING THINGS</span><h3>Less content.<br />More connection.</h3><p>See the moments other explorers made.</p><span className="card-link">See the community <AppIcon name="arrow" size={18} /></span></button></div>}
+        {!isExplorerMode && <div className="discovery-row"><button className="discovery-card places-card" onClick={() => goToTrack(true)}><span className="discovery-symbol"><AppIcon name="compass" size={28} /></span><span className="eyebrow">TAKE THE SCENIC ROUTE</span><h3>Your city has<br />a few secrets.</h3><p>Find a local spot worth stepping out for.</p><span className="card-link">Explore neighbourhoods <AppIcon name="arrow" size={18} /></span></button><button className="discovery-card community-card" onClick={showFeed}><span className="discovery-symbol"><AppIcon name="camera" size={28} /></span><span className="eyebrow">OUT THERE, DOING THINGS</span><h3>Less content.<br />More connection.</h3><p>See the moments other explorers made.</p><span className="card-link">See the community <AppIcon name="arrow" size={18} /></span></button></div>}
       </>}
       </div>
       <aside className="personal-column" aria-label="Your explorer space">
@@ -3458,7 +3459,7 @@ export default function Home() {
           <div className="section-label"><AppIcon name="sun" size={18} /><h2>YOUR LIFE, OFFLINE</h2></div>
           <div className="profile-summary"><span className="large-avatar">{handle.charAt(0).toUpperCase()}</span><div>{isEditingHandle ? <input aria-label="Your handle" type="text" defaultValue={handle} onBlur={e => saveHandle(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveHandle(e.currentTarget.value)} autoFocus /> : <button className="handle-button" onClick={() => setIsEditingHandle(true)}>@{handle} <span>Edit</span></button>}<p>{getRankTitle(totalXp)}</p></div></div>
           <div className="stat-grid"><div><span className="stat-number">{streak}<small>{streak === 1 ? 'day' : 'days'}</small></span><span>Loop streak</span></div><div><span className="stat-number xp-number">{totalXp}<small>XP</small></span><span>Real-world XP</span></div></div>
-          <div className="rank-track"><div><span>{nextRank ? 'Your next chapter' : 'You made it'}</span><strong>{nextRank?.title ?? 'Mumbai Made'}</strong></div><progress aria-label="Progress to next rank" value={totalXp} max={nextRank?.minXp ?? Math.max(totalXp, 1)} /><p>{nextRank ? `${nextRank.minXp - totalXp} XP to your next rank. One adventure at a time.` : 'Keep finding your kind of adventure.'}</p></div>
+          <div className="rank-track"><div><span>{nextRank ? 'Your next chapter' : 'You made it'}</span><strong>{nextRank?.title ?? getRankTitle(totalXp)}</strong></div><progress aria-label="Progress to next rank" value={totalXp} max={nextRank?.minXp ?? Math.max(totalXp, 1)} /><p>{nextRank ? `${nextRank.minXp - totalXp} XP to your next rank. One adventure at a time.` : 'Keep finding your kind of adventure.'}</p></div>
           {badges.length > 0 && <div className="badge-list">{badges.map((badge, i) => <span key={i}>{badge}</span>)}</div>}
           <div className="profile-actions"><button onClick={() => setShowFriendsModal(true)}><AppIcon name="people" size={18} />Squad ({friendsList.length})</button><button onClick={generateRecapCard}><AppIcon name="grid" size={18} />Recap</button></div>
           {(!userEmail || userEmail === 'guest@breaktheloop.app') ? <div className="save-progress"><button className="secondary-button" onClick={() => setShowSaveProgressModal(true)}>Save My Progress <AppIcon name="arrow" size={17} /></button><button className="signin-link" onClick={() => setShowRecoverModal(true)}>Already have an account? Sign in</button></div> : <button className="signin-link" onClick={handleSignOut}>Sign Out</button>}
@@ -3467,7 +3468,7 @@ export default function Home() {
         <div className="contribute-panel"><span className="eyebrow">BUILT BY PEOPLE LIKE YOU</span><h3>Know a good way<br />to break the loop?</h3><button className="text-link" onClick={() => { setSuggestQuestMode(mode); setShowSuggestQuestModal(true); }}>Suggest Quest <AppIcon name="arrow" size={17} /></button>{isGuest && <button className="signin-link" onClick={() => { setAuthModalReason(''); setShowAuthModal(true); }}>Verify</button>}</div>
       </aside>
       </div>
-      <footer className="site-footer"><span>BREAK THE LOOP. <span>Go make a memory.</span></span><div><span>Made for Mumbai</span><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
+      <footer className="site-footer"><span>BREAK THE LOOP. <span>Go make a memory.</span></span><div><span>Starting in {CURRENT_CITY.name}</span><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
     </main>
   );
 }

@@ -1,5 +1,6 @@
 interface StoryStats {
   handle: string;
+  cityName: string;
   streak: number;
   totalXp: number;
   rank: string;
@@ -156,7 +157,7 @@ export function drawStoryCard(ctx: CanvasRenderingContext2D, data: StoryCardData
   }
 
   ctx.fillStyle = colors.ink;
-  fittedText(ctx, `@${data.handle} · Mumbai`, 80, 1772, 44, 920);
+  fittedText(ctx, `@${data.handle} · ${data.cityName}`, 80, 1772, 44, 920);
   ctx.fillStyle = colors.line;
   ctx.fillRect(80, 1812, 920, 2);
   label(ctx, 'GO MAKE A MEMORY.', 80, 1872);
