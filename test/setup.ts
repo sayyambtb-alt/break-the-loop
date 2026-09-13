@@ -31,6 +31,8 @@ const fake2dContext = {
   fillRect: vi.fn(),
   fillText: vi.fn(),
   beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
   arc: vi.fn(),
   fill: vi.fn(),
   stroke: vi.fn(),

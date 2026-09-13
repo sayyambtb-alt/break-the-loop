@@ -5,6 +5,7 @@ import Link from 'next/link';
 import AppIcon from './components/AppIcon';
 import SavedPlaces from './components/SavedPlaces';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
+import { createStoryCard, type StoryCardData } from './lib/story-cards';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
@@ -175,7 +176,6 @@ export default function Home() {
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(0);
-  const [savedMins, setSavedMins] = useState(0);
   const [totalXp, setTotalXp] = useState(0);
   const [handle, setHandle] = useState('Explorer');
   const [badges, setBadges] = useState<string[]>(['🌱 First Step']);
@@ -239,6 +239,7 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState<{ handle: string; total_xp: number; streak: number; is_self: boolean }[]>([]);
   const [showWrappedModal, setShowWrappedModal] = useState(false);
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
+  const [pendingRecap, setPendingRecap] = useState<Extract<StoryCardData, { kind: 'recap' }> | null>(null);
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
   const [sendingInviteTo, setSendingInviteTo] = useState<string | null>(null);
 
@@ -1036,7 +1037,6 @@ export default function Home() {
     setEmailInput('');
     setHandle('Explorer');
     setStreak(0);
-    setSavedMins(0);
     setTotalXp(0);
     setBadges(['🌱 First Step']);
     setFriendsList([]);
@@ -1056,7 +1056,6 @@ export default function Home() {
           if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', data.handle);
         }
         setStreak(data.streak ?? 0);
-        setSavedMins(data.time_saved_mins ?? 0);
         setTotalXp(data.total_xp || 0);
         if (data.badges) setBadges(data.badges);
         if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
@@ -1916,186 +1915,36 @@ export default function Home() {
     }
   };
 
-  const generateShareCard = (newStreak: number, newSavedMins: number) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1920;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
-    bgGradient.addColorStop(0, '#090d16');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, 0, 1080, 1920);
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
-    ctx.beginPath();
-    ctx.arc(540, 400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 52px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 220);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 360, 880, 1100, 40);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.roundRect(140, 420, 800, 80, 20);
-    ctx.fill();
-
-    ctx.fillStyle = '#fda4af';
-    ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '600 42px sans-serif';
-    const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
-    const words = text.split(' ');
-    let line = '';
-    let y = 600;
-
-    for (let i = 0; i < words.length; i++) {
-      const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > 780 && i > 0) {
-        ctx.fillText(line, 540, y);
-        line = words[i] + ' ';
-        y += 60;
-      } else {
-        line = testLine;
-      }
+  const generateRecapCard = () => {
+    try {
+      const url = createStoryCard({ kind: 'recap', handle, streak, totalXp, rank: getRankTitle(totalXp), friendCount: friendsList.length });
+      if (!url) throw new Error('Canvas unavailable');
+      setWrappedCardDataUrl(url);
+      setShowWrappedModal(true);
+    } catch {
+      showToast('Could not create your recap. Please try again.', 'error');
     }
-    ctx.fillText(line, 540, y);
-
-    const statsY = Math.max(y + 100, 1050);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('IRL XP GAINED', 760, statsY);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
-
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '700 40px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '500 32px sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
-
-    setCardDataUrl(canvas.toDataURL('image/png'));
   };
 
-  const generateSpotifyWrappedCard = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1920;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
-    bgGradient.addColorStop(0, '#0f172a');
-    bgGradient.addColorStop(0.3, '#1e1b4b');
-    bgGradient.addColorStop(0.7, '#881337');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, 0, 1080, 1920);
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.arc(200, 300, 250, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-    ctx.beginPath();
-    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 48px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 200);
-
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 340, 880, 1250, 40);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 56px sans-serif';
-    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} XP`, 540, 680);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '900 80px sans-serif';
-    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
-
-    const topBadge = badges[badges.length - 1] || '🌱 First Step';
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(topBadge, 540, 1120);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
-
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
-
-    const url = canvas.toDataURL('image/png');
-    setWrappedCardDataUrl(url);
-    setShowWrappedModal(true);
-  };
+  // Capture the RPC result at completion. A delayed callback that reads the
+  // previous render's state would show the old XP, streak and rank.
+  useEffect(() => {
+    if (!pendingRecap || !isCompleted) return;
+    const timer = setTimeout(() => {
+      try {
+        const url = createStoryCard(pendingRecap);
+        if (url) {
+          setWrappedCardDataUrl(url);
+          setShowWrappedModal(true);
+        }
+      } catch {
+        // A share-image failure must not interrupt a successfully logged mission.
+      }
+      setPendingRecap(null);
+    }, 2500);
+    // Also cancel if the player leaves the completion screen or unmounts.
+    return () => clearTimeout(timer);
+  }, [pendingRecap, isCompleted]);
 
   const handleCompleteMission = async () => {
     if (!proofImage) {
@@ -2151,7 +2000,6 @@ export default function Home() {
 
         // Safely check for data before setting state so the page does not crash
         if (data.new_streak !== undefined) setStreak(data.new_streak);
-        if (data.new_saved_mins !== undefined) setSavedMins(data.new_saved_mins);
         if (data.badges !== undefined) setBadges(data.badges);
         if (data.new_total_xp !== undefined) setTotalXp(data.new_total_xp);
 
@@ -2162,19 +2010,29 @@ export default function Home() {
           }
         }
 
-        // Wrap card generation in try/catch and provide fallback 0 values
+        const completedStats = {
+          handle,
+          streak: data.new_streak ?? streak,
+          totalXp: data.new_total_xp ?? totalXp,
+          rank: getRankTitle(data.new_total_xp ?? totalXp),
+        };
+        // Mission XP and lifetime XP are different fields; saved minutes are
+        // neither. Prefer the awarded XP returned by complete_mission.
         try {
-          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+          setCardDataUrl(createStoryCard({
+            kind: 'mission',
+            ...completedStats,
+            quest: activeQuest || 'Completed a local real-world mission in Mumbai',
+            mode: isExplorerMode ? 'explorer' : mode,
+            xpEarned: data.xp_earned ?? activeQuestXp,
+          }));
         } catch {
+          setCardDataUrl(null);
         }
 
-        // Auto-surface the Recap at a genuine peak moment, after the completion
-        // animation has had time to play rather than instantly on top of it.
-        if (justEarnedNewBadge || wasLegendary) {
-          setTimeout(() => {
-            generateSpotifyWrappedCard();
-          }, 2500);
-        }
+        setPendingRecap(justEarnedNewBadge || wasLegendary
+          ? { kind: 'recap', ...completedStats, friendCount: friendsList.length }
+          : null);
       }
     } catch {
       showToast('Failed to log mission completion. Please try again.', 'error');
@@ -3188,25 +3046,20 @@ export default function Home() {
       {/* Journey Recap Modal */}
       {showWrappedModal && (
         <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
-            <button
-              onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
-              ✕
-            </button>
-            <h2 className="text-sm font-black text-orange-700 uppercase tracking-wider">🎧 Your IRL Recap</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="recap-title" className="recap-dialog w-full max-w-sm bg-white rounded-3xl p-5 space-y-4 shadow-2xl text-center">
+            <div className="recap-heading">
+              <h2 id="recap-title">Your IRL Recap</h2>
+              <button onClick={() => setShowWrappedModal(false)} aria-label="Close recap" className="icon-button">✕</button>
+            </div>
             {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
-                <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
-              </div>
+              <img src={wrappedCardDataUrl} alt="Recap" width={1080} height={1920} className="story-preview" />
             )}
             <button
               onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
+              className="share-story-button"
             >
-              <span>📲</span>
-              <span>Share Recap to Story / WhatsApp</span>
+              <AppIcon name="arrow" size={20} />
+              <span>Share your recap</span>
             </button>
           </div>
         </div>
@@ -3470,7 +3323,7 @@ export default function Home() {
           )}
 
           {isCompleted && (
-            <div className="w-full bg-white border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="completion-card w-full bg-white rounded-3xl p-6 text-center space-y-4">
               <div className="text-4xl">🎉</div>
               <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
               <p className="text-xs text-stone-700">
@@ -3479,16 +3332,14 @@ export default function Home() {
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-orange-500/30 shadow-xl bg-stone-50">
-                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
-                  </div>
+                  <img src={cardDataUrl} alt="Story Card" width={1080} height={1920} className="story-preview" />
 
                   <button
                     onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
+                    className="share-story-button"
                   >
-                    <span>📲</span>
-                    <span>Share to Instagram Story / WhatsApp</span>
+                    <AppIcon name="arrow" size={20} />
+                    <span>Share your adventure</span>
                   </button>
                 </div>
               )}
@@ -3609,7 +3460,7 @@ export default function Home() {
           <div className="stat-grid"><div><span className="stat-number">{streak}<small>{streak === 1 ? 'day' : 'days'}</small></span><span>Loop streak</span></div><div><span className="stat-number xp-number">{totalXp}<small>XP</small></span><span>Real-world XP</span></div></div>
           <div className="rank-track"><div><span>{nextRank ? 'Your next chapter' : 'You made it'}</span><strong>{nextRank?.title ?? 'Mumbai Made'}</strong></div><progress aria-label="Progress to next rank" value={totalXp} max={nextRank?.minXp ?? Math.max(totalXp, 1)} /><p>{nextRank ? `${nextRank.minXp - totalXp} XP to your next rank. One adventure at a time.` : 'Keep finding your kind of adventure.'}</p></div>
           {badges.length > 0 && <div className="badge-list">{badges.map((badge, i) => <span key={i}>{badge}</span>)}</div>}
-          <div className="profile-actions"><button onClick={() => setShowFriendsModal(true)}><AppIcon name="people" size={18} />Squad ({friendsList.length})</button><button onClick={generateSpotifyWrappedCard}><AppIcon name="grid" size={18} />Recap</button></div>
+          <div className="profile-actions"><button onClick={() => setShowFriendsModal(true)}><AppIcon name="people" size={18} />Squad ({friendsList.length})</button><button onClick={generateRecapCard}><AppIcon name="grid" size={18} />Recap</button></div>
           {(!userEmail || userEmail === 'guest@breaktheloop.app') ? <div className="save-progress"><button className="secondary-button" onClick={() => setShowSaveProgressModal(true)}>Save My Progress <AppIcon name="arrow" size={17} /></button><button className="signin-link" onClick={() => setShowRecoverModal(true)}>Already have an account? Sign in</button></div> : <button className="signin-link" onClick={handleSignOut}>Sign Out</button>}
         </section>
         <SavedPlaces key={currentUserId ?? 'visitor'} userId={currentUserId} activeGem={activeGem} />

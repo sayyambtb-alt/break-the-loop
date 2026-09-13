@@ -32,8 +32,9 @@ describe('mission completion end-to-end', () => {
       data: {
         success: true,
         new_streak: 2,
-        new_saved_mins: 30,
+        new_saved_mins: 290,
         new_total_xp: 30,
+        xp_earned: 15,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -76,15 +77,20 @@ describe('mission completion end-to-end', () => {
 
     expect(screen.getByText('Loop streak').parentElement).toHaveTextContent('2days');
     expect(screen.getByText('Real-world XP').parentElement).toHaveTextContent('30XP');
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    expect(ctx.fillText).toHaveBeenCalledWith('+15 XP', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).not.toHaveBeenCalledWith('+290 XP', expect.any(Number), expect.any(Number));
   });
 
-  it('auto-surfaces the Recap card when a new badge is earned', async () => {
+  it('auto-surfaces the Recap with the updated XP, streak and actual rank when a new badge is earned', async () => {
     const user = userEvent.setup();
     mockState.rpcResponses['complete_mission'] = {
       data: {
         success: true,
         new_streak: 3,
-        new_saved_mins: 45,
+        new_saved_mins: 290,
+        new_total_xp: 155,
+        xp_earned: 15,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -107,10 +113,40 @@ describe('mission completion end-to-end', () => {
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
     await waitFor(
-      () => expect(screen.getByText('🎧 Your IRL Recap')).toBeInTheDocument(),
+      () => expect(screen.getByRole('dialog', { name: 'Your IRL Recap' })).toBeInTheDocument(),
       { timeout: 4000 }
     );
     expect(screen.getByAltText('Recap')).toBeInTheDocument();
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    expect(ctx.fillText).toHaveBeenCalledWith('155 XP', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith('3 days', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith('Chaos Local', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).not.toHaveBeenCalledWith('290 XP', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).not.toHaveBeenCalledWith('🔥 Warm Up', expect.any(Number), expect.any(Number));
+
+    await user.click(screen.getByRole('button', { name: 'Close recap' }));
+    vi.mocked(ctx.fillText).mockClear();
+    await user.click(screen.getByRole('button', { name: 'Recap' }));
+    expect(ctx.fillText).toHaveBeenCalledWith('155 XP', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith('Chaos Local', expect.any(Number), expect.any(Number));
+  });
+
+  it('uses persisted profile XP for a manually opened recap and labels one day correctly', async () => {
+    const user = userEvent.setup();
+    mockState.responses['profiles'] = (builder) => {
+      const profile = { device_id: 'anon-user-id', handle: 'Tester', streak: 1, time_saved_mins: 290, total_xp: 155, badges: ['⚡ 1 Hour Saved'] };
+      return { data: builder.method === 'select' ? [profile] : profile, error: null };
+    };
+    await renderApp();
+    await waitFor(() => expect(screen.getByText('Real-world XP').parentElement).toHaveTextContent('155XP'));
+    const ctx = document.createElement('canvas').getContext('2d')!;
+    vi.mocked(ctx.fillText).mockClear();
+    await user.click(screen.getByRole('button', { name: 'Recap' }));
+    expect(ctx.fillText).toHaveBeenCalledWith('155 XP', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith('1 day', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).toHaveBeenCalledWith('Chaos Local', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).not.toHaveBeenCalledWith('290 XP', expect.any(Number), expect.any(Number));
+    expect(ctx.fillText).not.toHaveBeenCalledWith('⚡ 1 Hour Saved', expect.any(Number), expect.any(Number));
   });
 
   it('pays out the XP that matches the rarity shown on the card', async () => {
