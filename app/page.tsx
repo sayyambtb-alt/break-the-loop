@@ -185,6 +185,10 @@ export default function Home() {
   const [pendingInviteRoomId, setPendingInviteRoomId] = useState<string | null>(null);
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
+  // Same-origin copy of the proof used for the share card. The uploaded URL is
+  // cross-origin, and drawing that onto the canvas taints it, which makes
+  // toDataURL throw and takes the whole card down with it.
+  const [proofDataUrl, setProofDataUrl] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(1);
   const [savedMins, setSavedMins] = useState(15);
@@ -1223,6 +1227,7 @@ export default function Home() {
     setActiveGem(null);
     setRoomId('');
     setProofImage(null);
+    setProofDataUrl(null);
     setIsCompleted(false);
     setIsInviteSession(false);
     setIsSearching(false);
@@ -1245,6 +1250,7 @@ export default function Home() {
     setActiveGem(null);
     setRoomId('');
     setProofImage(null);
+    setProofDataUrl(null);
     setIsCompleted(false);
     setIsInviteSession(false);
     setIsSearching(false);
@@ -1266,6 +1272,7 @@ export default function Home() {
     setActiveQuest(null);
     setRoomId('');
     setProofImage(null);
+    setProofDataUrl(null);
     setIsCompleted(false);
     setIsInviteSession(false);
     setIsSearching(false);
@@ -1316,6 +1323,7 @@ export default function Home() {
     setActiveQuest(null);
     setActiveGem(null);
     setProofImage(null);
+    setProofDataUrl(null);
     setIsCompleted(false);
     setCardDataUrl(null);
     setMessages([]);
@@ -1410,6 +1418,7 @@ export default function Home() {
       setActiveGem(null);
       setRoomId('');
       setProofImage(null);
+      setProofDataUrl(null);
       setIsCompleted(false);
       setIsInviteSession(false);
       setIsSearching(false);
@@ -1684,6 +1693,7 @@ export default function Home() {
     setIsSearching(true);
     setActiveQuest(null);
     setProofImage(null);
+    setProofDataUrl(null);
     setIsCompleted(false);
     setCardDataUrl(null);
     setMessages([]);
@@ -1972,6 +1982,17 @@ export default function Home() {
       const compressedBlob = await compressImage(file, 800, 0.6);
       const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
 
+      const localCopy = await new Promise<string | null>((resolve) => {
+        try {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(typeof reader.result === 'string' ? reader.result : null);
+          reader.onerror = () => resolve(null);
+          reader.readAsDataURL(compressedBlob);
+        } catch {
+          resolve(null);
+        }
+      });
+
       const { error: uploadError } = await supabase.storage
         .from('Proofs')
         .upload(fileName, compressedBlob, {
@@ -1984,24 +2005,28 @@ export default function Home() {
         console.error('Storage upload error:', uploadError);
         showToast('Could not upload image to cloud. Please check connection and try again.', 'error');
         setProofImage(null);
+        setProofDataUrl(null);
       } else {
         const { data } = supabase.storage.from('Proofs').getPublicUrl(fileName);
         setProofImage(data.publicUrl);
+        setProofDataUrl(localCopy);
       }
     } catch (err) {
       console.error('Compression error:', err);
       showToast('Failed to process image. Please try again.', 'error');
       setProofImage(null);
+      setProofDataUrl(null);
     } finally {
       setUploading(false);
     }
   };
 
-  // Rebranded onto the app's own palette (it was still slate/rose from the
-  // pre-light-theme design), and given the right numbers: it used to print the
-  // running time_saved_mins total under an "IRL XP GAINED" heading, which is
-  // neither XP nor a gain.
-  const generateShareCard = (
+  // The card that actually travels: it lands on someone else's story with no
+  // other context, so it carries the proof photo, the mission, and where that
+  // put you. It previously showed neither the photo nor real XP — it printed
+  // the running time_saved_mins total under an "IRL XP GAINED" heading, which
+  // is neither XP nor a gain — on the pre-redesign slate/rose palette.
+  const generateShareCard = async (
     newStreak: number,
     xpEarned: number,
     newTotalXp: number
@@ -2014,7 +2039,7 @@ export default function Home() {
 
     const INK = '#1C1917';
     const MUTED = '#78716C';
-    const ACTION = '#EA580C';
+    const ACTION = '#C2410C';
     const REWARD = '#B45309';
     const LINE = '#E7E0D8';
 
@@ -2038,92 +2063,160 @@ export default function Home() {
     ctx.fillStyle = ACTION;
     ctx.font = '700 50px "Space Grotesk", sans-serif';
     ctx.letterSpacing = '2px';
-    ctx.fillText('BREAK THE LOOP', 540, 214);
+    ctx.fillText('BREAK THE LOOP', 540, 196);
     ctx.letterSpacing = '0px';
 
     ctx.fillStyle = MUTED;
     ctx.font = '600 32px Inter, sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 272);
+    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 254);
 
-    ctx.fillStyle = '#FFFFFF';
-    ctx.strokeStyle = LINE;
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.roundRect(90, 350, 900, 1140, 48);
-    ctx.fill();
-    ctx.stroke();
+    // Load the proof, if we kept a same-origin copy of it. Everything below
+    // lays out around whether this succeeded, so a missing or broken photo
+    // simply produces the text-only card rather than a hole.
+    const photo = await new Promise<HTMLImageElement | null>((resolve) => {
+      if (!proofDataUrl) return resolve(null);
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = proofDataUrl;
+      // A cached data URL can decode before onload is attached.
+      if (img.complete && img.naturalWidth > 0) resolve(img);
+    });
 
-    // Mode pill
-    const pillLabel = `${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN`;
-    ctx.font = '700 34px Inter, sans-serif';
-    const pillWidth = ctx.measureText(pillLabel).width + 72;
-    ctx.fillStyle = '#FFF7ED';
-    ctx.strokeStyle = '#FED7AA';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.roundRect(540 - pillWidth / 2, 424, pillWidth, 72, 36);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = ACTION;
-    ctx.fillText(pillLabel, 540, 472);
+    const CARD_X = 90;
+    const CARD_W = 900;
+    const CARD_TOP = 320;
+    const PHOTO_H = photo ? 620 : 0;
+    const RADIUS = 48;
 
-    // Quest text, wrapped
-    ctx.fillStyle = INK;
-    ctx.font = '500 46px "Space Grotesk", sans-serif';
+    const roundRectPath = (x: number, y: number, w: number, h: number, r: number) => {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+    };
+
+    // Measure the mission text first so the card can be sized to its content
+    // instead of leaving a fixed slab of dead space under short missions.
+    ctx.font = '500 44px "Space Grotesk", sans-serif';
     const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
     const words = text.split(' ');
+    const lines: string[] = [];
     let line = '';
-    let y = 620;
-
     for (let i = 0; i < words.length; i++) {
       const testLine = line + words[i] + ' ';
-      if (ctx.measureText(testLine).width > 760 && i > 0) {
-        ctx.fillText(line.trim(), 540, y);
+      if (ctx.measureText(testLine).width > 740 && i > 0) {
+        lines.push(line.trim());
         line = words[i] + ' ';
-        y += 62;
       } else {
         line = testLine;
       }
     }
-    ctx.fillText(line.trim(), 540, y);
+    lines.push(line.trim());
+    const visibleLines = lines.slice(0, 4);
 
-    const statsY = Math.max(y + 160, 1090);
+    const PILL_H = 68;
+    const textBlockH = visibleLines.length * 58;
+    const contentH = 48 + PILL_H + 44 + textBlockH + 56 + 210;
+    const CARD_H = PHOTO_H + contentH;
 
+    // Card
+    ctx.save();
+    roundRectPath(CARD_X, CARD_TOP, CARD_W, CARD_H, RADIUS);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fill();
+    ctx.clip();
+
+    if (photo) {
+      // Clip to the photo band as well as the card. Clipping to the card alone
+      // lets a cover-fit image spill past the band and run under the text.
+      ctx.beginPath();
+      ctx.rect(CARD_X, CARD_TOP, CARD_W, PHOTO_H);
+      ctx.clip();
+
+      // Cover-fit, same as object-cover in the app.
+      const scale = Math.max(CARD_W / photo.width, PHOTO_H / photo.height);
+      const dw = photo.width * scale;
+      const dh = photo.height * scale;
+      ctx.drawImage(photo, CARD_X + (CARD_W - dw) / 2, CARD_TOP + (PHOTO_H - dh) / 2, dw, dh);
+    }
+    ctx.restore();
+
+    ctx.strokeStyle = LINE;
+    ctx.lineWidth = 3;
+    roundRectPath(CARD_X, CARD_TOP, CARD_W, CARD_H, RADIUS);
+    ctx.stroke();
+
+    let y = CARD_TOP + PHOTO_H + 48;
+
+    // Mode pill
+    const pillLabel = `${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN`;
+    ctx.font = '700 32px Inter, sans-serif';
+    const pillWidth = ctx.measureText(pillLabel).width + 72;
+    ctx.fillStyle = '#FFF7ED';
+    ctx.strokeStyle = '#FED7AA';
+    ctx.lineWidth = 2;
+    roundRectPath(540 - pillWidth / 2, y, pillWidth, PILL_H, PILL_H / 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = ACTION;
+    ctx.fillText(pillLabel, 540, y + 45);
+    y += PILL_H + 44;
+
+    // Mission text
+    ctx.fillStyle = INK;
+    ctx.font = '500 44px "Space Grotesk", sans-serif';
+    for (const l of visibleLines) {
+      y += 48;
+      ctx.fillText(l, 540, y);
+      y += 10;
+    }
+
+    y += 56;
     ctx.strokeStyle = LINE;
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(180, statsY - 92);
-    ctx.lineTo(900, statsY - 92);
+    ctx.moveTo(CARD_X + 90, y);
+    ctx.lineTo(CARD_X + CARD_W - 90, y);
     ctx.stroke();
 
+    y += 60;
     ctx.font = '600 30px Inter, sans-serif';
     ctx.fillStyle = MUTED;
-    ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('XP EARNED', 760, statsY);
+    ctx.fillText('STREAK', 320, y);
+    ctx.fillText('XP EARNED', 760, y);
 
-    ctx.font = '700 70px "Space Grotesk", sans-serif';
+    y += 76;
+    ctx.font = '700 66px "Space Grotesk", sans-serif';
     ctx.fillStyle = ACTION;
-    ctx.fillText(`${newStreak} days`, 320, statsY + 82);
+    ctx.fillText(`${newStreak} ${newStreak === 1 ? 'day' : 'days'}`, 320, y);
     ctx.fillStyle = REWARD;
-    ctx.fillText(`+${xpEarned}`, 760, statsY + 82);
+    ctx.fillText(`+${xpEarned}`, 760, y);
 
+    y += 64;
     ctx.font = '600 30px Inter, sans-serif';
     ctx.fillStyle = MUTED;
     ctx.fillText(
       `${newTotalXp.toLocaleString()} XP total • ${getRankTitle(newTotalXp)}`,
       540,
-      statsY + 168
+      y
     );
 
+    // Footer sits under the card, wherever the card ended.
+    const footerY = Math.min(CARD_TOP + CARD_H + 96, 1790);
     ctx.fillStyle = INK;
     ctx.font = '700 42px "Space Grotesk", sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1610);
+    ctx.fillText(`@${handle} • Mumbai, MH`, 540, footerY);
 
     ctx.fillStyle = MUTED;
     ctx.font = '500 32px Inter, sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1676);
+    ctx.fillText('Join at breaktheloopapp.in', 540, footerY + 62);
 
-    setCardDataUrl(canvas.toDataURL('image/png'));
+    try {
+      setCardDataUrl(canvas.toDataURL('image/png'));
+    } catch {
+      // A tainted canvas would throw here. Nothing to share, but the
+      // completion screen still works without a card.
+      setCardDataUrl(null);
+    }
   };
 
   // The share card is the one part of the app that travels -- it lands on
@@ -2191,7 +2284,7 @@ export default function Home() {
 
     ctx.fillStyle = MUTED;
     ctx.font = '400 30px Inter, sans-serif';
-    ctx.fillText('Real-world time reclaimed from the scroll', 540, 508);
+    ctx.fillText('Here is what you did instead of scrolling', 540, 508);
 
     const rank = getRankTitle(totalXp);
 
@@ -2234,7 +2327,13 @@ export default function Home() {
     ctx.fillText(topBadge, 540, 1456);
     ctx.fillStyle = MUTED;
     ctx.font = '600 30px Inter, sans-serif';
-    ctx.fillText(`${friendsList.length} raid partners in your squad`, 540, 1524);
+    ctx.fillText(
+      friendsList.length === 1
+        ? '1 raid partner in your squad'
+        : `${friendsList.length} raid partners in your squad`,
+      540,
+      1524
+    );
 
     ctx.fillStyle = INK;
     ctx.font = '700 42px "Space Grotesk", sans-serif';
@@ -2316,7 +2415,7 @@ export default function Home() {
 
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
-          generateShareCard(
+          await generateShareCard(
             data.new_streak || 0,
             activeQuestXp,
             data.new_total_xp ?? totalXp
