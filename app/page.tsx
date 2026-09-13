@@ -3,10 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
-import { getRankTitle } from './lib/ranks';
+import { getRank, getRankTitle, type RankTier } from './lib/ranks';
 import { applyTheme, readThemePref, resolveTheme, systemTheme, THEME_KEY, type Theme, type ThemePref } from './lib/theme';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import RankProgress from "./components/RankProgress";
+import RankUpModal from "./components/RankUpModal";
 import { Modal, Button, Chip, Stat, SectionLabel, inputClass } from "./components/ui";
 import {
   IconBell, IconBellOff, IconShield, IconFlag, IconMap, IconPencil,
@@ -268,6 +269,10 @@ export default function Home() {
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
   const [sendingInviteTo, setSendingInviteTo] = useState<string | null>(null);
+
+  // Rank-up celebration. Crossing a tier is the biggest event in the app and
+  // was previously a four-second toast sharing a slot with error messages.
+  const [rankUp, setRankUp] = useState<{ from: RankTier; xp: number } | null>(null);
 
   // Notifications & Feed
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
@@ -2448,7 +2453,15 @@ export default function Home() {
         if (data.new_total_xp !== undefined) {
           const newRankTitle = getRankTitle(data.new_total_xp);
           if (newRankTitle !== oldRankTitle) {
-            showToast(`Rank up! You're now a ${newRankTitle}.`, 'success');
+            setRankUp({ from: getRank(totalXp).current, xp: data.new_total_xp });
+            track('rank_up', { rank: newRankTitle, total_xp: data.new_total_xp });
+            confetti({
+              particleCount: 160,
+              spread: 90,
+              startVelocity: 45,
+              origin: { y: 0.5 },
+              colors: ['#F59E0B', '#FBBF24', '#EA580C', '#FCD34D']
+            });
           }
         }
 
@@ -2699,7 +2712,7 @@ export default function Home() {
       {/* Explorer Public Profile Modal */}
       <Modal open={!!selectedProfile} onClose={() => setSelectedProfile(null)}>
         {selectedProfile && (
-          <div className="space-y-4 -mt-2">
+          <div className="space-y-4">
             <div className="flex items-center gap-3">
               <span
                 aria-hidden="true"
@@ -3171,7 +3184,7 @@ export default function Home() {
         onClose={() => setShowAuthModal(false)}
         dismissible={isLoggedIn}
       >
-        <div className="text-center space-y-4 -mt-2">
+        <div className="text-center space-y-4">
           <span
             aria-hidden="true"
             className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
@@ -3251,7 +3264,7 @@ export default function Home() {
 
       {/* Save My Progress Modal */}
       <Modal open={showSaveProgressModal} onClose={() => setShowSaveProgressModal(false)}>
-        <div className="text-center space-y-4 -mt-2">
+        <div className="text-center space-y-4">
           <span
             aria-hidden="true"
             className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
@@ -3284,7 +3297,7 @@ export default function Home() {
 
       {/* Suggest a Quest Modal */}
       <Modal open={showSuggestQuestModal} onClose={() => setShowSuggestQuestModal(false)}>
-        <div className="text-center space-y-4 -mt-2">
+        <div className="text-center space-y-4">
           <span
             aria-hidden="true"
             className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
@@ -3333,7 +3346,7 @@ export default function Home() {
       </Modal>
 
       <Modal open={showSuggestGemModal} onClose={() => setShowSuggestGemModal(false)}>
-        <div className="text-center space-y-4 -mt-2">
+        <div className="text-center space-y-4">
           <span
             aria-hidden="true"
             className="inline-flex w-12 h-12 rounded-full reward-soft reward items-center justify-center"
@@ -3393,7 +3406,7 @@ export default function Home() {
           rather than describing it in a paragraph -- it is the one screen that
           has to land the concept. */}
       <Modal open={showWelcomeModal} onClose={dismissWelcomeModal}>
-        <div className="text-center space-y-5 -mt-2">
+        <div className="text-center space-y-5">
           <div className="space-y-2">
             <span
               aria-hidden="true"
@@ -3441,7 +3454,7 @@ export default function Home() {
       </Modal>
 
       <Modal open={showRecoverModal} onClose={() => setShowRecoverModal(false)}>
-        <div className="text-center space-y-4 -mt-2">
+        <div className="text-center space-y-4">
           <span
             aria-hidden="true"
             className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
@@ -3503,7 +3516,7 @@ export default function Home() {
 
       {/* Safety gate before any multiplayer match. */}
       <Modal open={showSafetyModal} onClose={() => setShowSafetyModal(false)}>
-        <div className="text-center space-y-4 -mt-2">
+        <div className="text-center space-y-4">
           <span
             aria-hidden="true"
             className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
@@ -3677,6 +3690,17 @@ export default function Home() {
             )}
         </div>
       </Modal>
+
+      <RankUpModal
+        open={!!rankUp}
+        fromTier={rankUp?.from ?? null}
+        totalXp={rankUp?.xp ?? totalXp}
+        onClose={() => setRankUp(null)}
+        onShare={cardDataUrl ? () => {
+          setRankUp(null);
+          handleShareCard(cardDataUrl);
+        } : undefined}
+      />
 
       {/* Journey Recap Modal */}
       <Modal

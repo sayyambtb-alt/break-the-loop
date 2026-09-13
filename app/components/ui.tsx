@@ -22,6 +22,8 @@ interface ModalProps {
   /** Rendered at the right of the title row, left of the close button. */
   action?: React.ReactNode;
   children: React.ReactNode;
+  /** Accessible name for dialogs that carry no visible title. */
+  ariaLabel?: string;
   size?: "sm" | "md";
   /** Modals the user must answer (e.g. the safety gate) opt out of dismissal. */
   dismissible?: boolean;
@@ -36,6 +38,7 @@ export function Modal({
   subtitle,
   action,
   children,
+  ariaLabel,
   size = "sm",
   dismissible = true,
   tone = "default",
@@ -109,7 +112,11 @@ export function Modal({
 
   if (!open) return null;
 
-  const hasHeader = Boolean(title || dismissible);
+  // A dialog with no title still needed a close button, and reserving a whole
+  // header row for it left a dead band above the content. Float the button
+  // instead and let the content start at the top.
+  const hasHeaderRow = Boolean(title || subtitle || action);
+  const floatingClose = !hasHeaderRow && dismissible;
 
   return (
     <div
@@ -123,11 +130,23 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={title ? titleId : undefined}
+        aria-label={!title ? ariaLabel : undefined}
         className={`a-pop w-full ${
           size === "md" ? "max-w-md" : "max-w-sm"
-        } max-h-[88vh] overflow-y-auto scroll-soft surface rounded-[1.5rem] border bd-line shadow-[var(--shadow-modal)] text-left`}
+        } relative max-h-[88vh] overflow-y-auto scroll-soft surface rounded-[1.5rem] border bd-line shadow-[var(--shadow-modal)] text-left`}
       >
-        {hasHeader && (
+        {floatingClose && (
+          <button
+            type="button"
+            onClick={close}
+            aria-label="Close"
+            className="icon-btn !w-8 !h-8 border-transparent bg-transparent absolute top-3 right-3 z-10"
+          >
+            <IconClose size={17} />
+          </button>
+        )}
+
+        {hasHeaderRow && (
           <div
             className={`flex items-start justify-between gap-3 px-5 pt-5 pb-3 ${
               tone === "reward" ? "reward-soft rounded-t-[1.5rem]" : ""
@@ -161,7 +180,7 @@ export function Modal({
             </div>
           </div>
         )}
-        <div className={`px-5 pb-5 ${hasHeader ? "" : "pt-5"}`}>{children}</div>
+        <div className={`px-5 pb-5 ${hasHeaderRow ? "" : "pt-5"}`}>{children}</div>
       </div>
     </div>
   );

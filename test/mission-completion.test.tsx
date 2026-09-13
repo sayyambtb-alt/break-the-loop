@@ -172,7 +172,13 @@ describe('mission completion end-to-end', () => {
     await user.click(screen.getByText('Complete & Log Proof'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
-    await screen.findByText(/Rank up! You're now a Chaos Local/);
+    // Crossing a tier now opens a proper celebration rather than a toast that
+    // shares a slot with error messages.
+    const dialog = await screen.findByRole('dialog', { name: 'Rank up' });
+    expect(within(dialog).getByText('Rank up')).toBeInTheDocument();
+    expect(within(dialog).getByText('Chaos Local')).toBeInTheDocument();
+    // The tier you came from is shown so the jump is legible.
+    expect(within(dialog).getByText('Fresh Escapee')).toBeInTheDocument();
   });
 
   it('shows an error and does not mark the mission complete when the RPC fails', async () => {
