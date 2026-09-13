@@ -1,0 +1,328 @@
+/* ---------------------------------------------------------------------------
+   A different argument about what this app is.
+
+   The current design is a game: cream paper, candy orange, fat rounded
+   corners, press-depth buttons, a slot-machine lever in the middle. It looks
+   like Duolingo, and it is built like Duolingo, and that is the problem —
+   see the note at the top of page.tsx.
+
+   This is a city guide. The premise is that the valuable thing here is
+   Mumbaikars' knowledge of Mumbai, not a dare generator, so it should look
+   like something that respects a place.
+
+   - Ink ground, not paper. You open this at 11pm in bed. That is the whole
+     use case. A full-brightness cream page is the wrong answer to it, and
+     dark-as-an-option is a weaker answer than dark-as-the-design.
+   - Kaali-peeli yellow. The taxi. It is the most Mumbai colour there is, it
+     is unmistakable against ink, and it is nobody else's.
+   - A high-contrast serif for display. Editorial, not arcade. It says
+     "somebody wrote this" rather than "you have unlocked this".
+   - Tight radii and hairlines instead of pillow shapes and drop shadows.
+--------------------------------------------------------------------------- */
+
+.v2-root {
+  --ink: #0d0d0e;
+  --ink-raised: #17171a;
+  --ink-sunk: #101012;
+  --hair: #26262b;
+  --hair-strong: #35353c;
+
+  --paper: #f4f2ed;
+  --paper-dim: #b9b6ae;
+  --paper-faint: #85827b;
+
+  --taxi: #f6c500;
+  --taxi-deep: #c99f00;
+  --taxi-ink: #1a1500;
+
+  --sea: #4cc4c0;
+  --alert: #ff6b5a;
+
+  --r-xs: 3px;
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 16px;
+
+  background: var(--ink);
+  color: var(--paper);
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.v2-display {
+  font-family: "Instrument Serif", Georgia, "Times New Roman", serif;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+/* Signage type: the small all-caps labels that run the interface, spaced like
+   a departure board rather than a badge. */
+.v2-sign {
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+  font-size: 0.6875rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--paper-faint);
+}
+
+.v2-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* ---------------------------------------------------------------------------
+   Surfaces — hairlines, not shadows. On an ink ground a drop shadow is
+   invisible; a 1px line is what actually separates things.
+--------------------------------------------------------------------------- */
+
+.v2-card {
+  background: var(--ink-raised);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-md);
+}
+
+.v2-rule {
+  border: 0;
+  border-top: 1px solid var(--hair);
+}
+
+/* ---------------------------------------------------------------------------
+   Controls
+--------------------------------------------------------------------------- */
+
+.v2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  font-size: 0.9375rem;
+  line-height: 1.2;
+  padding: 0.875rem 1.25rem;
+  cursor: pointer;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease,
+    opacity 0.12s ease;
+  touch-action: manipulation;
+}
+
+.v2-btn:focus-visible {
+  outline: 2px solid var(--taxi);
+  outline-offset: 2px;
+}
+
+.v2-btn-primary {
+  background: var(--taxi);
+  color: var(--taxi-ink);
+  border: 1px solid var(--taxi);
+}
+
+.v2-btn-primary:hover:not(:disabled) {
+  background: #ffd426;
+}
+
+.v2-btn-primary:active:not(:disabled) {
+  background: var(--taxi-deep);
+}
+
+.v2-btn-primary:disabled {
+  background: var(--hair);
+  border-color: var(--hair);
+  color: var(--paper-faint);
+  cursor: not-allowed;
+}
+
+.v2-btn-quiet {
+  background: transparent;
+  color: var(--paper);
+  border: 1px solid var(--hair-strong);
+}
+
+.v2-btn-quiet:hover:not(:disabled) {
+  border-color: var(--paper-faint);
+}
+
+.v2-btn-bare {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--paper-dim);
+  padding: 0.5rem 0.25rem;
+  font-size: 0.875rem;
+}
+
+.v2-btn-bare:hover:not(:disabled) {
+  color: var(--paper);
+}
+
+/* A choice in a set: the time budget, the travel mode, the kind filters. */
+.v2-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  padding: 0.875rem 1rem;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--hair);
+  background: var(--ink-raised);
+  color: var(--paper);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background-color 0.12s ease;
+}
+
+.v2-choice:hover {
+  border-color: var(--hair-strong);
+}
+
+.v2-choice:focus-visible {
+  outline: 2px solid var(--taxi);
+  outline-offset: 2px;
+}
+
+.v2-choice[aria-pressed="true"] {
+  background: var(--taxi);
+  border-color: var(--taxi);
+  color: var(--taxi-ink);
+}
+
+.v2-choice[aria-pressed="true"] .v2-choice-sub {
+  color: rgba(26, 21, 0, 0.7);
+}
+
+.v2-choice-sub {
+  font-size: 0.75rem;
+  color: var(--paper-faint);
+}
+
+.v2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--hair-strong);
+  background: transparent;
+  color: var(--paper-dim);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.v2-chip:hover {
+  color: var(--paper);
+  border-color: var(--paper-faint);
+}
+
+.v2-chip[aria-pressed="true"] {
+  background: var(--paper);
+  border-color: var(--paper);
+  color: var(--ink);
+}
+
+.v2-chip:focus-visible {
+  outline: 2px solid var(--taxi);
+  outline-offset: 2px;
+}
+
+.v2-input {
+  width: 100%;
+  background: var(--ink-sunk);
+  border: 1px solid var(--hair);
+  border-radius: var(--r-sm);
+  padding: 0.75rem 0.875rem;
+  color: var(--paper);
+  font-size: 0.9375rem;
+}
+
+.v2-input::placeholder {
+  color: var(--paper-faint);
+}
+
+.v2-input:focus {
+  outline: none;
+  border-color: var(--taxi);
+}
+
+/* ---------------------------------------------------------------------------
+   The Log ladder. Mumbai is a long thin island that runs south to north, so
+   the honest shape for "where have you been" is a vertical line, not a grid
+   of badges.
+--------------------------------------------------------------------------- */
+
+.v2-ladder-rail {
+  position: absolute;
+  left: 7px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--hair);
+}
+
+.v2-ladder-dot {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  border: 1px solid var(--hair-strong);
+  background: var(--ink);
+  flex: none;
+  position: relative;
+  z-index: 1;
+}
+
+.v2-ladder-dot[data-been="true"] {
+  background: var(--taxi);
+  border-color: var(--taxi);
+}
+
+/* ---------------------------------------------------------------------------
+   Motion — restrained on purpose. This app is arguing against stimulation.
+--------------------------------------------------------------------------- */
+
+@keyframes v2-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.v2-in {
+  animation: v2-in 0.26s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+}
+
+.v2-in-2 { animation-delay: 0.05s; }
+.v2-in-3 { animation-delay: 0.1s; }
+
+@keyframes v2-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.8; }
+}
+
+.v2-breathe {
+  animation: v2-breathe 4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v2-root *,
+  .v2-root *::before,
+  .v2-root *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .v2-in { opacity: 1; transform: none; }
+}
+
+.v2-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hair-strong) transparent;
+}
+
+.v2-scroll::-webkit-scrollbar { width: 5px; }
+.v2-scroll::-webkit-scrollbar-thumb { background: var(--hair-strong); border-radius: 999px; }
+.v2-scroll::-webkit-scrollbar-track { background: transparent; }

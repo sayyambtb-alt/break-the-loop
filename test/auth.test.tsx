@@ -8,7 +8,7 @@ vi.mock('@supabase/supabase-js', () => ({
 }));
 
 async function renderApp() {
-  const { default: Home } = await import('../app/page');
+  const { default: Home } = await import('../app/classic/page');
   render(<Home />);
   await waitFor(() => expect(screen.queryByText('JOIN BREAK THE LOOP')).not.toBeInTheDocument());
 }

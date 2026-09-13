@@ -9,7 +9,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Break The Loop",
-  description: "Destroy boredom with real-world micro-missions.",
+  description: "Somewhere real to go in Mumbai, right now.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#EA580C",
+  themeColor: "#0D0D0E",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
@@ -38,7 +38,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased bg-[#FFF8F0] text-stone-900">
+      <body className="antialiased bg-[#0D0D0E] text-stone-900">
         {children}
       </body>
     </html>
