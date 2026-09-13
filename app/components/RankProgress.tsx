@@ -44,13 +44,13 @@ export default function RankProgress({
     <div className="w-full">
       <div className="flex items-baseline justify-between gap-2 mb-1.5">
         <span className="flex items-center gap-1.5 min-w-0">
-          <IconCrown size={14} className="text-amber-600 shrink-0" />
-          <span className="font-display text-[0.8125rem] font-bold text-stone-900 truncate">
+          <IconCrown size={14} className="reward shrink-0" />
+          <span className="font-display text-[0.8125rem] font-bold ink truncate">
             {rank.current.title}
           </span>
         </span>
         {showXp && (
-          <span className="nums text-[0.8125rem] font-bold text-amber-700 shrink-0 flex items-center gap-1">
+          <span className="nums text-[0.8125rem] font-bold reward shrink-0 flex items-center gap-1">
             <IconBolt size={12} />
             {totalXp.toLocaleString()} XP
           </span>
@@ -58,7 +58,7 @@ export default function RankProgress({
       </div>
 
       <div
-        className="h-2 w-full rounded-full bg-stone-200/80 overflow-hidden"
+        className="h-2 w-full rounded-full surface-mute overflow-hidden"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -76,11 +76,11 @@ export default function RankProgress({
       </div>
 
       {!compact && (
-        <p className="text-[0.6875rem] text-stone-600 mt-1.5 font-medium">
+        <p className="text-[0.6875rem] ink-3 mt-1.5 font-medium">
           {rank.next ? (
             <>
-              <span className="nums font-bold text-stone-800">{rank.xpToNext}</span> XP to{" "}
-              <span className="font-bold text-stone-800">{rank.next.title}</span>
+              <span className="nums font-bold ink">{rank.xpToNext}</span> XP to{" "}
+              <span className="font-bold ink">{rank.next.title}</span>
             </>
           ) : (
             rank.current.blurb

@@ -11,31 +11,31 @@ export const metadata: Metadata = {
 // should be impossible to miss on the live page until every one is gone.
 function TODO({ children }: { children: React.ReactNode }) {
   return (
-    <span className="bg-amber-200 text-amber-900 font-bold px-1.5 py-0.5 rounded">
+    <span className="reward-soft reward font-bold px-1.5 py-0.5 rounded">
       {children}
     </span>
   );
 }
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="font-display text-xl font-bold text-stone-900 mt-8 mb-3">{children}</h2>;
+  return <h2 className="font-display text-xl font-bold ink mt-8 mb-3">{children}</h2>;
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-[0.9375rem] text-stone-700 leading-relaxed mb-3">{children}</p>;
+  return <p className="text-[0.9375rem] ink-2 leading-relaxed mb-3">{children}</p>;
 }
 
 export default function PrivacyPolicy() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(120%_80%_at_50%_0%,_#FFFDFA_0%,_#FFF8F0_45%,_#FBE7CE_100%)] px-6 py-10">
+    <main className="min-h-screen page-bg px-6 py-10">
       <div className="max-w-2xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-1 text-orange-700 font-semibold text-[0.875rem] hover:underline">
+        <Link href="/" className="inline-flex items-center gap-1 accent font-semibold text-[0.875rem] hover:underline">
           ← Back to Break The Loop
         </Link>
 
-        <div className="bg-white border border-[#e7e0d8] rounded-[1.5rem] shadow-[0_2px_4px_rgba(68,64,60,0.06),0_12px_32px_rgba(68,64,60,0.1)] p-6 sm:p-10 mt-4">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 mb-1">Privacy Policy</h1>
-          <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
+        <div className="surface border bd-line rounded-[1.5rem] shadow-[var(--shadow-lift)] p-6 sm:p-10 mt-4">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold ink mb-1">Privacy Policy</h1>
+          <p className="text-sm ink-3 mb-6">Last updated: September 10, 2026</p>
 
           <P>
             This Privacy Policy explains what information Break The Loop ("we," "us," "the App") collects when
@@ -54,7 +54,7 @@ export default function PrivacyPolicy() {
             Squad) and helps you discover hyper-local "hidden gem" spots in your neighborhood, submitted by
             other users.
           </P>
-          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-700 space-y-1">
+          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm ink-2 space-y-1">
             <p><strong>Data Fiduciary / Grievance Officer</strong></p>
             <p>Name: Sayyam</p>
             <p>Email: sayyambtb@gmail.com</p>
@@ -71,9 +71,9 @@ export default function PrivacyPolicy() {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="text-left border-b-2 border-stone-200">
-                  <th className="py-2 px-2 text-stone-900">Data</th>
-                  <th className="py-2 px-2 text-stone-900">What it is</th>
-                  <th className="py-2 px-2 text-stone-900">Why we collect it</th>
+                  <th className="py-2 px-2 ink">Data</th>
+                  <th className="py-2 px-2 ink">What it is</th>
+                  <th className="py-2 px-2 ink">Why we collect it</th>
                 </tr>
               </thead>
               <tbody className="text-stone-600">
@@ -162,7 +162,7 @@ export default function PrivacyPolicy() {
 
           <H2>7. Your rights</H2>
           <P>Under the DPDP Act, you have the right to:</P>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="list-disc pl-6 ink-2 space-y-1 mb-3">
             <li><strong className="text-stone-800">Access</strong> the personal data we hold about you.</li>
             <li><strong className="text-stone-800">Correct or update</strong> inaccurate data (e.g., your handle).</li>
             <li><strong className="text-stone-800">Withdraw consent</strong> at any time — you can stop using the App, or ask us to delete your account.</li>

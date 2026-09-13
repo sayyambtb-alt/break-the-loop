@@ -63,9 +63,9 @@ describe('friends leaderboard', () => {
     expect(within(selfRow).getByText('Chaos Local')).toBeInTheDocument();
 
     // Only the caller's own row gets the highlight treatment.
-    expect(selfRow.className).toContain('border-orange-200');
-    expect(topRow.className).not.toContain('border-orange-200');
-    expect(lastRow.className).not.toContain('border-orange-200');
+    expect(selfRow.className).toContain('bd-accent');
+    expect(topRow.className).not.toContain('bd-accent');
+    expect(lastRow.className).not.toContain('bd-accent');
 
     await user.click(screen.getByText('@TopDog'));
     const profileCall = mockState.calls.find(

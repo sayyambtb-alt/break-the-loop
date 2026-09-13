@@ -6,6 +6,7 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "./globals.css";
+import { THEME_INIT_SCRIPT } from "./lib/theme";
 
 export const metadata: Metadata = {
   title: "Break The Loop",
@@ -38,8 +39,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="antialiased bg-[#FFFAF4] text-stone-900">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Sets data-theme before first paint. Without this the page renders
+            light and snaps to dark on hydration — the exact full-brightness
+            flash dark mode exists to prevent. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
+      <body className="antialiased">
         {children}
       </body>
     </html>

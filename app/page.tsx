@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
 import { getRankTitle } from './lib/ranks';
+import { applyTheme, readThemePref, resolveTheme, systemTheme, THEME_KEY, type Theme, type ThemePref } from './lib/theme';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import RankProgress from "./components/RankProgress";
 import { Modal, Button, Chip, Stat, SectionLabel, inputClass } from "./components/ui";
@@ -13,7 +14,7 @@ import {
   IconFlame, IconBolt, IconShare, IconSend, IconChat, IconHeadphones,
   IconCompass, IconTarget, IconTrash, IconBan, IconSave, IconClock,
   IconSearch, IconWhatsApp, IconInbox, IconCrown, IconGem, IconSparkle, IconLock,
-  IconRefresh, IconCheck, IconMail,
+  IconRefresh, IconCheck, IconMail, IconSun, IconMoon,
 } from "./components/Icons";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
@@ -225,6 +226,12 @@ export default function Home() {
   const [showDevModal, setShowDevModal] = useState(false);
   const devTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Theme. Defaults to whatever the OS says and only pins to a value once the
+  // user actually picks one, so someone on auto night mode gets a dark app
+  // without ever opening a setting.
+  const [themePref, setThemePref] = useState<ThemePref>('system');
+  const [theme, setTheme] = useState<Theme>('light');
+
   // Admin tools are collapsed behind one menu rather than three header buttons.
   const [showAdminMenu, setShowAdminMenu] = useState(false);
   const adminMenuRef = useRef<HTMLDivElement>(null);
@@ -301,6 +308,38 @@ export default function Home() {
       setShowWelcomeModal(true);
     }
   }, []);
+
+  useEffect(() => {
+    const pref = readThemePref();
+    setThemePref(pref);
+    setTheme(resolveTheme(pref));
+    applyTheme(pref);
+  }, []);
+
+  // Follow the OS while the user hasn't pinned a choice.
+  useEffect(() => {
+    if (themePref !== 'system' || typeof window === 'undefined' || !window.matchMedia) return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      setTheme(systemTheme());
+      applyTheme('system');
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, [themePref]);
+
+  const toggleTheme = () => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    setThemePref(next);
+    setTheme(next);
+    applyTheme(next);
+    try {
+      localStorage.setItem(THEME_KEY, next);
+    } catch {
+      // Blocked storage just means the choice doesn't survive a reload.
+    }
+    track('theme_changed', { theme: next });
+  };
 
   // Dismiss the admin menu on an outside click or Escape. The pointerdown
   // must ignore presses inside the menu itself: closing on any pointerdown
@@ -2463,7 +2502,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(120%_80%_at_50%_0%,_#FFFDFA_0%,_#FFF8F0_45%,_#FBE7CE_100%)] text-stone-900 flex flex-col items-center justify-between gap-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans">
+    <main className="min-h-screen overflow-x-hidden page-bg ink flex flex-col items-center justify-between gap-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans">
       {/* Toast Stack. Toasts were left over from the old dark theme -- near-black
           panels dropped into a cream page. They now read as one system, and
           carry an icon so success/error is legible without relying on colour. */}
@@ -2477,10 +2516,10 @@ export default function Home() {
             key={t.id}
             className={`a-drop w-full flex items-start gap-2.5 px-3.5 py-3 rounded-[0.875rem] text-[0.8125rem] font-semibold border shadow-[0_8px_28px_rgba(28,25,23,0.16)] ${
               t.type === 'error'
-                ? 'bg-red-50 border-red-200 text-red-800'
+                ? 'err-chip'
                 : t.type === 'success'
-                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
-                : 'bg-white border-[#e7e0d8] text-stone-800'
+                ? 'ok-chip'
+                : 'surface bd-line ink'
             }`}
           >
             <span className="shrink-0 mt-px">
@@ -2515,7 +2554,7 @@ export default function Home() {
           >
             <IconBolt size={15} />
           </span>
-          <span className="font-display text-[0.9375rem] font-bold tracking-tight text-stone-900 leading-none whitespace-nowrap">
+          <span className="font-display text-[0.9375rem] font-bold tracking-tight ink leading-none whitespace-nowrap">
             Break The Loop
           </span>
         </h1>
@@ -2542,7 +2581,7 @@ export default function Home() {
               {showAdminMenu && (
                 <div
                   role="menu"
-                  className="a-rise absolute right-0 top-full mt-1.5 z-50 w-52 bg-white border border-[#e7e0d8] rounded-[1rem] shadow-[0_12px_32px_rgba(28,25,23,0.16)] p-1.5"
+                  className="a-rise absolute right-0 top-full mt-1.5 z-50 w-52 surface border bd-line rounded-[1rem] shadow-[0_12px_32px_rgba(28,25,23,0.16)] p-1.5"
                 >
                   <SectionLabel className="px-2.5 py-1.5">Admin</SectionLabel>
                   {[
@@ -2557,12 +2596,12 @@ export default function Home() {
                         setShowAdminMenu(false);
                         entry.run();
                       }}
-                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[0.625rem] text-[0.8125rem] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[0.625rem] text-[0.8125rem] font-semibold ink-2 hover-surface-sunk hover-ink transition"
                     >
-                      <span className="text-stone-500">{entry.icon}</span>
+                      <span className="ink-3">{entry.icon}</span>
                       <span className="flex-1 text-left">{entry.label}</span>
                       {entry.badge > 0 && (
-                        <span className="nums bg-orange-100 text-orange-700 text-[0.6875rem] font-bold px-1.5 rounded-full">
+                        <span className="nums accent-soft accent text-[0.6875rem] font-bold px-1.5 rounded-full">
                           {entry.badge}
                         </span>
                       )}
@@ -2572,6 +2611,17 @@ export default function Home() {
               )}
             </div>
           )}
+
+          <button
+            onClick={toggleTheme}
+            className="icon-btn"
+            title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+          >
+            {theme === 'dark' ? <IconSun size={17} /> : <IconMoon size={17} />}
+            <span className="sr-only">
+              {theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            </span>
+          </button>
 
           <button
             onClick={requestNotificationPermission}
@@ -2588,7 +2638,7 @@ export default function Home() {
           <div
             role="group"
             aria-label="View"
-            className="flex bg-white border border-[#e7e0d8] rounded-[0.625rem] p-1 shadow-[0_1px_2px_rgba(68,64,60,0.04)]"
+            className="flex surface border bd-line rounded-[0.625rem] p-1 shadow-[0_1px_2px_rgba(68,64,60,0.04)]"
           >
             {(['quest', 'feed'] as const).map((t) => (
               <button
@@ -2598,7 +2648,7 @@ export default function Home() {
                 className={`px-3 py-1 rounded-[0.4rem] text-[0.8125rem] font-bold capitalize transition-all ${
                   tab === t
                     ? 'bg-orange-600 text-white shadow-[0_1px_2px_rgba(154,52,18,0.4)]'
-                    : 'text-stone-600 hover:text-stone-900'
+                    : 'ink-3 hover-ink'
                 }`}
               >
                 {t === 'quest' ? 'Quest' : 'Feed'}
@@ -2616,20 +2666,20 @@ export default function Home() {
         <div
           role="alertdialog"
           aria-label={`Duo raid invite from ${incomingInvite.sender_handle}`}
-          className="a-drop fixed top-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-sm z-50 bg-white border border-orange-200 p-4 rounded-[1.25rem] shadow-[0_16px_48px_rgba(234,88,12,0.24)]"
+          className="a-drop fixed top-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-sm z-50 surface border bd-accent p-4 rounded-[1.25rem] shadow-[0_16px_48px_rgba(234,88,12,0.24)]"
         >
           <div className="flex items-start gap-3">
             <span
               aria-hidden="true"
-              className="shrink-0 w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"
+              className="shrink-0 w-9 h-9 rounded-full accent-soft accent flex items-center justify-center"
             >
               <IconBolt size={18} />
             </span>
             <div className="min-w-0 flex-1">
-              <h3 className="font-display text-[0.875rem] font-bold text-stone-900 leading-snug">
+              <h3 className="font-display text-[0.875rem] font-bold ink leading-snug">
                 @{incomingInvite.sender_handle} challenged you to a Duo Raid
               </h3>
-              <p className="text-[0.8125rem] text-stone-600 mt-1 leading-snug line-clamp-2">
+              <p className="text-[0.8125rem] ink-3 mt-1 leading-snug line-clamp-2">
                 "{incomingInvite.quest_text}"
               </p>
             </div>
@@ -2658,10 +2708,10 @@ export default function Home() {
                 <IconUser size={22} />
               </span>
               <div className="min-w-0">
-                <h2 className="font-display text-base font-bold text-stone-900 truncate">
+                <h2 className="font-display text-base font-bold ink truncate">
                   @{selectedProfile.handle}
                 </h2>
-                <span className="flex items-center gap-1 text-[0.8125rem] text-amber-700 font-semibold">
+                <span className="flex items-center gap-1 text-[0.8125rem] reward font-semibold">
                   <IconCrown size={13} />
                   {getRankTitle(selectedProfile.total_xp || 0)}
                 </span>
@@ -2671,7 +2721,7 @@ export default function Home() {
             {/* A public profile now shows real XP, which is what actually drives
                 the rank shown right above it. It previously showed
                 time_saved_mins under an "IRL XP" label. */}
-            <div className="flex justify-around bg-[#faf7f3] p-3.5 rounded-[1rem] border border-[#e7e0d8]">
+            <div className="flex justify-around surface-sunk p-3.5 rounded-[1rem] border bd-line">
               <Stat
                 label="Streak"
                 value={selectedProfile.streak ?? 0}
@@ -2679,14 +2729,14 @@ export default function Home() {
                 icon={<IconFlame size={12} />}
                 tone="action"
               />
-              <div className="w-px bg-[#e7e0d8]" />
+              <div className="w-px bg-[color:var(--line)]" />
               <Stat
                 label="Total XP"
                 value={(selectedProfile.total_xp ?? 0).toLocaleString()}
                 icon={<IconBolt size={12} />}
                 tone="reward"
               />
-              <div className="w-px bg-[#e7e0d8]" />
+              <div className="w-px bg-[color:var(--line)]" />
               <Stat
                 label="Saved"
                 value={selectedProfile.time_saved_mins ?? 0}
@@ -2715,7 +2765,7 @@ export default function Home() {
                   selectedProfile.history.map((h) => (
                     <div
                       key={h.id}
-                      className="bg-[#faf7f3] p-2 rounded-[0.875rem] border border-[#e7e0d8] flex gap-2.5 items-center"
+                      className="surface-sunk p-2 rounded-[0.875rem] border bd-line flex gap-2.5 items-center"
                     >
                       {h.photo_url && (
                         <img
@@ -2725,17 +2775,17 @@ export default function Home() {
                         />
                       )}
                       <div className="text-left overflow-hidden min-w-0">
-                        <p className="text-[0.8125rem] text-stone-800 truncate font-medium">
+                        <p className="text-[0.8125rem] ink truncate font-medium">
                           "{h.quest_text}"
                         </p>
-                        <span className="text-[0.6875rem] text-stone-500 uppercase font-bold tracking-wide">
+                        <span className="text-[0.6875rem] ink-3 uppercase font-bold tracking-wide">
                           {h.mode} mission
                         </span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[0.8125rem] text-stone-500 text-center py-3">
+                  <p className="text-[0.8125rem] ink-3 text-center py-3">
                     No public missions logged yet.
                   </p>
                 )}
@@ -2754,7 +2804,7 @@ export default function Home() {
                     showToast('Could not block this user.', 'error');
                   }
                 }}
-                className="w-full flex items-center justify-center gap-1.5 text-[0.8125rem] font-semibold text-stone-500 hover:text-red-700 py-2 rounded-[0.625rem] border border-transparent hover:border-red-200 hover:bg-red-50 transition"
+                className="w-full flex items-center justify-center gap-1.5 text-[0.8125rem] font-semibold ink-3 hover-err py-2 rounded-[0.625rem] border border-transparent hover-err-soft transition"
               >
                 <IconBan size={14} />
                 Block this Explorer
@@ -2771,7 +2821,7 @@ export default function Home() {
         size="md"
         title={
           <span className="flex items-center gap-1.5">
-            <IconShield size={15} className="text-amber-600" />
+            <IconShield size={15} className="reward" />
             Moderation Reports Queue ({adminReports.length})
           </span>
         }
@@ -2780,38 +2830,38 @@ export default function Home() {
             <div className="max-h-[60vh] overflow-y-auto scroll-soft space-y-2 pr-1">
               {adminReports.length === 0 ? (
                 <div className="text-center py-10 space-y-2">
-                  <span className="inline-flex w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 items-center justify-center">
+                  <span className="inline-flex w-11 h-11 rounded-full ok-soft ok-text items-center justify-center">
                     <IconCheck size={22} />
                   </span>
-                  <p className="text-[0.875rem] font-semibold text-stone-800">Queue clear! Zero reported content.</p>
+                  <p className="text-[0.875rem] font-semibold ink">Queue clear! Zero reported content.</p>
                 </div>
               ) : (
                 adminReports.map((r) => (
-                  <div key={r.id} className="bg-[#faf7f3] p-3 rounded-[1rem] border border-[#e7e0d8] space-y-2">
+                  <div key={r.id} className="surface-sunk p-3 rounded-[1rem] border bd-line space-y-2">
                     <div className="flex justify-between items-start gap-2">
                       <Chip tone="action">Flagged {r.reported_type.toUpperCase()}</Chip>
-                      <span className="nums text-[0.6875rem] text-stone-500 shrink-0 pt-1">{new Date(r.created_at).toLocaleTimeString()}</span>
+                      <span className="nums text-[0.6875rem] ink-3 shrink-0 pt-1">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-stone-700 text-[0.8125rem]">
+                    <p className="ink-2 text-[0.8125rem]">
                       <strong className="font-semibold">Reason:</strong> "{r.reason}"
                     </p>
                     {r.content_text && (
-                      <p className="text-stone-800 text-[0.8125rem] bg-white border border-[#e7e0d8] rounded-[0.625rem] p-2.5">
-                        <strong className="text-amber-700 font-semibold">Reported content:</strong> "{r.content_text}"
+                      <p className="ink text-[0.8125rem] surface border bd-line rounded-[0.625rem] p-2.5">
+                        <strong className="reward font-semibold">Reported content:</strong> "{r.content_text}"
                       </p>
                     )}
                     {r.content_photo_url && (
                       <img
                         src={r.content_photo_url}
                         alt="Reported proof photo"
-                        className="w-full max-h-40 object-cover rounded-[0.625rem] border border-[#e7e0d8]"
+                        className="w-full max-h-40 object-cover rounded-[0.625rem] border bd-line"
                       />
                     )}
-                    <p className="text-stone-500 text-[0.6875rem]">
+                    <p className="ink-3 text-[0.6875rem]">
                       Reported by @{r.reporter_handle}
                       {r.offender_handle ? ` • Posted by @${r.offender_handle}` : ''}
                     </p>
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-[#e7e0d8]">
+                    <div className="flex flex-wrap gap-2 pt-2 border-t bd-line">
                       {r.reported_type === 'feed' && (
                         <button
                           onClick={() => {
@@ -2845,7 +2895,7 @@ export default function Home() {
                               showToast('Failed to ban user.', 'error');
                             }
                           }}
-                          className="btn text-[0.75rem] px-3 py-1.5 bg-white text-red-700 border border-red-300 hover:bg-red-50"
+                          className="btn text-[0.75rem] px-3 py-1.5 surface err-text border bd-err hover-err-soft"
                         >
                           Ban User
                         </button>
@@ -2871,7 +2921,7 @@ export default function Home() {
         size="md"
         title={
           <span className="flex items-center gap-1.5">
-            <IconPencil size={15} className="text-amber-600" />
+            <IconPencil size={15} className="reward" />
             Pending Quest Suggestions ({pendingQuests.length})
           </span>
         }
@@ -2885,19 +2935,19 @@ export default function Home() {
         <div>
             <div className="max-h-[60vh] overflow-y-auto scroll-soft space-y-2 pr-1">
               {loadingPendingQuests ? (
-                <p className="text-[0.875rem] text-stone-500 text-center py-10">Loading...</p>
+                <p className="text-[0.875rem] ink-3 text-center py-10">Loading...</p>
               ) : pendingQuests.length === 0 ? (
-                <p className="text-[0.875rem] text-stone-500 text-center py-10">No quests awaiting review.</p>
+                <p className="text-[0.875rem] ink-3 text-center py-10">No quests awaiting review.</p>
               ) : (
                 pendingQuests.map((q) => (
-                  <div key={q.id} className="bg-[#faf7f3] p-3 rounded-[1rem] border border-[#e7e0d8] space-y-2">
+                  <div key={q.id} className="surface-sunk p-3 rounded-[1rem] border bd-line space-y-2">
                     <div className="flex justify-between items-start gap-2">
                       <Chip tone="reward" className="uppercase">{q.mode}</Chip>
-                      <span className="nums text-[0.6875rem] text-stone-500 shrink-0 pt-1">{new Date(q.created_at).toLocaleTimeString()}</span>
+                      <span className="nums text-[0.6875rem] ink-3 shrink-0 pt-1">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-stone-800 text-[0.875rem]">"{q.quest_text}"</p>
-                    <p className="text-stone-500 text-[0.6875rem]">Suggested by @{q.submitted_by_handle}</p>
-                    <div className="flex gap-2 pt-2 border-t border-[#e7e0d8]">
+                    <p className="ink text-[0.875rem]">"{q.quest_text}"</p>
+                    <p className="ink-3 text-[0.6875rem]">Suggested by @{q.submitted_by_handle}</p>
+                    <div className="flex gap-2 pt-2 border-t bd-line">
                       <button
                         onClick={() => handleApproveQuest(q.id)}
                         className="btn btn-primary text-[0.75rem] px-3 py-1.5"
@@ -2924,7 +2974,7 @@ export default function Home() {
         size="md"
         title={
           <span className="flex items-center gap-1.5">
-            <IconMap size={15} className="text-amber-600" />
+            <IconMap size={15} className="reward" />
             Manage Hidden Gems ({pendingGems.length})
           </span>
         }
@@ -2938,58 +2988,58 @@ export default function Home() {
         <div>
             <div className="max-h-[60vh] overflow-y-auto scroll-soft space-y-2 pr-1">
               {loadingPendingGems ? (
-                <p className="text-[0.875rem] text-stone-500 text-center py-10">Loading...</p>
+                <p className="text-[0.875rem] ink-3 text-center py-10">Loading...</p>
               ) : pendingGems.length === 0 ? (
-                <p className="text-[0.875rem] text-stone-500 text-center py-10">No spots awaiting review.</p>
+                <p className="text-[0.875rem] ink-3 text-center py-10">No spots awaiting review.</p>
               ) : (
                 pendingGems.map((g) => (
-                  <div key={g.id} className="bg-[#faf7f3] p-3 rounded-[1rem] border border-[#e7e0d8] space-y-2">
+                  <div key={g.id} className="surface-sunk p-3 rounded-[1rem] border bd-line space-y-2">
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex items-center gap-1.5">
                         <select
                           value={g.neighborhood}
                           onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
-                          className="bg-amber-50 text-amber-800 text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase border border-amber-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                          className="reward-soft reward text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase border bd-reward focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                         >
                           {MUMBAI_NEIGHBORHOODS.map((n) => (
-                            <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
+                            <option key={n} value={n} className="surface ink normal-case">{n}</option>
                           ))}
                         </select>
                         <span className={`text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase border ${
-                          g.status === 'pending' ? 'bg-stone-100 text-stone-700 border-stone-200' : 'bg-orange-50 text-orange-700 border-orange-200'
+                          g.status === 'pending' ? 'surface-mute ink-2 bd-line' : 'accent-soft accent bd-accent'
                         }`}>
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
                         {dirtyGemIds.includes(g.id) && (
-                          <span className="text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase bg-amber-100 text-amber-900 border border-amber-300">
+                          <span className="text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase reward-soft text-amber-900 border bd-reward">
                             Unsaved
                           </span>
                         )}
                         {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
-                          <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase ok-chip border">
                             <IconCheck size={11} />
                             Saved
                           </span>
                         )}
                       </div>
-                      <span className="nums text-[0.6875rem] text-stone-500 shrink-0 pt-1">{new Date(g.created_at).toLocaleTimeString()}</span>
+                      <span className="nums text-[0.6875rem] ink-3 shrink-0 pt-1">{new Date(g.created_at).toLocaleTimeString()}</span>
                     </div>
                     <input
                       type="text"
                       value={g.name}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
                       maxLength={100}
-                      className="w-full bg-white border border-[#e7e0d8] rounded-[0.625rem] px-2.5 py-2 text-stone-900 text-[0.875rem] font-semibold focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                      className="w-full surface border bd-line rounded-[0.625rem] px-2.5 py-2 ink text-[0.875rem] font-semibold focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                     />
                     <textarea
                       value={g.description}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
                       maxLength={300}
                       rows={3}
-                      className="w-full bg-white border border-[#e7e0d8] rounded-[0.625rem] px-2.5 py-2 text-stone-800 text-[0.8125rem] resize-none focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
+                      className="w-full surface border bd-line rounded-[0.625rem] px-2.5 py-2 ink text-[0.8125rem] resize-none focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                     />
-                    <p className="text-stone-500 text-[0.6875rem]">Suggested by @{g.submitted_by_handle}</p>
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-[#e7e0d8]">
+                    <p className="ink-3 text-[0.6875rem]">Suggested by @{g.submitted_by_handle}</p>
+                    <div className="flex flex-wrap gap-2 pt-2 border-t bd-line">
                       {g.status === 'pending' ? (
                         <>
                           <button
@@ -3042,7 +3092,7 @@ export default function Home() {
         subtitle={userEmail}
       >
         <div className="space-y-4">
-            <div className="text-[0.75rem] font-mono bg-[#faf7f3] p-3 rounded-[0.875rem] border border-[#e7e0d8] text-stone-700 space-y-1 break-all">
+            <div className="text-[0.75rem] font-mono surface-sunk p-3 rounded-[0.875rem] border bd-line ink-2 space-y-1 break-all">
               <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
               <p><strong>Session:</strong> {userEmail}</p>
               <p><strong>Room:</strong> {roomId || 'None'}</p>
@@ -3072,7 +3122,7 @@ export default function Home() {
                   sessionStorage.clear();
                   window.location.reload();
                 }}
-                className="btn w-full text-[0.8125rem] py-2.5 bg-white text-red-700 border border-red-300 hover:bg-red-50"
+                className="btn w-full text-[0.8125rem] py-2.5 surface err-text border bd-err hover-err-soft"
               >
                 Hard Reset Local Storage & Reload
               </button>
@@ -3086,18 +3136,18 @@ export default function Home() {
         <div className="text-center space-y-4">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
           >
             <IconUser size={24} />
           </span>
           <div className="space-y-1.5">
-            <h2 className="font-display text-lg font-bold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
-            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+            <h2 className="font-display text-lg font-bold ink">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-[0.8125rem] ink-3 leading-relaxed">
               Pick a unique handle so other Mumbai explorers can recognize and add you to their squad.
             </p>
           </div>
           <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-600 font-bold text-[0.875rem]">@</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 ink-3 font-bold text-[0.875rem]">@</span>
             <input
               type="text"
               placeholder="ExplorerTag"
@@ -3124,15 +3174,15 @@ export default function Home() {
         <div className="text-center space-y-4 -mt-2">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
           >
             <IconMail size={24} />
           </span>
           <div className="space-y-1.5">
-            <h2 className="font-display text-xl font-bold text-stone-900">
+            <h2 className="font-display text-xl font-bold ink">
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
-            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+            <p className="text-[0.8125rem] ink-3 leading-relaxed">
               {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
           </div>
@@ -3140,7 +3190,7 @@ export default function Home() {
           {authError && (
             <p
               role="alert"
-              className="text-[0.8125rem] text-red-800 bg-red-50 border border-red-200 px-3 py-2 rounded-[0.625rem] font-medium text-left"
+              className="text-[0.8125rem] err-chip border px-3 py-2 rounded-[0.625rem] font-medium text-left"
             >
               {authError}
             </p>
@@ -3163,15 +3213,15 @@ export default function Home() {
               </Button>
 
               <div className="relative py-1">
-                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#e7e0d8]"></div></div>
-                <div className="relative flex justify-center"><span className="bg-white px-2 text-[0.6875rem] uppercase tracking-wide text-stone-500 font-semibold">Or</span></div>
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t bd-line"></div></div>
+                <div className="relative flex justify-center"><span className="surface px-2 text-[0.6875rem] uppercase tracking-wide ink-3 font-semibold">Or</span></div>
               </div>
 
               <Button variant="secondary" size="lg" full onClick={handleGuestLogin}>
                 <IconBolt size={16} />
                 Continue as Guest
               </Button>
-              <p className="text-[0.6875rem] text-stone-500 -mt-1">Solo missions only</p>
+              <p className="text-[0.6875rem] ink-3 -mt-1">Solo missions only</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -3190,7 +3240,7 @@ export default function Home() {
               </Button>
               <button
                 onClick={() => setIsOtpSent(false)}
-                className="text-[0.8125rem] text-stone-500 hover:text-stone-800 hover:underline pt-1 block mx-auto"
+                className="text-[0.8125rem] ink-3 hover-ink hover:underline pt-1 block mx-auto"
               >
                 Change Email
               </button>
@@ -3204,13 +3254,13 @@ export default function Home() {
         <div className="text-center space-y-4 -mt-2">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
           >
             <IconSave size={23} />
           </span>
           <div className="space-y-1.5">
-            <h2 className="font-display text-lg font-bold text-stone-900">SAVE MY PROGRESS</h2>
-            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+            <h2 className="font-display text-lg font-bold ink">SAVE MY PROGRESS</h2>
+            <p className="text-[0.8125rem] ink-3 leading-relaxed">
               Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
             </p>
           </div>
@@ -3237,18 +3287,18 @@ export default function Home() {
         <div className="text-center space-y-4 -mt-2">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
           >
             <IconPencil size={22} />
           </span>
           <div className="space-y-1.5">
-            <h2 className="font-display text-lg font-bold text-stone-900">SUGGEST A QUEST</h2>
-            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+            <h2 className="font-display text-lg font-bold ink">SUGGEST A QUEST</h2>
+            <p className="text-[0.8125rem] ink-3 leading-relaxed">
               Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
             </p>
           </div>
           <div className="space-y-3">
-            <div className="flex bg-[#faf7f3] p-1 rounded-[0.75rem] border border-[#e7e0d8] gap-1">
+            <div className="flex surface-sunk p-1 rounded-[0.75rem] border bd-line gap-1">
               {(['solo', 'duo', 'squad'] as const).map((m) => (
                 <button
                   key={m}
@@ -3257,7 +3307,7 @@ export default function Home() {
                   className={`flex-1 py-2 text-[0.8125rem] font-bold rounded-[0.5rem] capitalize transition-all ${
                     suggestQuestMode === m
                       ? 'bg-orange-600 text-white shadow-[0_1px_2px_rgba(154,52,18,0.4)]'
-                      : 'text-stone-600 hover:text-stone-900'
+                      : 'ink-3 hover-ink'
                   }`}
                 >
                   {m}
@@ -3273,7 +3323,7 @@ export default function Home() {
               className={`${inputClass} resize-none`}
             />
             <div className="flex justify-end -mt-1">
-              <span className="nums text-[0.6875rem] text-stone-500">{suggestQuestText.length}/300</span>
+              <span className="nums text-[0.6875rem] ink-3">{suggestQuestText.length}/300</span>
             </div>
             <Button variant="primary" size="lg" full onClick={handleSubmitQuestSuggestion}>
               Submit for Review
@@ -3286,13 +3336,13 @@ export default function Home() {
         <div className="text-center space-y-4 -mt-2">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-amber-100 text-amber-700 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full reward-soft reward items-center justify-center"
           >
             <IconGem size={22} />
           </span>
           <div className="space-y-1.5">
-            <h2 className="font-display text-lg font-bold text-stone-900">SUGGEST A HIDDEN GEM</h2>
-            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+            <h2 className="font-display text-lg font-bold ink">SUGGEST A HIDDEN GEM</h2>
+            <p className="text-[0.8125rem] ink-3 leading-relaxed">
               A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
             </p>
           </div>
@@ -3316,7 +3366,7 @@ export default function Home() {
                     className={`px-2.5 py-1 rounded-full text-[0.75rem] font-semibold border transition-all ${
                       suggestGemNeighborhood === n
                         ? 'bg-amber-500 text-stone-900 border-amber-500'
-                        : 'bg-white text-stone-600 border-[#e7e0d8] hover:border-amber-300 hover:text-stone-900'
+                        : 'surface ink-3 bd-line hover:border-amber-300 hover-ink'
                     }`}
                   >
                     {n}
@@ -3351,10 +3401,10 @@ export default function Home() {
             >
               <IconBolt size={26} />
             </span>
-            <h2 className="font-display text-xl font-bold text-stone-900 pt-1">
+            <h2 className="font-display text-xl font-bold ink pt-1">
               Welcome to Break The Loop
             </h2>
-            <p className="text-[0.875rem] text-stone-600 leading-relaxed">
+            <p className="text-[0.875rem] ink-3 leading-relaxed">
               Stuck scrolling? We hand you something real to go do instead.
             </p>
           </div>
@@ -3365,18 +3415,18 @@ export default function Home() {
               { icon: <IconCamera size={17} />, title: 'Go do it', body: 'Snap a photo as proof you actually showed up.' },
               { icon: <IconBolt size={17} />, title: 'Earn XP and rank up', body: 'Build a streak, unlock badges, climb from Fresh Escapee to Mumbai Made.' },
             ].map((step, i) => (
-              <li key={i} className="flex gap-3 items-start bg-[#faf7f3] border border-[#e7e0d8] rounded-[0.875rem] p-3">
+              <li key={i} className="flex gap-3 items-start surface-sunk border bd-line rounded-[0.875rem] p-3">
                 <span
                   aria-hidden="true"
-                  className="shrink-0 w-8 h-8 rounded-[0.5rem] bg-white border border-[#e7e0d8] text-orange-600 flex items-center justify-center"
+                  className="shrink-0 w-8 h-8 rounded-[0.5rem] surface border bd-line accent flex items-center justify-center"
                 >
                   {step.icon}
                 </span>
                 <span className="min-w-0">
-                  <span className="block font-display text-[0.875rem] font-bold text-stone-900 leading-tight">
+                  <span className="block font-display text-[0.875rem] font-bold ink leading-tight">
                     {step.title}
                   </span>
-                  <span className="block text-[0.8125rem] text-stone-600 leading-snug mt-0.5">
+                  <span className="block text-[0.8125rem] ink-3 leading-snug mt-0.5">
                     {step.body}
                   </span>
                 </span>
@@ -3394,14 +3444,14 @@ export default function Home() {
         <div className="text-center space-y-4 -mt-2">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
           >
             <IconLock size={22} />
           </span>
-          <h2 className="font-display text-lg font-bold text-stone-900">SIGN IN ON THIS DEVICE</h2>
+          <h2 className="font-display text-lg font-bold ink">SIGN IN ON THIS DEVICE</h2>
           {!isRecoverOtpSent ? (
             <>
-              <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+              <p className="text-[0.8125rem] ink-3 leading-relaxed">
                 Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
               </p>
               <div className="space-y-3">
@@ -3422,7 +3472,7 @@ export default function Home() {
             </>
           ) : (
             <>
-              <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+              <p className="text-[0.8125rem] ink-3 leading-relaxed">
                 Enter the 6-digit code we emailed to {recoverEmail}.
               </p>
               <div className="space-y-3">
@@ -3441,7 +3491,7 @@ export default function Home() {
                 </Button>
                 <button
                   onClick={() => setIsRecoverOtpSent(false)}
-                  className="text-[0.8125rem] text-stone-500 hover:text-stone-800 hover:underline pt-1 block mx-auto"
+                  className="text-[0.8125rem] ink-3 hover-ink hover:underline pt-1 block mx-auto"
                 >
                   Change Email
                 </button>
@@ -3456,11 +3506,11 @@ export default function Home() {
         <div className="text-center space-y-4 -mt-2">
           <span
             aria-hidden="true"
-            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+            className="inline-flex w-12 h-12 rounded-full accent-soft accent items-center justify-center"
           >
             <IconShield size={23} />
           </span>
-          <h2 className="font-display text-lg font-bold text-stone-900">SAFETY FIRST</h2>
+          <h2 className="font-display text-lg font-bold ink">SAFETY FIRST</h2>
           <ul className="text-left space-y-2.5">
             {[
               ['Meet in public', 'Coordinate only at visible, public landmarks.'],
@@ -3468,12 +3518,12 @@ export default function Home() {
               ['Never share private data', 'Do not disclose banking details, OTPs, or exact home addresses.'],
             ].map(([title, body]) => (
               <li key={title} className="flex gap-2.5 items-start">
-                <span aria-hidden="true" className="shrink-0 mt-0.5 text-orange-600">
+                <span aria-hidden="true" className="shrink-0 mt-0.5 accent">
                   <IconCheck size={16} />
                 </span>
                 <span className="text-[0.8125rem] leading-snug">
-                  <strong className="font-semibold text-stone-900">{title}:</strong>{' '}
-                  <span className="text-stone-600">{body}</span>
+                  <strong className="font-semibold ink">{title}:</strong>{' '}
+                  <span className="ink-3">{body}</span>
                 </span>
               </li>
             ))}
@@ -3499,13 +3549,13 @@ export default function Home() {
         onClose={() => setShowFriendsModal(false)}
         title={
           <span className="flex items-center gap-1.5">
-            <IconUsers size={15} className="text-orange-600" />
+            <IconUsers size={15} className="accent" />
             Raid Squad ({friendsList.length})
           </span>
         }
       >
         <div className="space-y-3">
-            <div role="group" aria-label="Squad view" className="flex bg-[#faf7f3] p-1 rounded-[0.75rem] border border-[#e7e0d8] gap-1">
+            <div role="group" aria-label="Squad view" className="flex surface-sunk p-1 rounded-[0.75rem] border bd-line gap-1">
               {(['squad', 'leaderboard'] as const).map((t) => (
                 <button
                   key={t}
@@ -3514,7 +3564,7 @@ export default function Home() {
                   className={`flex-1 py-2 text-[0.8125rem] font-bold rounded-[0.5rem] transition-all ${
                     leaderboardTab === t
                       ? 'bg-orange-600 text-white shadow-[0_1px_2px_rgba(154,52,18,0.4)]'
-                      : 'text-stone-600 hover:text-stone-900'
+                      : 'ink-3 hover-ink'
                   }`}
                 >
                   {t === 'squad' ? 'Squad' : 'Leaderboard'}
@@ -3530,8 +3580,8 @@ export default function Home() {
                     data-leaderboard-row
                     className={`p-2.5 rounded-[0.875rem] border flex items-center justify-between gap-2 ${
                       entry.is_self
-                        ? 'bg-orange-50 border-orange-200'
-                        : 'bg-[#faf7f3] border-[#e7e0d8]'
+                        ? 'accent-soft bd-accent'
+                        : 'surface-sunk bd-line'
                     }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -3540,12 +3590,12 @@ export default function Home() {
                       <span
                         className={`nums shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[0.75rem] font-bold ${
                           i === 0
-                            ? 'bg-amber-400 text-stone-900'
+                            ? 'bg-amber-400 ink'
                             : i === 1
-                            ? 'bg-stone-300 text-stone-800'
+                            ? 'bg-stone-300 ink'
                             : i === 2
                             ? 'bg-orange-200 text-orange-900'
-                            : 'text-stone-500'
+                            : 'ink-3'
                         }`}
                       >
                         {i + 1}
@@ -3553,16 +3603,16 @@ export default function Home() {
                       <div className="min-w-0">
                         <button
                           onClick={() => inspectProfile(entry.handle)}
-                          className="text-[0.875rem] font-bold text-orange-700 hover:underline truncate block"
+                          className="text-[0.875rem] font-bold accent hover:underline truncate block"
                         >
                           @{entry.handle}
                         </button>
-                        <span className="block text-[0.6875rem] text-stone-500">{getRankTitle(entry.total_xp)}</span>
+                        <span className="block text-[0.6875rem] ink-3">{getRankTitle(entry.total_xp)}</span>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
-                      <p className="nums text-[0.875rem] font-bold text-stone-900">{entry.total_xp} XP</p>
-                      <p className="flex items-center justify-end gap-0.5 text-[0.6875rem] text-stone-500">
+                      <p className="nums text-[0.875rem] font-bold ink">{entry.total_xp} XP</p>
+                      <p className="flex items-center justify-end gap-0.5 text-[0.6875rem] ink-3">
                         <IconFlame size={11} />
                         <span className="nums">{entry.streak}</span> days
                       </p>
@@ -3574,10 +3624,10 @@ export default function Home() {
             <div className="max-h-[52vh] overflow-y-auto scroll-soft space-y-1.5 pr-1">
               {friendsList.length === 0 ? (
                 <div className="text-center py-10 space-y-2.5">
-                  <span className="inline-flex w-11 h-11 rounded-full bg-stone-100 text-stone-500 items-center justify-center">
+                  <span className="inline-flex w-11 h-11 rounded-full surface-mute ink-3 items-center justify-center">
                     <IconUsers size={22} />
                   </span>
-                  <p className="text-[0.8125rem] text-stone-600 max-w-[240px] mx-auto leading-relaxed">
+                  <p className="text-[0.8125rem] ink-3 max-w-[240px] mx-auto leading-relaxed">
                     No squad friends added yet. Complete a Duo or Squad mission and tap Add Friend.
                   </p>
                 </div>
@@ -3585,21 +3635,21 @@ export default function Home() {
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
                   return (
-                    <div key={i} className="bg-[#faf7f3] p-2.5 rounded-[0.875rem] border border-[#e7e0d8] flex justify-between items-center gap-2">
+                    <div key={i} className="surface-sunk p-2.5 rounded-[0.875rem] border bd-line flex justify-between items-center gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span
                             aria-hidden="true"
-                            className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`}
+                            className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'ok-dot' : 'bg-[color:var(--line)]'}`}
                           />
                           <button
                             onClick={() => inspectProfile(f.handle)}
-                            className="text-[0.875rem] font-bold text-orange-700 hover:underline truncate"
+                            className="text-[0.875rem] font-bold accent hover:underline truncate"
                           >
                             @{f.handle}
                           </button>
                         </div>
-                        <span className="block text-[0.6875rem] text-stone-500 pl-3.5">
+                        <span className="block text-[0.6875rem] ink-3 pl-3.5">
                           {isOnline ? 'Online in app' : 'Offline'}
                         </span>
                       </div>
@@ -3635,14 +3685,14 @@ export default function Home() {
         tone="reward"
         title={
           <span className="flex items-center gap-1.5">
-            <IconHeadphones size={15} className="text-amber-600" />
+            <IconHeadphones size={15} className="reward" />
             Your IRL Recap
           </span>
         }
       >
         <div className="space-y-3">
           {wrappedCardDataUrl && (
-            <div className="rounded-[1rem] overflow-hidden border border-[#e7e0d8] bg-[#faf7f3]">
+            <div className="rounded-[1rem] overflow-hidden border bd-line surface-sunk">
               <img src={wrappedCardDataUrl} alt="Your recap card" className="w-full h-80 object-contain mx-auto" />
             </div>
           )}
@@ -3657,21 +3707,21 @@ export default function Home() {
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
           {/* Track choice. Each side now says what it actually does -- "Quest"
               and "Explore" alone never explained the difference. */}
-          <div className="flex bg-white p-1.5 rounded-[1.25rem] border border-[#e7e0d8] w-full gap-1.5 shadow-[0_1px_2px_rgba(68,64,60,0.04),0_4px_16px_rgba(68,64,60,0.06)]">
+          <div className="flex surface p-1.5 rounded-[1.25rem] border bd-line w-full gap-1.5 shadow-[0_1px_2px_rgba(68,64,60,0.04),0_4px_16px_rgba(68,64,60,0.06)]">
             <button
               onClick={handleSelectQuestTrack}
               aria-pressed={!isExplorerMode}
               className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 px-2 rounded-[0.875rem] transition-all active:scale-[0.98] ${
                 !isExplorerMode
                   ? 'bg-orange-600 text-white shadow-[0_2px_0_0_#9A3412]'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+                  : 'ink-3 hover-ink hover-surface-sunk'
               }`}
             >
               <span className="flex items-center gap-1.5 font-display text-[0.9375rem] font-bold leading-none">
                 <IconTarget size={16} />
                 Quest
               </span>
-              <span className={`text-[0.6875rem] font-medium ${!isExplorerMode ? 'text-white' : 'text-stone-600'}`}>
+              <span className={`text-[0.6875rem] font-medium ${!isExplorerMode ? 'text-white' : 'ink-3'}`}>
                 Random dare
               </span>
             </button>
@@ -3681,14 +3731,14 @@ export default function Home() {
               className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 px-2 rounded-[0.875rem] transition-all active:scale-[0.98] ${
                 isExplorerMode
                   ? 'bg-amber-500 text-stone-900 shadow-[0_2px_0_0_#B45309]'
-                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
+                  : 'ink-3 hover-ink hover-surface-sunk'
               }`}
             >
               <span className="flex items-center gap-1.5 font-display text-[0.9375rem] font-bold leading-none">
                 <IconCompass size={16} />
                 Explore
               </span>
-              <span className={`text-[0.6875rem] font-medium ${isExplorerMode ? 'text-amber-950' : 'text-stone-600'}`}>
+              <span className={`text-[0.6875rem] font-medium ${isExplorerMode ? 'text-amber-950' : 'ink-3'}`}>
                 Hidden gems
               </span>
             </button>
@@ -3705,7 +3755,7 @@ export default function Home() {
                 className={`px-3.5 py-1.5 text-[0.8125rem] font-bold rounded-full capitalize transition-all active:scale-95 ${
                   mode === m
                     ? 'bg-stone-800 text-white'
-                    : 'text-stone-500 hover:text-stone-900 hover:bg-white'
+                    : 'ink-3 hover-ink hover-surface-sunk'
                 }`}
               >
                 {m === 'squad' ? 'Squad (2-8)' : m}
@@ -3718,11 +3768,11 @@ export default function Home() {
               <div className="text-center space-y-1">
                 <span
                   aria-hidden="true"
-                  className="inline-flex w-11 h-11 rounded-full bg-amber-100 text-amber-700 items-center justify-center"
+                  className="inline-flex w-11 h-11 rounded-full reward-soft reward items-center justify-center"
                 >
                   <IconCompass size={22} />
                 </span>
-                <p className="text-[0.875rem] text-stone-700 leading-relaxed pt-1">
+                <p className="text-[0.875rem] ink-2 leading-relaxed pt-1">
                   Pick a neighborhood to discover a hidden gem someone local actually knows about.
                 </p>
               </div>
@@ -3739,7 +3789,7 @@ export default function Home() {
                       className={`px-2.5 py-1.5 rounded-full text-[0.75rem] font-semibold border transition-all disabled:opacity-40 ${
                         selectedNeighborhood === n
                           ? 'bg-amber-500 text-stone-900 border-amber-500'
-                          : 'bg-white text-stone-600 border-[#e7e0d8] hover:border-amber-300 hover:text-stone-900'
+                          : 'surface ink-3 bd-line hover:border-amber-300 hover-ink'
                       }`}
                     >
                       {n}
@@ -3773,7 +3823,7 @@ export default function Home() {
               {!isSearching && (
                 <button
                   onClick={() => setShowSuggestGemModal(true)}
-                  className="w-full text-[0.8125rem] text-stone-500 hover:text-stone-900 font-semibold underline decoration-stone-300 underline-offset-2"
+                  className="w-full text-[0.8125rem] ink-3 hover-ink font-semibold underline decoration-stone-300 underline-offset-2"
                 >
                   Know a spot? Suggest your own hidden gem
                 </button>
@@ -3801,7 +3851,7 @@ export default function Home() {
                   onClick={onStartMatchingClick}
                   disabled={isSearching}
                   aria-label={isSearching ? 'Searching for a mission' : 'Destroy boredom — get a random mission'}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-600 to-orange-800 flex flex-col items-center justify-center text-white overflow-hidden touch-manipulation transition-transform duration-100 ring-[6px] ring-white shadow-[0_10px_0_0_#7C2D12,0_24px_48px_rgba(194,65,12,0.35)] ${
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-600 to-orange-800 flex flex-col items-center justify-center text-white overflow-hidden touch-manipulation transition-transform duration-100 ring-[6px] ring-[color:var(--surface)] shadow-[0_10px_0_0_#7C2D12,0_24px_48px_rgba(194,65,12,0.35)] ${
                     isSearching
                       ? 'opacity-90 cursor-wait'
                       : 'hover:scale-[1.03] active:translate-y-[6px] active:shadow-[0_4px_0_0_#7C2D12,0_12px_24px_rgba(194,65,12,0.3)]'
@@ -3835,7 +3885,7 @@ export default function Home() {
               </div>
 
               <div className="text-center space-y-3 max-w-xs">
-                <p className="text-[0.875rem] text-stone-600 leading-relaxed">
+                <p className="text-[0.875rem] ink-3 leading-relaxed">
                   {isSearching
                     ? `Searching the live queue for Mumbai ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
@@ -3849,7 +3899,7 @@ export default function Home() {
                     </Button>
                     <button
                       onClick={cancelSearch}
-                      className="text-[0.8125rem] text-stone-500 hover:text-stone-800 hover:underline"
+                      className="text-[0.8125rem] ink-3 hover-ink hover:underline"
                     >
                       Cancel search
                     </button>
@@ -3865,34 +3915,34 @@ export default function Home() {
                 <Chip tone="action" className="uppercase tracking-wide">
                   {isExplorerMode ? 'Explorer' : mode} Mission Assigned
                 </Chip>
-                <span className="flex items-center gap-1.5 text-[0.6875rem] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 font-semibold whitespace-nowrap">
-                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="flex items-center gap-1.5 text-[0.6875rem] ok-chip px-2.5 py-1 rounded-full border font-semibold whitespace-nowrap">
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full ok-dot animate-pulse" />
                   Active
                 </span>
               </div>
 
               {squadRoster.length > 0 && (
-                <div className="bg-[#faf7f3] border border-[#e7e0d8] p-3 rounded-[0.875rem] text-left space-y-2">
+                <div className="surface-sunk border bd-line p-3 rounded-[0.875rem] text-left space-y-2">
                   <div className="flex justify-between items-center gap-2">
                     <SectionLabel className="flex items-center gap-1.5">
-                      <IconCrown size={13} className="text-amber-600" />
+                      <IconCrown size={13} className="reward" />
                       Squad roster ({squadRoster.length})
                     </SectionLabel>
-                    <span className="text-[0.6875rem] text-emerald-700 font-semibold">Live lobby</span>
+                    <span className="text-[0.6875rem] ok-text font-semibold">Live lobby</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center gap-1 bg-white border border-[#e7e0d8] pl-2.5 pr-1.5 py-1 rounded-full">
+                      <div key={idx} className="flex items-center gap-1 surface border bd-line pl-2.5 pr-1.5 py-1 rounded-full">
                         <button
                           onClick={() => inspectProfile(p.handle)}
-                          className="text-[0.8125rem] text-orange-700 font-bold hover:underline"
+                          className="text-[0.8125rem] accent font-bold hover:underline"
                         >
                           @{p.handle}
                         </button>
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
-                            className="text-stone-500 hover:text-orange-700 p-0.5 rounded-full transition"
+                            className="ink-3 hover:text-orange-700 p-0.5 rounded-full transition"
                             title={`Add @${p.handle} as a friend`}
                           >
                             <IconUserPlus size={14} />
@@ -3935,10 +3985,10 @@ export default function Home() {
               </div>
 
               {(mode === 'duo' || mode === 'squad') && (
-                <div className="bg-[#faf7f3] border border-[#e7e0d8] rounded-[1rem] p-3 flex flex-col gap-2.5 text-left">
-                  <div className="flex justify-between items-center gap-2 border-b border-[#e7e0d8] pb-2">
+                <div className="surface-sunk border bd-line rounded-[1rem] p-3 flex flex-col gap-2.5 text-left">
+                  <div className="flex justify-between items-center gap-2 border-b bd-line pb-2">
                     <SectionLabel className="flex items-center gap-1.5">
-                      <IconChat size={13} className="text-orange-600" />
+                      <IconChat size={13} className="accent" />
                       Live {mode} rally chat
                     </SectionLabel>
                     <button
@@ -3952,30 +4002,30 @@ export default function Home() {
 
                   <div className="h-32 overflow-y-auto scroll-soft space-y-1.5 pr-1">
                     {messages.length === 0 ? (
-                      <p className="text-[0.8125rem] text-stone-500 py-4 text-center">
+                      <p className="text-[0.8125rem] ink-3 py-4 text-center">
                         No messages yet. Coordinate your rally point.
                       </p>
                     ) : (
                       messages.map((m) => (
                         <div
                           key={m.id || Math.random()}
-                          className="bg-white p-2.5 rounded-[0.75rem] border border-[#e7e0d8] flex justify-between items-start gap-2"
+                          className="surface p-2.5 rounded-[0.75rem] border bd-line flex justify-between items-start gap-2"
                         >
                           <div className="min-w-0">
                             <button
                               onClick={() => inspectProfile(m.sender_handle)}
-                              className="text-[0.6875rem] font-bold text-orange-700 hover:underline"
+                              className="text-[0.6875rem] font-bold accent hover:underline"
                             >
                               @{m.sender_handle}
                             </button>
-                            <span className="block text-[0.8125rem] text-stone-800 leading-snug break-words">
+                            <span className="block text-[0.8125rem] ink leading-snug break-words">
                               {m.message}
                             </span>
                           </div>
                           {m.sender_handle !== handle && (
                             <button
                               onClick={() => handleReport('chat', m.id || m.message)}
-                              className="shrink-0 text-stone-500 hover:text-red-600 p-0.5 transition"
+                              className="shrink-0 ink-3 hover-err p-0.5 transition"
                               title="Report message"
                             >
                               <IconFlag size={13} />
@@ -3996,7 +4046,7 @@ export default function Home() {
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className={`${inputClass} flex-1 !py-2 bg-white`}
+                      className={`${inputClass} flex-1 !py-2 surface`}
                     />
                     <button onClick={sendMessage} className="btn btn-primary px-3 py-2" title="Send message">
                       <IconSend size={15} />
@@ -4007,18 +4057,18 @@ export default function Home() {
               )}
 
               {isMissionAccepted && (
-                <div className="border-2 border-dashed border-[#e7e0d8] rounded-[1rem] p-3 flex flex-col items-center justify-center bg-[#faf7f3]/60">
+                <div className="border-2 border-dashed bd-line rounded-[1rem] p-3 flex flex-col items-center justify-center surface-sunk">
                   {uploading ? (
                     <div className="py-5 flex flex-col items-center gap-2">
-                      <IconCamera size={22} className="text-orange-600 animate-pulse" />
-                      <span className="text-[0.8125rem] text-stone-700 font-semibold">
+                      <IconCamera size={22} className="accent animate-pulse" />
+                      <span className="text-[0.8125rem] ink-2 font-semibold">
                         Compressing &amp; uploading...
                       </span>
                     </div>
                   ) : proofImage ? (
                     <div className="relative w-full">
                       <img src={proofImage} alt="Proof" className="w-full h-40 object-cover rounded-[0.75rem]" />
-                      <span className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-600 text-white text-[0.6875rem] font-bold px-2 py-1 rounded-full shadow">
+                      <span className="absolute top-2 right-2 flex items-center gap-1 ok-chip border text-[0.6875rem] font-bold px-2 py-1 rounded-full">
                         <IconCheck size={12} />
                         Proof ready
                       </span>
@@ -4029,12 +4079,12 @@ export default function Home() {
                     <label className="cursor-pointer flex flex-col items-center gap-1.5 w-full py-4 text-center">
                       <span
                         aria-hidden="true"
-                        className="w-11 h-11 rounded-full bg-white border border-[#e7e0d8] text-orange-600 flex items-center justify-center"
+                        className="w-11 h-11 rounded-full surface border bd-line accent flex items-center justify-center"
                       >
                         <IconCamera size={21} />
                       </span>
-                      <span className="text-[0.875rem] text-stone-800 font-semibold">Tap to take your proof photo</span>
-                      <span className="text-[0.6875rem] text-stone-500">Compressed to about 50KB before upload</span>
+                      <span className="text-[0.875rem] ink font-semibold">Tap to take your proof photo</span>
+                      <span className="text-[0.6875rem] ink-3">Compressed to about 50KB before upload</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -4069,7 +4119,7 @@ export default function Home() {
                 )}
                 <button
                   onClick={handleAbandonMission}
-                  className="text-[0.8125rem] text-stone-600 hover:text-stone-900 py-1.5 transition-colors"
+                  className="text-[0.8125rem] ink-3 hover-ink py-1.5 transition-colors"
                 >
                   Abandon mission
                 </button>
@@ -4078,29 +4128,29 @@ export default function Home() {
           )}
 
           {isCompleted && (
-            <div className="a-pop w-full card card-lift border-amber-200 bg-gradient-to-b from-amber-50/70 to-white p-6 text-center space-y-4">
+            <div className="a-pop w-full card card-lift bd-reward bg-gradient-to-b from-amber-50/70 to-white p-6 text-center space-y-4">
               <span
                 aria-hidden="true"
-                className="inline-flex w-14 h-14 rounded-full bg-amber-400 text-stone-900 items-center justify-center shadow-[0_3px_0_0_#B45309]"
+                className="inline-flex w-14 h-14 rounded-full bg-amber-400 ink items-center justify-center shadow-[0_3px_0_0_#B45309]"
               >
                 <IconTrophy size={26} />
               </span>
               <div className="space-y-1.5">
-                <h2 className="font-display text-2xl font-bold text-stone-900">LOOP BROKEN!</h2>
-                <p className="text-[0.875rem] text-stone-600">
+                <h2 className="font-display text-2xl font-bold ink">LOOP BROKEN!</h2>
+                <p className="text-[0.875rem] ink-3">
                   You broke routine and gained real-world experience today.
                 </p>
               </div>
 
               {/* Where the XP actually landed. Completing a mission used to give
                   no numeric feedback at all on this screen. */}
-              <div className="bg-white/80 border border-[#e7e0d8] rounded-[1rem] p-3.5">
+              <div className="surface border bd-line rounded-[1rem] p-3.5">
                 <RankProgress totalXp={totalXp} />
               </div>
 
               {cardDataUrl && (
                 <div className="space-y-3">
-                  <div className="rounded-[1rem] overflow-hidden border border-[#e7e0d8] bg-[#faf7f3]">
+                  <div className="rounded-[1rem] overflow-hidden border bd-line surface-sunk">
                     <img src={cardDataUrl} alt="Your shareable mission card" className="w-full h-64 object-contain mx-auto" />
                   </div>
 
@@ -4120,8 +4170,8 @@ export default function Home() {
       ) : (
         <div className="w-full max-w-md space-y-3">
           <div className="flex justify-between items-baseline gap-2">
-            <h2 className="font-display text-base font-bold text-stone-900">Community Proof Feed</h2>
-            <span className="nums text-[0.8125rem] text-stone-600">
+            <h2 className="font-display text-base font-bold ink">Community Proof Feed</h2>
+            <span className="nums text-[0.8125rem] ink-3">
               {feedItems.length} logged
             </span>
           </div>
@@ -4165,18 +4215,18 @@ export default function Home() {
                       src={item.photo_url}
                       alt={`Proof photo for: ${item.quest_text}`}
                       loading="lazy"
-                      className="w-full aspect-[4/3] object-cover bg-[#faf7f3]"
+                      className="w-full aspect-[4/3] object-cover surface-sunk"
                     />
                   )}
                   <div className="p-3.5 space-y-2.5">
                     <div className="flex justify-between items-center gap-2">
                       <button
                         onClick={() => inspectProfile(item.handle)}
-                        className="flex items-center gap-1.5 text-[0.875rem] font-bold text-orange-700 hover:underline min-w-0"
+                        className="flex items-center gap-1.5 text-[0.875rem] font-bold accent hover:underline min-w-0"
                       >
                         <span
                           aria-hidden="true"
-                          className="shrink-0 w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"
+                          className="shrink-0 w-6 h-6 rounded-full accent-soft accent flex items-center justify-center"
                         >
                           <IconUser size={13} />
                         </span>
@@ -4186,33 +4236,33 @@ export default function Home() {
                         {/* Mode and timestamp were on every row already and
                             neither had ever been shown. */}
                         {item.mode && (
-                          <span className="text-[0.6875rem] font-bold uppercase tracking-wide text-stone-600">
+                          <span className="text-[0.6875rem] font-bold uppercase tracking-wide ink-3">
                             {item.mode}
                           </span>
                         )}
-                        <span aria-hidden="true" className="text-stone-400">·</span>
+                        <span aria-hidden="true" className="ink-3">·</span>
                         <time
                           dateTime={item.created_at}
-                          className="nums text-[0.6875rem] text-stone-600"
+                          className="nums text-[0.6875rem] ink-3"
                         >
                           {timeAgo(item.created_at)}
                         </time>
                       </div>
                     </div>
 
-                    <p className="text-[0.875rem] text-stone-800 leading-snug">"{item.quest_text}"</p>
+                    <p className="text-[0.875rem] ink leading-snug">"{item.quest_text}"</p>
 
                     {/* The emoji here stay -- the fire and the high five are the
                         reactions themselves, not chrome standing in for an icon. */}
-                    <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#e7e0d8]">
+                    <div className="flex items-center justify-between gap-2 pt-2.5 border-t bd-line">
                       <div className="flex gap-2">
                         <button
                           onClick={() => handleReact(item.id, 'fire')}
                           aria-pressed={firedByMe}
                           className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold transition-all active:scale-95 ${
                             firedByMe
-                              ? 'bg-orange-50 border-orange-300 text-orange-800'
-                              : 'bg-[#faf7f3] border-[#e7e0d8] text-stone-700 hover:border-orange-200'
+                              ? 'accent-soft bd-accent accent'
+                              : 'surface-sunk bd-line ink-2 hover:border-orange-200'
                           }`}
                         >
                           <span aria-hidden="true">🔥</span>
@@ -4224,8 +4274,8 @@ export default function Home() {
                           aria-pressed={fivedByMe}
                           className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold transition-all active:scale-95 ${
                             fivedByMe
-                              ? 'bg-orange-50 border-orange-300 text-orange-800'
-                              : 'bg-[#faf7f3] border-[#e7e0d8] text-stone-700 hover:border-orange-200'
+                              ? 'accent-soft bd-accent accent'
+                              : 'surface-sunk bd-line ink-2 hover:border-orange-200'
                           }`}
                         >
                           <span aria-hidden="true">✋</span>
@@ -4238,7 +4288,7 @@ export default function Home() {
                         {userEmail === ADMIN_EMAIL && (
                           <button
                             onClick={() => handleAdminDeleteFeedPost(item.id)}
-                            className="text-stone-500 hover:text-red-600 p-1 rounded transition"
+                            className="ink-3 hover-err p-1 rounded transition"
                             title="Admin: delete post"
                           >
                             <IconTrash size={14} />
@@ -4247,7 +4297,7 @@ export default function Home() {
                         )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
-                          className="text-stone-500 hover:text-red-600 p-1 rounded transition"
+                          className="ink-3 hover-err p-1 rounded transition"
                           title="Report post"
                         >
                           <IconFlag size={14} />
@@ -4261,12 +4311,12 @@ export default function Home() {
               })
             ) : (
               <div className="text-center py-12 space-y-3">
-                <span className="inline-flex w-14 h-14 rounded-full bg-stone-100 text-stone-500 items-center justify-center">
+                <span className="inline-flex w-14 h-14 rounded-full surface-mute ink-3 items-center justify-center">
                   <IconInbox size={26} />
                 </span>
                 <div className="space-y-1">
-                  <h3 className="font-display text-[0.9375rem] font-bold text-stone-900">No missions logged yet</h3>
-                  <p className="text-[0.8125rem] text-stone-600 max-w-[240px] mx-auto leading-relaxed">
+                  <h3 className="font-display text-[0.9375rem] font-bold ink">No missions logged yet</h3>
+                  <p className="text-[0.8125rem] ink-3 max-w-[240px] mx-auto leading-relaxed">
                     Be the first to complete one and show up here.
                   </p>
                 </div>
@@ -4294,7 +4344,7 @@ export default function Home() {
               autoFocus
               maxLength={20}
               aria-label="Your handle"
-              className="bg-[#faf7f3] border border-orange-400 rounded-[0.5rem] px-2 py-1 text-[0.875rem] text-stone-900 font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 min-w-0 flex-1"
+              className="surface-sunk border border-orange-400 rounded-[0.5rem] px-2 py-1 text-[0.875rem] ink font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 min-w-0 flex-1"
             />
           ) : (
             <button
@@ -4302,8 +4352,8 @@ export default function Home() {
               className="flex items-center gap-1.5 min-w-0 group"
               title="Edit your handle"
             >
-              <span className="text-[0.9375rem] font-bold text-orange-700 truncate">@{handle}</span>
-              <IconPencil size={13} className="text-stone-500 group-hover:text-stone-900 shrink-0 transition" />
+              <span className="text-[0.9375rem] font-bold accent truncate">@{handle}</span>
+              <IconPencil size={13} className="ink-3 group-hover:text-stone-900 shrink-0 transition" />
             </button>
           )}
 
@@ -4338,7 +4388,7 @@ export default function Home() {
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
                 onClick={handleSignOut}
-                className="text-[0.75rem] text-stone-500 hover:text-stone-900 hover:underline font-semibold px-1.5"
+                className="text-[0.75rem] ink-3 hover-ink hover:underline font-semibold px-1.5"
               >
                 Sign Out
               </button>
@@ -4348,7 +4398,7 @@ export default function Home() {
                   setAuthModalReason('');
                   setShowAuthModal(true);
                 }}
-                className="text-[0.75rem] text-orange-700 hover:underline font-semibold px-1.5"
+                className="text-[0.75rem] accent hover:underline font-semibold px-1.5"
               >
                 Verify
               </button>
@@ -4363,7 +4413,7 @@ export default function Home() {
         {/* These three were previously two stats, one of which was wrong: the
             footer printed time_saved_mins under a "Total IRL XP" label, so the
             number shown had nothing to do with the rank beside it. */}
-        <div className="flex justify-around items-center border-t border-[#e7e0d8] pt-3">
+        <div className="flex justify-around items-center border-t bd-line pt-3">
           <Stat
             label="Streak"
             value={streak}
@@ -4371,14 +4421,14 @@ export default function Home() {
             icon={<IconFlame size={12} />}
             tone="action"
           />
-          <div className="w-px h-8 bg-[#e7e0d8]" />
+          <div className="w-px h-8 bg-[color:var(--line)]" />
           <Stat
             label="Total XP"
             value={totalXp.toLocaleString()}
             icon={<IconBolt size={12} />}
             tone="reward"
           />
-          <div className="w-px h-8 bg-[#e7e0d8]" />
+          <div className="w-px h-8 bg-[color:var(--line)]" />
           <Stat
             label="Saved"
             value={savedMins}
@@ -4388,7 +4438,7 @@ export default function Home() {
         </div>
 
         {badges.length > 0 && (
-          <div className="space-y-1.5 border-t border-[#e7e0d8] pt-3">
+          <div className="space-y-1.5 border-t bd-line pt-3">
             <SectionLabel>Badges</SectionLabel>
             <div className="flex items-center gap-1.5 overflow-x-auto scroll-soft pb-1">
               {badges.map((b, i) => (
@@ -4399,26 +4449,26 @@ export default function Home() {
         )}
 
         {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center gap-2 border-t border-[#e7e0d8] pt-3">
+          <div className="flex flex-col items-center gap-2 border-t bd-line pt-3">
             <Button variant="secondary" full onClick={() => setShowSaveProgressModal(true)}>
               <IconSave size={15} />
               Save My Progress
             </Button>
             <button
               onClick={() => setShowRecoverModal(true)}
-              className="text-[0.75rem] text-stone-500 hover:text-stone-800 hover:underline"
+              className="text-[0.75rem] ink-3 hover-ink hover:underline"
             >
               Already have an account? Sign in
             </button>
           </div>
         )}
 
-        <div className="flex items-center justify-center gap-3 border-t border-[#e7e0d8] pt-3">
-          <Link href="/privacy" className="text-[0.75rem] text-stone-500 hover:text-stone-800 hover:underline">
+        <div className="flex items-center justify-center gap-3 border-t bd-line pt-3">
+          <Link href="/privacy" className="text-[0.75rem] ink-3 hover-ink hover:underline">
             Privacy
           </Link>
           <span aria-hidden="true" className="text-stone-300">·</span>
-          <Link href="/terms" className="text-[0.75rem] text-stone-500 hover:text-stone-800 hover:underline">
+          <Link href="/terms" className="text-[0.75rem] ink-3 hover-ink hover:underline">
             Terms
           </Link>
         </div>

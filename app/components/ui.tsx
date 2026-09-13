@@ -113,7 +113,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-stone-900/45 backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-center justify-center p-4 sm:p-6 bg-[color:var(--scrim)] backdrop-blur-sm"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) closeRef.current();
       }}
@@ -125,25 +125,25 @@ export function Modal({
         aria-labelledby={title ? titleId : undefined}
         className={`a-pop w-full ${
           size === "md" ? "max-w-md" : "max-w-sm"
-        } max-h-[88vh] overflow-y-auto scroll-soft bg-white rounded-[1.5rem] border border-[#e7e0d8] shadow-[0_24px_64px_rgba(28,25,23,0.22)] text-left`}
+        } max-h-[88vh] overflow-y-auto scroll-soft surface rounded-[1.5rem] border bd-line shadow-[var(--shadow-modal)] text-left`}
       >
         {hasHeader && (
           <div
             className={`flex items-start justify-between gap-3 px-5 pt-5 pb-3 ${
-              tone === "reward" ? "bg-amber-50/60 rounded-t-[1.5rem]" : ""
+              tone === "reward" ? "reward-soft rounded-t-[1.5rem]" : ""
             }`}
           >
             <div className="min-w-0">
               {title && (
                 <h2
                   id={titleId}
-                  className="font-display text-[0.9375rem] font-bold text-stone-900 leading-tight"
+                  className="font-display text-[0.9375rem] font-bold ink leading-tight"
                 >
                   {title}
                 </h2>
               )}
               {subtitle && (
-                <p className="text-[0.8125rem] text-stone-600 mt-1 leading-snug">{subtitle}</p>
+                <p className="text-[0.8125rem] ink-3 mt-1 leading-snug">{subtitle}</p>
               )}
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -214,7 +214,7 @@ export function SectionLabel({
 }) {
   return (
     <span
-      className={`block text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-stone-600 ${className}`}
+      className={`block text-[0.6875rem] font-bold uppercase tracking-[0.07em] ink-3 ${className}`}
     >
       {children}
     </span>
@@ -231,9 +231,9 @@ export function Chip({
   className?: string;
 }) {
   const tones = {
-    neutral: "bg-stone-100 text-stone-700 border-stone-200",
-    action: "bg-orange-50 text-orange-700 border-orange-200",
-    reward: "bg-amber-50 text-amber-800 border-amber-200",
+    neutral: "surface-mute ink-2 bd-line",
+    action: "accent-soft accent bd-accent",
+    reward: "reward-soft reward bd-reward",
   } as const;
   return (
     <span
@@ -259,14 +259,14 @@ export function Stat({
   tone?: "neutral" | "action" | "reward";
 }) {
   const valueTone = {
-    neutral: "text-stone-900",
-    action: "text-orange-700",
-    reward: "text-amber-700",
+    neutral: "ink",
+    action: "accent",
+    reward: "reward",
   }[tone];
 
   return (
     <div className="flex flex-col items-center gap-0.5 min-w-0">
-      <span className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-stone-600">
+      <span className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] ink-3">
         {icon}
         {label}
       </span>
@@ -280,4 +280,4 @@ export function Stat({
 
 /** Shared text-input styling — inputs were styled six different ways before. */
 export const inputClass =
-  "w-full bg-[#faf7f3] border border-[#e7e0d8] rounded-[0.625rem] px-3 py-2.5 text-[0.875rem] text-stone-900 placeholder:text-[#736c66] focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition";
+  "w-full surface-sunk border bd-line rounded-[0.625rem] px-3 py-2.5 text-[0.875rem] ink placeholder:text-[color:var(--ink-soft)] focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition";

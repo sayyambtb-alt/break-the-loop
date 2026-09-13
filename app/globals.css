@@ -21,7 +21,7 @@
      5.18:1 and reads as the same orange. --action-vivid keeps the brighter
      tone for large display type and for non-text accents, where 3:1 applies. */
   --action: #c2410c;
-  --action-hover: #d4490d;
+  --action-hover: #ad3c0a;
   --action-deep: #7c2d12;
   --action-ink: #c2410c;
   --action-vivid: #ea580c;
@@ -54,6 +54,154 @@
   --shadow-card: 0 1px 2px rgba(68, 64, 60, 0.04), 0 4px 16px rgba(68, 64, 60, 0.06);
   --shadow-lift: 0 2px 4px rgba(68, 64, 60, 0.06), 0 12px 32px rgba(68, 64, 60, 0.1);
   --shadow-modal: 0 24px 64px rgba(28, 25, 23, 0.22);
+
+  --surface-mute: #f2efec;
+  --scrim: rgba(28, 25, 23, 0.45);
+
+  /* Accents as *text* need different values from accents as *fills*: #c2410c
+     reads well on paper and is nearly invisible on a dark ground. */
+  --accent-text: #c2410c;
+  --accent-soft-bg: #fff7ed;
+  --accent-soft-bd: #fed7aa;
+  --reward-text: #b45309;
+  --reward-soft-bg: #fffbeb;
+  --reward-soft-bd: #fde68a;
+
+  --page-1: #fffdfa;
+  --page-2: #fff8f0;
+  --page-3: #fbe7ce;
+
+  --skeleton-1: #f2ede7;
+  --skeleton-2: #e9e2da;
+  --scrollbar: #d6cec4;
+
+  /* Success and danger need to theme too: a mint chip left at its light value
+     is a glaring white block on a dark card. */
+  --ok-bg: #ecfdf5;
+  --ok-bd: #a7f3d0;
+  --ok-text: #065f46;
+  --ok-dot: #10b981;
+  --err-bg: #fef2f2;
+  --err-bd: #fecaca;
+  --err-text: #991b1b;
+}
+
+/* ---------------------------------------------------------------------------
+   Dark
+
+   The premise of this app is breaking a doomscrolling habit, and that habit
+   mostly happens in bed at night. Serving only a full-brightness cream page was
+   the wrong default for the exact moment someone opens it.
+
+   Not an inversion: the ground is a warm near-black rather than pure black so
+   it belongs to the same family as the cream, surfaces lift with lightness
+   instead of shadow (shadows do nothing on a dark ground), and the accents move
+   to lighter tints because #c2410c on near-black is unreadable.
+--------------------------------------------------------------------------- */
+
+:root[data-theme="dark"] {
+  --background: #14110f;
+  --foreground: #f5f1ec;
+
+  --ink-strong: #f7f4f0;
+  --ink: #ddd6cf;
+  --ink-soft: #b0a79f;
+
+  --line: #362f29;
+  --surface: #201b18;
+  --surface-sunk: #191512;
+  --surface-mute: #2a2420;
+  --scrim: rgba(8, 6, 5, 0.7);
+
+  /* Fills keep enough weight to carry white text; text accents lighten.
+     Lightening this for "vibrancy" on a dark ground drops white-on-orange to
+     3.70:1 — the same failure the light theme had. #c9470c is 4.78:1. */
+  --action: #c9470c;
+  --action-hover: #b03e0a;
+  --action-deep: #7e2c0b;
+  --action-ink: #ffa96b;
+  --action-vivid: #fb923c;
+
+  --reward: #fbbf24;
+  --reward-bright: #f0b429;
+
+  --accent-text: #ffa96b;
+  --accent-soft-bg: #2e1a10;
+  --accent-soft-bd: #592f18;
+  --reward-text: #fcd34d;
+  --reward-soft-bg: #2c2110;
+  --reward-soft-bd: #58421a;
+
+  --page-1: #191512;
+  --page-2: #14110f;
+  --page-3: #0f0d0b;
+
+  --skeleton-1: #241f1b;
+  --skeleton-2: #2e2823;
+  --scrollbar: #3d352e;
+
+  --ok-bg: #0d2a1f;
+  --ok-bd: #1d5a41;
+  --ok-text: #6ee7b7;
+  --ok-dot: #34d399;
+  --err-bg: #2e1414;
+  --err-bd: #5c2626;
+  --err-text: #fca5a5;
+
+  /* Shadows are invisible on a dark ground; a hairline does the lifting. */
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.03), 0 4px 16px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 1px 0 0 rgba(255, 255, 255, 0.04), 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-modal: 0 24px 64px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------------------------------------------------------------------------
+   Semantic surface and ink classes
+
+   The app was written against literal Tailwind colours (bg-white, text-stone-900,
+   border-[#e7e0d8]), which a theme cannot reach. These route the same values
+   through tokens so one attribute on <html> repaints everything.
+--------------------------------------------------------------------------- */
+
+.surface { background-color: var(--surface); }
+.surface-sunk { background-color: var(--surface-sunk); }
+.surface-mute { background-color: var(--surface-mute); }
+.bd-line { border-color: var(--line); }
+
+.ink { color: var(--ink-strong); }
+.ink-2 { color: var(--ink); }
+.ink-3 { color: var(--ink-soft); }
+
+.accent { color: var(--accent-text); }
+.accent-soft { background-color: var(--accent-soft-bg); }
+.bd-accent { border-color: var(--accent-soft-bd); }
+.reward { color: var(--reward-text); }
+.reward-soft { background-color: var(--reward-soft-bg); }
+.bd-reward { border-color: var(--reward-soft-bd); }
+
+.ok-chip {
+  background-color: var(--ok-bg);
+  border-color: var(--ok-bd);
+  color: var(--ok-text);
+}
+.ok-dot { background-color: var(--ok-dot); }
+.ok-soft { background-color: var(--ok-bg); }
+.ok-text { color: var(--ok-text); }
+
+.err-chip {
+  background-color: var(--err-bg);
+  border-color: var(--err-bd);
+  color: var(--err-text);
+}
+.err-text { color: var(--err-text); }
+.bd-err { border-color: var(--err-bd); }
+.hover-err:hover { color: var(--err-text); }
+.hover-err-soft:hover { background-color: var(--err-bg); }
+
+.hover-surface-sunk:hover { background-color: var(--surface-sunk); }
+.hover-ink:hover { color: var(--ink-strong); }
+
+.page-bg {
+  background: radial-gradient(120% 80% at 50% 0%, var(--page-1) 0%, var(--page-2) 45%, var(--page-3) 100%);
 }
 
 @theme inline {
@@ -127,11 +275,11 @@ body {
 }
 
 .btn-primary:disabled {
-  background: #e7e0d8;
+  background: var(--surface-mute);
   /* Disabled controls are exempt from 1.4.3, but an unreadable label is
      still a bad label; this clears 4.5:1 on the disabled fill. */
-  color: #57534e;
-  box-shadow: 0 4px 0 0 #d6cec4;
+  color: var(--ink-soft);
+  box-shadow: 0 4px 0 0 var(--line);
 }
 
 .btn-reward {
@@ -150,9 +298,9 @@ body {
 }
 
 .btn-reward:disabled {
-  background: #e7e0d8;
-  color: #57534e;
-  box-shadow: 0 4px 0 0 #d6cec4;
+  background: var(--surface-mute);
+  color: var(--ink-soft);
+  box-shadow: 0 4px 0 0 var(--line);
 }
 
 .btn-secondary {
@@ -336,7 +484,7 @@ body {
 
 /* Skeleton blocks share the sweep so loading states feel like one system. */
 .skeleton {
-  background: linear-gradient(100deg, #f2ede7 30%, #e9e2da 50%, #f2ede7 70%);
+  background: linear-gradient(100deg, var(--skeleton-1) 30%, var(--skeleton-2) 50%, var(--skeleton-1) 70%);
   background-size: 200% 100%;
   animation: btl-sweep 1.5s linear infinite;
 }
@@ -366,7 +514,7 @@ body {
    chunky default bar over the cream. */
 .scroll-soft {
   scrollbar-width: thin;
-  scrollbar-color: #d6cec4 transparent;
+  scrollbar-color: var(--scrollbar) transparent;
 }
 
 .scroll-soft::-webkit-scrollbar {
@@ -375,7 +523,7 @@ body {
 }
 
 .scroll-soft::-webkit-scrollbar-thumb {
-  background: #d6cec4;
+  background: var(--scrollbar);
   border-radius: 999px;
 }
 

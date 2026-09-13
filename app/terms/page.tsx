@@ -7,24 +7,24 @@ export const metadata: Metadata = {
 };
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="font-display text-xl font-bold text-stone-900 mt-8 mb-3">{children}</h2>;
+  return <h2 className="font-display text-xl font-bold ink mt-8 mb-3">{children}</h2>;
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-[0.9375rem] text-stone-700 leading-relaxed mb-3">{children}</p>;
+  return <p className="text-[0.9375rem] ink-2 leading-relaxed mb-3">{children}</p>;
 }
 
 export default function TermsOfService() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(120%_80%_at_50%_0%,_#FFFDFA_0%,_#FFF8F0_45%,_#FBE7CE_100%)] px-6 py-10">
+    <main className="min-h-screen page-bg px-6 py-10">
       <div className="max-w-2xl mx-auto">
-        <Link href="/" className="inline-flex items-center gap-1 text-orange-700 font-semibold text-[0.875rem] hover:underline">
+        <Link href="/" className="inline-flex items-center gap-1 accent font-semibold text-[0.875rem] hover:underline">
           ← Back to Break The Loop
         </Link>
 
-        <div className="bg-white border border-[#e7e0d8] rounded-[1.5rem] shadow-[0_2px_4px_rgba(68,64,60,0.06),0_12px_32px_rgba(68,64,60,0.1)] p-6 sm:p-10 mt-4">
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 mb-1">Terms of Service</h1>
-          <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
+        <div className="surface border bd-line rounded-[1.5rem] shadow-[var(--shadow-lift)] p-6 sm:p-10 mt-4">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold ink mb-1">Terms of Service</h1>
+          <p className="text-sm ink-3 mb-6">Last updated: September 10, 2026</p>
 
           <P>
             Please read these Terms carefully. They include a liability waiver relevant to meeting other users
@@ -47,7 +47,7 @@ export default function TermsOfService() {
           </P>
 
           <H2>2. Eligibility</H2>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="list-disc pl-6 ink-2 space-y-1 mb-3">
             <li>You must be at least 13 years old to create an account.</li>
             <li>
               You must be at least <strong className="text-stone-800">18 years old</strong> to use Duo or Squad
@@ -67,7 +67,7 @@ export default function TermsOfService() {
               different from a normal app feature, and it comes with real risk. By using Duo or Squad, you
               acknowledge and agree to the following:
             </P>
-            <ul className="list-disc pl-6 text-stone-700 space-y-2 mb-3">
+            <ul className="list-disc pl-6 ink-2 space-y-2 mb-3">
               <li>
                 <strong className="text-stone-800">
                   Break The Loop does not conduct background checks, identity verification, or any vetting of
@@ -104,7 +104,7 @@ export default function TermsOfService() {
 
           <H2>4. Your conduct</H2>
           <P>You agree not to:</P>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="list-disc pl-6 ink-2 space-y-1 mb-3">
             <li>Harass, threaten, stalk, or endanger any other user.</li>
             <li>Impersonate another person or misrepresent your identity, age, or intentions.</li>
             <li>Use the App to solicit money, sell goods or services, or run scams.</li>
@@ -119,7 +119,7 @@ export default function TermsOfService() {
 
           <H2>5. Content you submit</H2>
           <P>When you submit a mission suggestion, a hidden gem, a chat message, or a photo:</P>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="list-disc pl-6 ink-2 space-y-1 mb-3">
             <li>You confirm you have the right to submit it (e.g., it's your own photo, your own words).</li>
             <li>You grant Break The Loop a non-exclusive, royalty-free license to display it within the App (e.g., on the feed, or to other users completing the same hidden gem).</li>
             <li>You're responsible for what you post. We moderate reactively (via user reports and admin review) but do not pre-screen every submission before it appears.</li>
@@ -127,14 +127,14 @@ export default function TermsOfService() {
           </ul>
 
           <H2>6. Reporting, blocking, and bans</H2>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="list-disc pl-6 ink-2 space-y-1 mb-3">
             <li>Any user can report content or another user, and can personally block another user from ever being matched with them again.</li>
             <li>We review reports and may remove content, issue warnings, or ban accounts that violate these Terms.</li>
             <li>Reports are reviewed by us, not guaranteed to result in any specific action, and we are not obligated to share the outcome of an investigation with the reporting user.</li>
           </ul>
 
           <H2>7. Accounts</H2>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="list-disc pl-6 ink-2 space-y-1 mb-3">
             <li>You can use much of the App as a guest, without an account.</li>
             <li>Verifying your email unlocks Duo/Squad matching with people outside your direct invite links.</li>
             <li>You're responsible for keeping your own account/session secure.</li>

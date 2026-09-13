@@ -321,3 +321,16 @@ export const IconGem = (p: IconProps) => (
     <path d="m9.5 9 2.5 12L14.5 9 12 3Z" />
   </Svg>
 );
+
+export const IconSun = (p: IconProps) => (
+  <Svg {...p}>
+    <circle cx="12" cy="12" r="4.2" />
+    <path d="M12 2v2.2M12 19.8V22M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2 12h2.2M19.8 12H22M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6" />
+  </Svg>
+);
+
+export const IconMoon = (p: IconProps) => (
+  <Svg {...p}>
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5Z" />
+  </Svg>
+);
