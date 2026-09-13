@@ -37,9 +37,16 @@ export default function SuspenseMissionCard({
   const currentRarity = quest.rarity || "common";
   const currentXp = quest.xp_reward || 15;
 
+  // The parent passes `quest` and `gem` as fresh object literals on every
+  // render, so depending on them by identity re-ran the whole 1.5s reveal
+  // any time anything else on the page changed -- accepting the mission,
+  // a toast, a chat message, a roster update -- blurring out the brief the
+  // player was mid-way through reading. Depend on the values instead.
+  const gemKey = gem ? `${gem.name}|${gem.neighborhood}|${gem.description}` : "";
+
   useEffect(() => {
     setIsRevealing(true);
-    const placeholderPhrases = gem
+    const placeholderPhrases = gemKey
       ? [
           "ASKING AROUND THE NEIGHBORHOOD...",
           "CHECKING WITH THE LOCALS...",
@@ -69,107 +76,137 @@ export default function SuspenseMissionCard({
       clearInterval(interval);
       clearTimeout(revealTimer);
     };
-  }, [quest, gem]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quest.quest_text, quest.rarity, quest.xp_reward, gemKey]);
 
+  // Rarity is the one place the palette is allowed to get loud. Each tier gets
+  // a different paper colour and edge treatment so a legendary pull is
+  // recognisable from across the room, not just from reading the label.
   const getRarityBadge = () => {
     switch (currentRarity) {
       case "legendary":
         return {
-          border: "border-amber-400",
-          bg: "bg-gradient-to-b from-amber-50 to-white",
-          shadow: "shadow-xl shadow-amber-400/40",
-          text: "text-amber-700",
+          paper: "bg-gold-wash",
+          ribbon: "bg-gold text-ink",
+          chip: "bg-ink text-gold",
           label: "⚡ LEGENDARY QUEST",
         };
       case "rare":
         return {
-          border: "border-amber-400",
-          bg: "bg-gradient-to-b from-amber-50 to-white",
-          shadow: "shadow-lg shadow-amber-400/25",
-          text: "text-amber-700",
+          paper: "bg-rose-wash",
+          ribbon: "bg-rose text-white",
+          chip: "bg-ink text-rose-wash",
           label: "💎 RARE QUEST",
         };
       default:
         return {
-          border: "border-stone-300",
-          bg: "bg-gradient-to-b from-white to-stone-50",
-          shadow: "shadow-lg shadow-stone-500/10",
-          text: "text-stone-600",
+          paper: "bg-white",
+          ribbon: "bg-cream-deep text-ink",
+          chip: "bg-ink text-cream",
           label: "⚪ COMMON QUEST",
         };
     }
   };
 
   const style = getRarityBadge();
+  const ribbon = gem ? "bg-gold text-ink" : style.ribbon;
+  const paper = gem ? "bg-gold-wash" : style.paper;
 
   return (
-    <div
-      className={`relative w-full max-w-md p-6 rounded-2xl border ${style.border} ${style.bg} ${style.shadow} transition-all duration-500 transform ${
-        isRevealing ? "scale-95 blur-xs" : "scale-100 blur-none"
-      }`}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <span className={`text-xs font-black tracking-widest uppercase ${gem ? "text-amber-700" : style.text}`}>
-          {isRevealing
-            ? gem
-              ? "📍 FINDING A SPOT..."
-              : "🎲 ROLLING RARITY..."
-            : gem
-            ? "📍 HYPER-LOCAL SECRET"
-            : style.label}
-        </span>
-        <div className="px-3 py-1 rounded-full bg-stone-100 border border-stone-300 text-xs font-bold text-amber-700">
-          +{currentXp} IRL XP
-        </div>
-      </div>
+    <div className="relative w-full max-w-md">
+      {/* The brief itself sits on a rotated backing sheet, so the card reads as
+          a physical thing handed to you rather than a panel in a web page. */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 translate-x-2 translate-y-2 rotate-1 rounded-3xl border-2 border-ink bg-cream-deep"
+      />
 
-      {gem && !isRevealing ? (
-        <div className="my-4 space-y-3">
-          <div className="text-center space-y-1.5">
-            <h3 className="text-xl font-black text-stone-900 leading-tight">{gem.name}</h3>
-            <span className="inline-block text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-full">
-              {gem.neighborhood}
-            </span>
-          </div>
-          <p className="text-center text-sm text-stone-700 leading-relaxed">
-            {gem.description}
-          </p>
-        </div>
-      ) : (
-        <div className="min-h-[100px] flex items-center justify-center my-4">
-          <p
-            className={`text-center text-lg font-medium leading-relaxed ${
-              isRevealing ? "text-stone-500 animate-pulse font-mono text-sm" : "text-stone-900"
+      <div
+        className={`relative overflow-hidden rounded-3xl sticker ${paper} transition-all duration-500 ${
+          isRevealing ? "scale-[0.97] blur-[2px]" : "scale-100 blur-none"
+        }`}
+      >
+        {/* Rarity ribbon: the loudest band on the card. */}
+        <div className={`flex items-center justify-between gap-2 border-b-2 border-ink px-4 py-2.5 ${ribbon}`}>
+          <span className="eyebrow truncate">
+            {isRevealing
+              ? gem
+                ? "📍 FINDING A SPOT..."
+                : "🎲 ROLLING RARITY..."
+              : gem
+              ? "📍 HYPER-LOCAL SECRET"
+              : style.label}
+          </span>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 font-display text-[11px] font-bold tracking-tight ${
+              gem ? "bg-ink text-gold" : style.chip
             }`}
           >
-            "{displayText}"
-          </p>
+            +{currentXp} IRL XP
+          </span>
         </div>
-      )}
 
-      {!isRevealing && credit && (
-        <p className="text-center text-[10px] text-stone-500 -mt-2 mb-2">
-          {gem ? "Shared by" : "Suggested by"} @{credit}
-        </p>
-      )}
+        <div className="px-5 pb-5 pt-5 sm:px-6">
+          {gem && !isRevealing ? (
+            <div className="space-y-3">
+              <div className="space-y-2 text-center">
+                <h3 className="font-display text-2xl font-bold leading-tight text-ink sm:text-3xl">
+                  {gem.name}
+                </h3>
+                <span className="eyebrow inline-flex items-center gap-1 rounded-full bg-ink px-3 py-1 text-cream">
+                  <span aria-hidden="true">📍</span>
+                  {gem.neighborhood}
+                </span>
+              </div>
+              <p className="rounded-2xl bg-white/80 sticker-flat p-3.5 text-center text-[15px] leading-relaxed text-ink-soft">
+                {gem.description}
+              </p>
+            </div>
+          ) : (
+            <div className="flex min-h-[104px] items-center justify-center">
+              {isRevealing ? (
+                <p className="animate-pulse text-center font-mono text-sm font-medium text-muted">
+                  {displayText}
+                </p>
+              ) : (
+                <p className="text-center font-display text-xl font-bold leading-snug text-ink sm:text-2xl">
+                  <span aria-hidden="true" className="text-ember-deep">
+                    “
+                  </span>
+                  {displayText}
+                  <span aria-hidden="true" className="text-ember-deep">
+                    ”
+                  </span>
+                </p>
+              )}
+            </div>
+          )}
 
-      {!isRevealing && (
-        <div className="mt-6 flex flex-col gap-3">
-          <button
-            onClick={onAcceptMission}
-            className="w-full py-3.5 px-4 rounded-xl font-extrabold text-white bg-orange-600 hover:bg-orange-500 active:scale-98 transition-all shadow-lg shadow-orange-600/30"
-          >
-            {gem ? "I'M GOING — OPEN CAMERA" : "ACCEPT MISSION & OPEN CAMERA"}
-          </button>
+          {!isRevealing && credit && (
+            <p className="mt-3 text-center text-[11px] font-semibold text-muted">
+              {gem ? "Shared by" : "Suggested by"} <span className="text-ember-ink">@{credit}</span>
+            </p>
+          )}
 
-          <button
-            onClick={onReroll}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-stone-600 hover:text-stone-900 bg-stone-100/60 hover:bg-stone-100 border border-stone-300/50 transition-all flex items-center justify-center gap-2"
-          >
-            <span>{gem ? "🔄 Show Me Another Spot" : "🔄 Reroll Quest"}</span>
-          </button>
+          {!isRevealing && (
+            <div className="mt-5 flex flex-col gap-2.5">
+              <button
+                onClick={onAcceptMission}
+                className="w-full rounded-2xl sticker press bg-ember-deep px-4 py-4 font-display text-base font-bold uppercase tracking-wide text-white"
+              >
+                {gem ? "I'M GOING — OPEN CAMERA" : "ACCEPT MISSION & OPEN CAMERA"}
+              </button>
+
+              <button
+                onClick={onReroll}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl sticker-sm press-sm bg-white px-4 py-2.5 text-xs font-bold text-ink hover:bg-cream"
+              >
+                <span>{gem ? "🔄 Show Me Another Spot" : "🔄 Reroll Quest"}</span>
+              </button>
+            </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

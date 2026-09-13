@@ -1,28 +1,203 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ---------------------------------------------------------------------------
+   BREAK THE LOOP — design tokens
+   ---------------------------------------------------------------------------
+   The palette is deliberately small and every text/background pair used in
+   the app is checked against WCAG before it ships. Light shades (-300/-400)
+   had repeatedly been used as text on light surfaces and measured under 2:1,
+   so they simply don't exist here: there is no washed-out text colour to
+   reach for. Measured ratios for every pair this app actually uses:
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+     ink        on cream      16.6:1     muted      on cream     5.9:1
+     ink        on white      18.2:1     muted      on white     6.5:1
+     ink-soft   on cream      11.4:1     muted      on cream-deep 5.2:1
+     ember-ink  on ember-wash  7.4:1     gold-ink   on gold-wash  6.6:1
+     ember-deep on white       5.2:1     rose-ink   on rose-wash  6.7:1
+     cream      on ink        16.6:1     gold       on ink        8.9:1
+     ink        on gold        8.9:1     ink        on ember      5.1:1
+     white      on ember-deep  5.2:1
+
+   One pair is large-text-only: white on --color-ember is 3.56:1, which
+   clears 3:1 for bold text at 18.66px+ but NOT for small text. Small labels
+   on an orange fill use ember-deep (5.18:1) or ink instead.
+--------------------------------------------------------------------------- */
+
+@theme {
+  /* Structure: warm near-black. Used for type, borders and hard shadows. */
+  --color-ink: #1c1410;
+  --color-ink-soft: #3d322b;
+  --color-muted: #6b5b50;
+
+  /* Ground: warm cream paper, and a deeper tone for wells/edges. */
+  --color-cream: #fff3e2;
+  --color-cream-deep: #fbe3c4;
+
+  /* Primary: Quest orange. */
+  --color-ember: #ea580c;
+  --color-ember-deep: #c2410c;
+  --color-ember-ink: #8a2b07;
+  --color-ember-wash: #ffead8;
+
+  /* Secondary: Explore marigold. */
+  --color-gold: #f5a524;
+  --color-gold-deep: #b45309;
+  --color-gold-ink: #7a4b05;
+  --color-gold-wash: #fff0cf;
+
+  /* Accent: used only for legendary/hot moments, never as body text. */
+  --color-rose: #e11d48;
+  --color-rose-ink: #9f1239;
+  --color-rose-wash: #ffe4e9;
+
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", monospace;
+
+  /* The signature of the redesign: flat offset shadows, no blur. Everything
+     reads as a printed sticker laid on paper rather than a floating pane. */
+  --shadow-sticker-xs: 2px 2px 0 0 #1c1410;
+  --shadow-sticker-sm: 3px 3px 0 0 #1c1410;
+  --shadow-sticker: 4px 4px 0 0 #1c1410;
+  --shadow-sticker-lg: 6px 6px 0 0 #1c1410;
+
+  --animate-rise: rise 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  --animate-pop: pop 0.34s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  --animate-halo: halo 2.6s ease-out infinite;
+  --animate-wiggle: wiggle 2.4s ease-in-out infinite;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pop {
+  0% { opacity: 0; transform: scale(0.9); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* The expanding ring behind the DESTROY button. */
+@keyframes halo {
+  0% { opacity: 0.5; transform: scale(0.82); }
+  100% { opacity: 0; transform: scale(1.35); }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(-7deg); }
+  50% { transform: rotate(5deg); }
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Space Grotesk's numerals are the reason it's here — tabular figures stop
+   stat tiles and XP counters from jittering as the digits change. */
+.font-display {
+  font-feature-settings: "tnum" 1;
+  letter-spacing: -0.02em;
+}
+
+/* ---------------------------------------------------------------------------
+   Component primitives
+   ---------------------------------------------------------------------------
+   Written as plain CSS rather than @apply so the offset-shadow mechanics live
+   in exactly one place. Used by every card, button and chip in the app.
+--------------------------------------------------------------------------- */
+
+/* A surface: ink hairline + flat offset shadow. */
+.sticker {
+  border: 2px solid var(--color-ink);
+  box-shadow: var(--shadow-sticker);
+}
+
+.sticker-sm {
+  border: 2px solid var(--color-ink);
+  box-shadow: var(--shadow-sticker-sm);
+}
+
+.sticker-lg {
+  border: 2px solid var(--color-ink);
+  box-shadow: var(--shadow-sticker-lg);
+}
+
+/* Flat hairline with no lift — for nested wells inside a card. */
+.sticker-flat {
+  border: 2px solid var(--color-ink);
+}
+
+/* Real press depth: the surface travels into its own shadow. Replaces hover
+   colour changes, which are invisible on touch and a contrast risk. */
+.press {
+  transition: transform 90ms ease-out, box-shadow 90ms ease-out, background-color 140ms ease-out;
+}
+
+.press:active:not(:disabled) {
+  transform: translate(3px, 3px);
+  box-shadow: 1px 1px 0 0 var(--color-ink);
+}
+
+.press-sm {
+  transition: transform 90ms ease-out, box-shadow 90ms ease-out, background-color 140ms ease-out;
+}
+
+.press-sm:active:not(:disabled) {
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 0 var(--color-ink);
+}
+
+/* Small caps label. Tracking is what makes 10px type read as a label
+   rather than as shrunken body copy. */
+.eyebrow {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 0.625rem;
+  line-height: 1.2;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+/* Printed-paper texture: a fine halftone dot grid over the cream ground. */
+.halftone {
+  background-image: radial-gradient(var(--color-ink) 1px, transparent 1px);
+  background-size: 18px 18px;
+  background-position: 0 0;
+}
+
+/* Diagonal hazard stripes — used on the hero plinth and section rules. */
+.hazard {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    var(--color-ink) 0 6px,
+    transparent 6px 12px
+  );
+}
+
+/* Scroll panels inside cards (chat, feed, admin queues). */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-cream-deep) transparent;
+}
+
+.scroll-slim::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-slim::-webkit-scrollbar-thumb {
+  background: var(--color-cream-deep);
+  border-radius: 999px;
+}
+
+/* Visible keyboard focus everywhere. The app is touch-first but this is the
+   only way desktop keyboard users can see where they are. */
+:focus-visible {
+  outline: 3px solid var(--color-ember-deep);
+  outline-offset: 2px;
 }
 
 /* Only when installed as a home-screen app -- a regular browser tab should
@@ -31,5 +206,16 @@ body {
 @media (display-mode: standalone) {
   html, body {
     overscroll-behavior: none;
+  }
+}
+
+/* The design leans on motion (haloes, wiggling stickers, bouncing invites).
+   Honour the OS setting instead of shipping it to everyone. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

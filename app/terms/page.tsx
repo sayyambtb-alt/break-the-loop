@@ -7,24 +7,33 @@ export const metadata: Metadata = {
 };
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-xl font-extrabold text-stone-900 mt-8 mb-3">{children}</h2>;
+  return (
+    <h2 className="mt-9 mb-3 font-display text-xl font-bold text-ink">{children}</h2>
+  );
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-stone-700 leading-relaxed mb-3">{children}</p>;
+  return <p className="mb-3 leading-relaxed text-ink-soft">{children}</p>;
 }
 
 export default function TermsOfService() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] px-6 py-10">
+    <main className="relative min-h-dvh bg-cream px-4 py-8 sm:px-6 sm:py-12">
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 halftone opacity-[0.05]" />
+        <div className="absolute -top-40 left-1/2 h-[30rem] w-[30rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,165,36,0.32)_0%,rgba(245,165,36,0)_70%)]" />
+      </div>
       <div className="max-w-2xl mx-auto">
-        <Link href="/" className="text-orange-600 font-bold text-sm hover:underline">
+        <Link
+          href="/"
+          className="inline-block rounded-xl sticker-sm press-sm bg-white px-3 py-2 text-sm font-bold text-ink"
+        >
           ← Back to Break The Loop
         </Link>
 
-        <div className="bg-gradient-to-b from-white to-stone-50 rounded-3xl shadow-xl shadow-orange-900/10 p-6 sm:p-10 mt-4">
-          <h1 className="text-2xl sm:text-3xl font-black text-stone-900 mb-1">Terms of Service</h1>
-          <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
+        <div className="mt-4 rounded-3xl sticker bg-white p-5 sm:p-10">
+          <h1 className="mb-1 font-display text-3xl font-bold text-ink sm:text-4xl">Terms of Service</h1>
+          <p className="mb-6 text-sm font-semibold text-muted">Last updated: September 10, 2026</p>
 
           <P>
             Please read these Terms carefully. They include a liability waiver relevant to meeting other users
@@ -39,7 +48,7 @@ export default function TermsOfService() {
             before. It also has an "Explore" mode that surfaces hyper-local spots submitted by other users.
           </P>
           <P>
-            <strong className="text-stone-800">
+            <strong className="text-ink">
               The App is a tool for suggesting activities and, where you opt into Duo/Squad, connecting you
               with other users. Break The Loop does not supervise, screen in advance, or guarantee the safety
               of any in-person meeting that results from using the App.
@@ -47,10 +56,10 @@ export default function TermsOfService() {
           </P>
 
           <H2>2. Eligibility</H2>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="mb-3 list-disc space-y-1 pl-6 text-ink-soft">
             <li>You must be at least 13 years old to create an account.</li>
             <li>
-              You must be at least <strong className="text-stone-800">18 years old</strong> to use Duo or Squad
+              You must be at least <strong className="text-ink">18 years old</strong> to use Duo or Squad
               matching with people you don't already know (i.e., random/stranger matchmaking, as opposed to
               inviting a specific friend via a direct link).
             </li>
@@ -60,16 +69,16 @@ export default function TermsOfService() {
             </li>
           </ul>
 
-          <div className="border-2 border-orange-300 bg-orange-50 rounded-2xl p-5 my-6">
+          <div className="my-6 rounded-2xl sticker bg-ember-wash p-5">
             <H2>3. Meeting people in person — read this section</H2>
             <P>
               Duo and Squad modes may match you with a stranger for a real-world activity. This is inherently
               different from a normal app feature, and it comes with real risk. By using Duo or Squad, you
               acknowledge and agree to the following:
             </P>
-            <ul className="list-disc pl-6 text-stone-700 space-y-2 mb-3">
+            <ul className="mb-3 list-disc space-y-2 pl-6 text-ink-soft">
               <li>
-                <strong className="text-stone-800">
+                <strong className="text-ink">
                   Break The Loop does not conduct background checks, identity verification, or any vetting of
                   users
                 </strong>{" "}
@@ -77,7 +86,7 @@ export default function TermsOfService() {
                 is reactive, not preventive).
               </li>
               <li>
-                <strong className="text-stone-800">You are solely responsible for your own safety</strong> when
+                <strong className="text-ink">You are solely responsible for your own safety</strong> when
                 meeting anyone through the App. We strongly recommend you:
                 <ul className="list-disc pl-6 mt-1 space-y-1">
                   <li>Only ever meet in a public place.</li>
@@ -88,14 +97,14 @@ export default function TermsOfService() {
                 </ul>
               </li>
               <li>
-                <strong className="text-stone-800">You assume all risk</strong> arising from meeting or
+                <strong className="text-ink">You assume all risk</strong> arising from meeting or
                 interacting with other users, in person or otherwise. To the fullest extent permitted by law,
                 Break The Loop, its founders, and anyone helping build or operate it disclaim all liability for
                 any injury, loss, dispute, or harm arising from an in-person meeting arranged through the App,
                 whether or not we were negligent in operating the platform.
               </li>
               <li>
-                <strong className="text-stone-800">Report immediately</strong> anything that violates these
+                <strong className="text-ink">Report immediately</strong> anything that violates these
                 Terms or makes you feel unsafe, using the in-app report feature. In an emergency, contact local
                 emergency services first — the App is not an emergency response tool.
               </li>
@@ -104,7 +113,7 @@ export default function TermsOfService() {
 
           <H2>4. Your conduct</H2>
           <P>You agree not to:</P>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="mb-3 list-disc space-y-1 pl-6 text-ink-soft">
             <li>Harass, threaten, stalk, or endanger any other user.</li>
             <li>Impersonate another person or misrepresent your identity, age, or intentions.</li>
             <li>Use the App to solicit money, sell goods or services, or run scams.</li>
@@ -119,7 +128,7 @@ export default function TermsOfService() {
 
           <H2>5. Content you submit</H2>
           <P>When you submit a mission suggestion, a hidden gem, a chat message, or a photo:</P>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="mb-3 list-disc space-y-1 pl-6 text-ink-soft">
             <li>You confirm you have the right to submit it (e.g., it's your own photo, your own words).</li>
             <li>You grant Break The Loop a non-exclusive, royalty-free license to display it within the App (e.g., on the feed, or to other users completing the same hidden gem).</li>
             <li>You're responsible for what you post. We moderate reactively (via user reports and admin review) but do not pre-screen every submission before it appears.</li>
@@ -127,14 +136,14 @@ export default function TermsOfService() {
           </ul>
 
           <H2>6. Reporting, blocking, and bans</H2>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="mb-3 list-disc space-y-1 pl-6 text-ink-soft">
             <li>Any user can report content or another user, and can personally block another user from ever being matched with them again.</li>
             <li>We review reports and may remove content, issue warnings, or ban accounts that violate these Terms.</li>
             <li>Reports are reviewed by us, not guaranteed to result in any specific action, and we are not obligated to share the outcome of an investigation with the reporting user.</li>
           </ul>
 
           <H2>7. Accounts</H2>
-          <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
+          <ul className="mb-3 list-disc space-y-1 pl-6 text-ink-soft">
             <li>You can use much of the App as a guest, without an account.</li>
             <li>Verifying your email unlocks Duo/Squad matching with people outside your direct invite links.</li>
             <li>You're responsible for keeping your own account/session secure.</li>
