@@ -28,8 +28,11 @@ let lockCount = 0;
 let previousOverflow = "";
 
 interface OverlayProps {
-  /** Called on Escape and on a click on the scrim itself. Omit for a dialog
-   *  that must be answered rather than dismissed. */
+  /** Called on Escape. Omit for a dialog that must be answered rather than
+   *  dismissed. Deliberately not wired to a click on the scrim: several of
+   *  these dialogs are submission forms, and a mis-tap on the backdrop would
+   *  throw away what you had typed with no confirmation. Escape doesn't get
+   *  pressed by accident the way a backdrop gets tapped. */
   onClose?: () => void;
   /** Announced as the dialog's name. */
   label: string;
@@ -96,11 +99,6 @@ export default function Overlay({ onClose, label, className = "", children }: Ov
       aria-modal="true"
       aria-label={label}
       className={`fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/95 p-4 backdrop-blur-md ${className}`}
-      onMouseDown={(e) => {
-        // Dismiss only on a press that lands on the scrim itself, so dragging
-        // a text selection out of the dialog doesn't close it.
-        if (e.target === e.currentTarget) closeRef.current?.();
-      }}
     >
       {children}
     </div>

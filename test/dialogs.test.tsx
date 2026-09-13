@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockState, resetMockState, buildSupabaseClient } from './mocks/supabase';
 
@@ -69,6 +69,27 @@ describe('dialogs', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(document.body.style.overflow).toBe('');
     expect(document.activeElement).toBe(opener);
+  });
+
+  it('does not discard a submission when the backdrop is clicked', async () => {
+    const user = userEvent.setup();
+    await renderApp();
+
+    await user.click(await screen.findByText("I'm in →"));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /Suggest Quest/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Suggest a quest' });
+
+    const textarea = within(dialog).getByRole('textbox');
+    await user.type(textarea, 'Walk to the oldest building on your street');
+
+    // Several of these dialogs are submission forms. A mis-tap on the backdrop
+    // must not throw away what has been typed.
+    await user.click(dialog);
+
+    expect(screen.getByRole('dialog', { name: 'Suggest a quest' })).toBeInTheDocument();
+    expect(textarea).toHaveValue('Walk to the oldest building on your street');
   });
 
   it('does not let Escape dismiss the handle setup dialog, which has to be answered', async () => {
