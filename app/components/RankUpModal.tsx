@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Modal, Button } from "./ui";
 import { getRank, type RankTier } from "../lib/ranks";
 import { IconCrown, IconShare, IconBolt } from "./Icons";
@@ -29,20 +29,16 @@ export default function RankUpModal({
   onShare?: () => void;
 }) {
   const rank = getRank(totalXp);
+  // Reset comes from the caller remounting this on each rank-up (see its key),
+  // so the effect only ever schedules — it never sets state synchronously.
   const [revealed, setRevealed] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    if (!open) {
-      setRevealed(false);
-      return;
-    }
+    if (!open) return;
     // A beat before the new title lands, so it reads as an arrival rather than
     // appearing pre-loaded.
-    timerRef.current = setTimeout(() => setRevealed(true), 260);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
+    const timer = setTimeout(() => setRevealed(true), 260);
+    return () => clearTimeout(timer);
   }, [open]);
 
   return (

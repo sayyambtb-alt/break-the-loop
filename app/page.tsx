@@ -2693,7 +2693,7 @@ export default function Home() {
                 @{incomingInvite.sender_handle} challenged you to a Duo Raid
               </h3>
               <p className="text-[0.8125rem] ink-3 mt-1 leading-snug line-clamp-2">
-                "{incomingInvite.quest_text}"
+                &quot;{incomingInvite.quest_text}&quot;
               </p>
             </div>
           </div>
@@ -2789,7 +2789,7 @@ export default function Home() {
                       )}
                       <div className="text-left overflow-hidden min-w-0">
                         <p className="text-[0.8125rem] ink truncate font-medium">
-                          "{h.quest_text}"
+                          &quot;{h.quest_text}&quot;
                         </p>
                         <span className="text-[0.6875rem] ink-3 uppercase font-bold tracking-wide">
                           {h.mode} mission
@@ -2856,11 +2856,11 @@ export default function Home() {
                       <span className="nums text-[0.6875rem] ink-3 shrink-0 pt-1">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
                     <p className="ink-2 text-[0.8125rem]">
-                      <strong className="font-semibold">Reason:</strong> "{r.reason}"
+                      <strong className="font-semibold">Reason:</strong> &quot;{r.reason}&quot;
                     </p>
                     {r.content_text && (
                       <p className="ink text-[0.8125rem] surface border bd-line rounded-[0.625rem] p-2.5">
-                        <strong className="reward font-semibold">Reported content:</strong> "{r.content_text}"
+                        <strong className="reward font-semibold">Reported content:</strong> &quot;{r.content_text}&quot;
                       </p>
                     )}
                     {r.content_photo_url && (
@@ -2958,7 +2958,7 @@ export default function Home() {
                       <Chip tone="reward" className="uppercase">{q.mode}</Chip>
                       <span className="nums text-[0.6875rem] ink-3 shrink-0 pt-1">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="ink text-[0.875rem]">"{q.quest_text}"</p>
+                    <p className="ink text-[0.875rem]">&quot;{q.quest_text}&quot;</p>
                     <p className="ink-3 text-[0.6875rem]">Suggested by @{q.submitted_by_handle}</p>
                     <div className="flex gap-2 pt-2 border-t bd-line">
                       <button
@@ -3448,7 +3448,7 @@ export default function Home() {
           </ol>
 
           <Button variant="primary" size="lg" full onClick={dismissWelcomeModal}>
-            Let's go
+            Let&apos;s go
           </Button>
         </div>
       </Modal>
@@ -3465,7 +3465,7 @@ export default function Home() {
           {!isRecoverOtpSent ? (
             <>
               <p className="text-[0.8125rem] ink-3 leading-relaxed">
-                Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
+                Enter the email you previously saved your progress with, and we&apos;ll send you a 6-digit code.
               </p>
               <div className="space-y-3">
                 <input
@@ -3692,6 +3692,7 @@ export default function Home() {
       </Modal>
 
       <RankUpModal
+        key={rankUp ? `rankup-${rankUp.xp}` : 'rankup-idle'}
         open={!!rankUp}
         fromTier={rankUp?.from ?? null}
         totalXp={rankUp?.xp ?? totalXp}
@@ -4274,7 +4275,7 @@ export default function Home() {
                       </div>
                     </div>
 
-                    <p className="text-[0.875rem] ink leading-snug">"{item.quest_text}"</p>
+                    <p className="text-[0.875rem] ink leading-snug">&quot;{item.quest_text}&quot;</p>
 
                     {/* The emoji here stay -- the fire and the high five are the
                         reactions themselves, not chrome standing in for an icon. */}

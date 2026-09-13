@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useId, useRef } from "react";
 import { IconClose } from "./Icons";
 
 /* ---------------------------------------------------------------------------
@@ -45,7 +45,7 @@ export function Modal({
 }: ModalProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
-  const titleId = useRef(`m-${Math.random().toString(36).slice(2, 9)}`).current;
+  const titleId = useId();
 
   // Callers pass inline arrows for onClose, so `close` changes identity on
   // every render. The effect below must NOT depend on it: re-running its
