@@ -31,6 +31,26 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 const ADMIN_EMAIL = 'sayyambtb@gmail.com';
 
+/**
+ * Every feed row carries created_at and the UI never showed it, so a proof from
+ * ten minutes ago and one from last month looked identical.
+ */
+const timeAgo = (iso: string): string => {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const secs = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (secs < 60) return 'just now';
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 5) return `${weeks}w ago`;
+  return new Date(then).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+};
+
 interface FeedItem {
   id: string;
   user_id: string;
@@ -242,6 +262,9 @@ export default function Home() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
+  // Reactions you've already sent this session, as `${logId}:${type}`. Drives
+  // the pressed state and stops a double-tap sending two rows.
+  const [myReactions, setMyReactions] = useState<Set<string>>(new Set());
 
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -1414,6 +1437,15 @@ export default function Home() {
 
         const profileMap = new Map((profiles || []).map(p => [p.device_id, p.handle]));
 
+        // Seed the pressed state from what this user has already reacted to, so
+        // it survives a reload instead of resetting every visit.
+        const mine = new Set<string>(
+          (reactions || [])
+            .filter((r) => currentUserId && r.user_id === currentUserId)
+            .map((r) => `${r.log_id}:${r.reaction_type}`)
+        );
+        setMyReactions(mine);
+
         const logsWithReactions = logs.map((log) => {
           const logReactions = reactions?.filter((r) => r.log_id === log.id) || [];
           const userHandle = profileMap.get(log.user_id) || (log.user_id ? log.user_id.substring(0, 8) : "Anonymous");
@@ -1443,13 +1475,41 @@ export default function Home() {
     setLeaderboard(data || []);
   };
 
+  // Reacting used to insert a row and then refetch the entire gallery, so a tap
+  // on the fire button did nothing visible until a full round trip finished and
+  // every card re-rendered. Bump the count locally, then reconcile.
   const handleReact = async (logId: string, type: 'fire' | 'five') => {
+    const key = `${logId}:${type}`;
+    if (myReactions.has(key)) return;
+
+    const countField = type === 'fire' ? 'fire_count' : 'five_count';
+    setMyReactions((prev) => new Set(prev).add(key));
+    setFeedItems((prev) =>
+      prev.map((item) =>
+        item.id === logId ? { ...item, [countField]: (item[countField] || 0) + 1 } : item
+      )
+    );
+
     try {
-      await supabase.from('feed_reactions').insert([
+      const { error } = await supabase.from('feed_reactions').insert([
         { log_id: logId, user_handle: handle, user_id: currentUserId, reaction_type: type }
       ]);
-      fetchGallery();
+      if (error) throw error;
     } catch {
+      // Put it back the way it was rather than leaving a count that never landed.
+      setMyReactions((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      setFeedItems((prev) =>
+        prev.map((item) =>
+          item.id === logId
+            ? { ...item, [countField]: Math.max(0, (item[countField] || 1) - 1) }
+            : item
+        )
+      );
+      showToast("Couldn't save that reaction.", 'error');
     }
   };
 
@@ -3959,19 +4019,32 @@ export default function Home() {
           )}
         </div>
       ) : (
-        <div className="w-full max-w-md my-auto space-y-3">
+        <div className="w-full max-w-md space-y-3">
           <div className="flex justify-between items-baseline gap-2">
             <h2 className="font-display text-base font-bold text-stone-900">Community Proof Feed</h2>
-            <span className="nums text-[0.8125rem] text-stone-500">
+            <span className="nums text-[0.8125rem] text-stone-600">
               {feedItems.length} logged
             </span>
           </div>
 
-          <div className="flex flex-col gap-3 max-h-[62vh] overflow-y-auto scroll-soft pr-1">
+          {/* No nested scroll container here.
+
+              This list used to be `flex flex-col ... max-h-[62vh] overflow-y-auto`.
+              Flex children shrink by default, so with the height capped every
+              card was squeezed below its natural height -- and because the card
+              clips its own overflow (to run the photo edge to edge), everything
+              past that squeeze, which is the handle, the quest text and the
+              reactions, was silently cut away. The feed rendered as three bare
+              photos and nothing else.
+
+              A scroll region nested inside a page that also scrolls is the wrong
+              shape for a feed regardless, so the page simply scrolls. shrink-0
+              keeps any future height cap from resurrecting this. */}
+          <div className="flex flex-col gap-3">
             {loadingFeed ? (
               [1, 2, 3].map((i) => (
-                <div key={i} className="card p-3 flex flex-col gap-3">
-                  <div className="w-full h-48 skeleton rounded-[0.875rem]" />
+                <div key={i} className="card shrink-0 p-3 flex flex-col gap-3">
+                  <div className="w-full aspect-[4/3] skeleton rounded-[0.875rem]" />
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
                       <div className="h-3 w-24 skeleton rounded-full" />
@@ -3983,14 +4056,17 @@ export default function Home() {
                 </div>
               ))
             ) : feedItems.length > 0 ? (
-              feedItems.map((item) => (
-                <article key={item.id} className="card overflow-hidden">
+              feedItems.map((item) => {
+                const firedByMe = myReactions.has(`${item.id}:fire`);
+                const fivedByMe = myReactions.has(`${item.id}:five`);
+                return (
+                <article key={item.id} className="card shrink-0 overflow-hidden">
                   {item.photo_url && (
                     <img
                       src={item.photo_url}
                       alt={`Proof photo for: ${item.quest_text}`}
                       loading="lazy"
-                      className="w-full h-52 object-cover"
+                      className="w-full aspect-[4/3] object-cover bg-[#faf7f3]"
                     />
                   )}
                   <div className="p-3.5 space-y-2.5">
@@ -4007,7 +4083,59 @@ export default function Home() {
                         </span>
                         <span className="truncate">@{item.handle || 'Explorer'}</span>
                       </button>
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Mode and timestamp were on every row already and
+                            neither had ever been shown. */}
+                        {item.mode && (
+                          <span className="text-[0.6875rem] font-bold uppercase tracking-wide text-stone-600">
+                            {item.mode}
+                          </span>
+                        )}
+                        <span aria-hidden="true" className="text-stone-400">·</span>
+                        <time
+                          dateTime={item.created_at}
+                          className="nums text-[0.6875rem] text-stone-600"
+                        >
+                          {timeAgo(item.created_at)}
+                        </time>
+                      </div>
+                    </div>
+
+                    <p className="text-[0.875rem] text-stone-800 leading-snug">"{item.quest_text}"</p>
+
+                    {/* The emoji here stay -- the fire and the high five are the
+                        reactions themselves, not chrome standing in for an icon. */}
+                    <div className="flex items-center justify-between gap-2 pt-2.5 border-t border-[#e7e0d8]">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleReact(item.id, 'fire')}
+                          aria-pressed={firedByMe}
+                          className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold transition-all active:scale-95 ${
+                            firedByMe
+                              ? 'bg-orange-50 border-orange-300 text-orange-800'
+                              : 'bg-[#faf7f3] border-[#e7e0d8] text-stone-700 hover:border-orange-200'
+                          }`}
+                        >
+                          <span aria-hidden="true">🔥</span>
+                          <span className="nums">{item.fire_count || 0}</span>
+                          <span className="sr-only">fire reactions</span>
+                        </button>
+                        <button
+                          onClick={() => handleReact(item.id, 'five')}
+                          aria-pressed={fivedByMe}
+                          className={`flex items-center gap-1.5 border px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold transition-all active:scale-95 ${
+                            fivedByMe
+                              ? 'bg-orange-50 border-orange-300 text-orange-800'
+                              : 'bg-[#faf7f3] border-[#e7e0d8] text-stone-700 hover:border-orange-200'
+                          }`}
+                        >
+                          <span aria-hidden="true">✋</span>
+                          <span className="nums">{item.five_count || 0}</span>
+                          <span className="sr-only">high fives</span>
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-1">
                         {userEmail === ADMIN_EMAIL && (
                           <button
                             onClick={() => handleAdminDeleteFeedPost(item.id)}
@@ -4028,32 +4156,10 @@ export default function Home() {
                         </button>
                       </div>
                     </div>
-
-                    <p className="text-[0.875rem] text-stone-800 leading-snug">"{item.quest_text}"</p>
-
-                    {/* The emoji here stay -- 🔥 and ✋ are the reactions
-                        themselves, not UI chrome standing in for an icon. */}
-                    <div className="flex gap-2 pt-2.5 border-t border-[#e7e0d8]">
-                      <button
-                        onClick={() => handleReact(item.id, 'fire')}
-                        className="flex items-center gap-1.5 bg-[#faf7f3] hover:bg-orange-50 hover:border-orange-200 border border-[#e7e0d8] px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold text-stone-700 transition-all active:scale-95"
-                      >
-                        <span aria-hidden="true">🔥</span>
-                        <span className="nums">{item.fire_count || 0}</span>
-                        <span className="sr-only">fire reactions</span>
-                      </button>
-                      <button
-                        onClick={() => handleReact(item.id, 'five')}
-                        className="flex items-center gap-1.5 bg-[#faf7f3] hover:bg-orange-50 hover:border-orange-200 border border-[#e7e0d8] px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold text-stone-700 transition-all active:scale-95"
-                      >
-                        <span aria-hidden="true">✋</span>
-                        <span className="nums">{item.five_count || 0}</span>
-                        <span className="sr-only">high fives</span>
-                      </button>
-                    </div>
                   </div>
                 </article>
-              ))
+                );
+              })
             ) : (
               <div className="text-center py-12 space-y-3">
                 <span className="inline-flex w-14 h-14 rounded-full bg-stone-100 text-stone-500 items-center justify-center">
