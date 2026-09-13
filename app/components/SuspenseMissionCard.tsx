@@ -23,6 +23,13 @@ interface MissionCardProps {
   gem?: GemDetails | null;
   onReroll: () => void;
   onAcceptMission: () => void;
+  /**
+   * Rendered inside the active-mission panel, which is itself a card. Drops
+   * the outer border and shadow so it reads as a section of that panel rather
+   * than a card floating inside another card. The rarity tint stays, since
+   * that is what makes a legendary pull feel different.
+   */
+  nested?: boolean;
 }
 
 const RARITY = {
@@ -55,6 +62,7 @@ export default function SuspenseMissionCard({
   gem,
   onReroll,
   onAcceptMission,
+  nested = false,
 }: MissionCardProps) {
   const [isRevealing, setIsRevealing] = useState<boolean>(true);
   const [displayText, setDisplayText] = useState<string>("DECRYPTING LOCAL MISSION...");
@@ -107,9 +115,13 @@ export default function SuspenseMissionCard({
 
   return (
     <div
-      className={`relative w-full max-w-md rounded-[1.5rem] border overflow-hidden transition-all duration-500 ${
-        style.shell
-      } ${style.glow} ${isRevealing ? "scale-[0.97]" : "scale-100"}`}
+      className={`relative w-full max-w-md rounded-[1.5rem] overflow-hidden transition-all duration-500 ${
+        nested
+          ? currentRarity === "common"
+            ? "bg-transparent"
+            : `${style.shell} border`
+          : `${style.shell} ${style.glow} border`
+      } ${isRevealing ? "scale-[0.97]" : "scale-100"}`}
       aria-busy={isRevealing}
     >
       {/* The shimmer only runs while the mission is being "decrypted". */}
@@ -117,7 +129,7 @@ export default function SuspenseMissionCard({
         <div aria-hidden="true" className="absolute inset-0 a-sweep pointer-events-none" />
       )}
 
-      <div className="relative p-5 sm:p-6">
+      <div className={`relative ${nested ? "p-0" : "p-5 sm:p-6"}`}>
         <div className="flex items-center justify-between gap-3 mb-5">
           <span
             className={`flex items-center gap-1.5 text-[0.6875rem] font-bold tracking-[0.1em] uppercase ${

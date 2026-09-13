@@ -2938,7 +2938,7 @@ export default function Home() {
             </p>
           </div>
           <div className="relative">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-[0.875rem]">@</span>
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-600 font-bold text-[0.875rem]">@</span>
             <input
               type="text"
               placeholder="ExplorerTag"
@@ -3415,7 +3415,7 @@ export default function Home() {
             <div className="max-h-[52vh] overflow-y-auto scroll-soft space-y-1.5 pr-1">
               {friendsList.length === 0 ? (
                 <div className="text-center py-10 space-y-2.5">
-                  <span className="inline-flex w-11 h-11 rounded-full bg-stone-100 text-stone-400 items-center justify-center">
+                  <span className="inline-flex w-11 h-11 rounded-full bg-stone-100 text-stone-500 items-center justify-center">
                     <IconUsers size={22} />
                   </span>
                   <p className="text-[0.8125rem] text-stone-600 max-w-[240px] mx-auto leading-relaxed">
@@ -3512,7 +3512,7 @@ export default function Home() {
                 <IconTarget size={16} />
                 Quest
               </span>
-              <span className={`text-[0.6875rem] font-medium ${!isExplorerMode ? 'text-orange-100' : 'text-stone-500'}`}>
+              <span className={`text-[0.6875rem] font-medium ${!isExplorerMode ? 'text-white' : 'text-stone-600'}`}>
                 Random dare
               </span>
             </button>
@@ -3529,7 +3529,7 @@ export default function Home() {
                 <IconCompass size={16} />
                 Explore
               </span>
-              <span className={`text-[0.6875rem] font-medium ${isExplorerMode ? 'text-amber-950' : 'text-stone-500'}`}>
+              <span className={`text-[0.6875rem] font-medium ${isExplorerMode ? 'text-amber-950' : 'text-stone-600'}`}>
                 Hidden gems
               </span>
             </button>
@@ -3642,10 +3642,10 @@ export default function Home() {
                   onClick={onStartMatchingClick}
                   disabled={isSearching}
                   aria-label={isSearching ? 'Searching for a mission' : 'Destroy boredom — get a random mission'}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 flex flex-col items-center justify-center text-white overflow-hidden touch-manipulation transition-transform duration-100 ring-[6px] ring-white shadow-[0_10px_0_0_#9A3412,0_24px_48px_rgba(234,88,12,0.35)] ${
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-600 to-orange-800 flex flex-col items-center justify-center text-white overflow-hidden touch-manipulation transition-transform duration-100 ring-[6px] ring-white shadow-[0_10px_0_0_#7C2D12,0_24px_48px_rgba(194,65,12,0.35)] ${
                     isSearching
                       ? 'opacity-90 cursor-wait'
-                      : 'hover:scale-[1.03] active:translate-y-[6px] active:shadow-[0_4px_0_0_#9A3412,0_12px_24px_rgba(234,88,12,0.3)]'
+                      : 'hover:scale-[1.03] active:translate-y-[6px] active:shadow-[0_4px_0_0_#7C2D12,0_12px_24px_rgba(194,65,12,0.3)]'
                   }`}
                 >
                   {/* Gloss highlight. */}
@@ -3656,7 +3656,7 @@ export default function Home() {
                   {isSearching ? (
                     <span className="flex flex-col items-center gap-2">
                       <IconSearch size={26} className="animate-spin" />
-                      <span className="nums text-[0.75rem] text-orange-100 font-semibold tracking-wide">
+                      <span className="nums text-[0.75rem] text-white font-semibold tracking-wide">
                         {squadRoster.length > 0
                           ? `LOBBY ${squadRoster.length}/${squadCapacity}`
                           : 'SEARCHING...'}
@@ -3667,7 +3667,7 @@ export default function Home() {
                       <span className="font-display font-bold text-[2rem] leading-none tracking-tight drop-shadow-[0_2px_4px_rgba(120,40,0,0.35)]">
                         DESTROY
                       </span>
-                      <span className="font-display font-medium text-[0.9375rem] text-orange-100 mt-1.5 tracking-[0.12em] line-through decoration-2 decoration-orange-200/80">
+                      <span className="font-display font-bold text-[1.25rem] text-white mt-1.5 tracking-[0.1em] line-through decoration-2 decoration-white/70">
                         BOREDOM
                       </span>
                     </>
@@ -3733,7 +3733,7 @@ export default function Home() {
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
-                            className="text-stone-400 hover:text-orange-700 p-0.5 rounded-full transition"
+                            className="text-stone-500 hover:text-orange-700 p-0.5 rounded-full transition"
                             title={`Add @${p.handle} as a friend`}
                           >
                             <IconUserPlus size={14} />
@@ -3748,6 +3748,7 @@ export default function Home() {
 
               <div className="my-4 flex justify-center">
                 <SuspenseMissionCard
+                  nested
                   key={activeQuest}
                   quest={{
                     id: "active-quest",
@@ -3815,7 +3816,7 @@ export default function Home() {
                           {m.sender_handle !== handle && (
                             <button
                               onClick={() => handleReport('chat', m.id || m.message)}
-                              className="shrink-0 text-stone-300 hover:text-red-600 p-0.5 transition"
+                              className="shrink-0 text-stone-500 hover:text-red-600 p-0.5 transition"
                               title="Report message"
                             >
                               <IconFlag size={13} />
@@ -3888,6 +3889,7 @@ export default function Home() {
               )}
 
               <div className="flex flex-col gap-2 pt-1">
+                {isMissionAccepted && (
                 <button
                   onClick={handleCompleteMission}
                   disabled={uploading || !proofImage}
@@ -3905,9 +3907,10 @@ export default function Home() {
                     </>
                   )}
                 </button>
+                )}
                 <button
                   onClick={handleAbandonMission}
-                  className="text-[0.8125rem] text-stone-500 hover:text-stone-800 py-1.5 transition-colors"
+                  className="text-[0.8125rem] text-stone-600 hover:text-stone-900 py-1.5 transition-colors"
                 >
                   Abandon mission
                 </button>
@@ -4008,7 +4011,7 @@ export default function Home() {
                         {userEmail === ADMIN_EMAIL && (
                           <button
                             onClick={() => handleAdminDeleteFeedPost(item.id)}
-                            className="text-stone-300 hover:text-red-600 p-1 rounded transition"
+                            className="text-stone-500 hover:text-red-600 p-1 rounded transition"
                             title="Admin: delete post"
                           >
                             <IconTrash size={14} />
@@ -4017,7 +4020,7 @@ export default function Home() {
                         )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
-                          className="text-stone-300 hover:text-red-600 p-1 rounded transition"
+                          className="text-stone-500 hover:text-red-600 p-1 rounded transition"
                           title="Report post"
                         >
                           <IconFlag size={14} />
@@ -4053,7 +4056,7 @@ export default function Home() {
               ))
             ) : (
               <div className="text-center py-12 space-y-3">
-                <span className="inline-flex w-14 h-14 rounded-full bg-stone-100 text-stone-400 items-center justify-center">
+                <span className="inline-flex w-14 h-14 rounded-full bg-stone-100 text-stone-500 items-center justify-center">
                   <IconInbox size={26} />
                 </span>
                 <div className="space-y-1">
@@ -4095,7 +4098,7 @@ export default function Home() {
               title="Edit your handle"
             >
               <span className="text-[0.9375rem] font-bold text-orange-700 truncate">@{handle}</span>
-              <IconPencil size={13} className="text-stone-400 group-hover:text-stone-700 shrink-0 transition" />
+              <IconPencil size={13} className="text-stone-500 group-hover:text-stone-900 shrink-0 transition" />
             </button>
           )}
 

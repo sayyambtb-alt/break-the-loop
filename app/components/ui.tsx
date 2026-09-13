@@ -214,7 +214,7 @@ export function SectionLabel({
 }) {
   return (
     <span
-      className={`block text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-stone-500 ${className}`}
+      className={`block text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-stone-600 ${className}`}
     >
       {children}
     </span>
@@ -266,7 +266,7 @@ export function Stat({
 
   return (
     <div className="flex flex-col items-center gap-0.5 min-w-0">
-      <span className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-stone-500">
+      <span className="flex items-center gap-1 text-[0.6875rem] font-semibold uppercase tracking-[0.06em] text-stone-600">
         {icon}
         {label}
       </span>
@@ -280,4 +280,4 @@ export function Stat({
 
 /** Shared text-input styling — inputs were styled six different ways before. */
 export const inputClass =
-  "w-full bg-[#faf7f3] border border-[#e7e0d8] rounded-[0.625rem] px-3 py-2.5 text-[0.875rem] text-stone-900 placeholder:text-stone-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition";
+  "w-full bg-[#faf7f3] border border-[#e7e0d8] rounded-[0.625rem] px-3 py-2.5 text-[0.875rem] text-stone-900 placeholder:text-[#736c66] focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition";

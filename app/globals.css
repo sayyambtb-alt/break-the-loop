@@ -16,10 +16,15 @@
   --foreground: #1c1917;
 
   /* Action */
-  --action: #ea580c;
-  --action-hover: #f97316;
-  --action-deep: #9a3412;
+  /* Buttons carry white labels at normal text size, so the action colour has
+     to clear 4.5:1 against white. #ea580c only reaches 3.56:1; #c2410c is
+     5.18:1 and reads as the same orange. --action-vivid keeps the brighter
+     tone for large display type and for non-text accents, where 3:1 applies. */
+  --action: #c2410c;
+  --action-hover: #d4490d;
+  --action-deep: #7c2d12;
   --action-ink: #c2410c;
+  --action-vivid: #ea580c;
 
   /* Reward */
   --reward: #b45309;
@@ -123,7 +128,9 @@ body {
 
 .btn-primary:disabled {
   background: #e7e0d8;
-  color: #a8a29e;
+  /* Disabled controls are exempt from 1.4.3, but an unreadable label is
+     still a bad label; this clears 4.5:1 on the disabled fill. */
+  color: #57534e;
   box-shadow: 0 4px 0 0 #d6cec4;
 }
 
@@ -144,7 +151,7 @@ body {
 
 .btn-reward:disabled {
   background: #e7e0d8;
-  color: #a8a29e;
+  color: #57534e;
   box-shadow: 0 4px 0 0 #d6cec4;
 }
 
