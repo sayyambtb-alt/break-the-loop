@@ -34,7 +34,7 @@ describe('suggest a quest', () => {
     await user.click(screen.getByRole('button', { name: /suggest quest/i }));
     const heading = screen.getByText('SUGGEST A QUEST');
     expect(heading).toBeInTheDocument();
-    const modal = within(heading.closest('div')!);
+    const modal = within(heading.closest('[role="dialog"]') as HTMLElement);
 
     await user.click(modal.getByRole('button', { name: 'duo' }));
     await user.type(

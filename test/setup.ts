@@ -37,11 +37,15 @@ const fake2dContext = {
   roundRect: vi.fn(),
   measureText: vi.fn(() => ({ width: 10 })),
   createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
   set fillStyle(_v: unknown) {},
   set strokeStyle(_v: unknown) {},
   set lineWidth(_v: unknown) {},
   set font(_v: unknown) {},
-  set textAlign(_v: unknown) {}
+  set textAlign(_v: unknown) {},
+  set letterSpacing(_v: unknown) {}
 };
 
 // @ts-expect-error - jsdom has no real canvas backend; stub just enough

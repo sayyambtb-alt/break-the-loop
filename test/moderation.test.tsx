@@ -91,8 +91,10 @@ describe('moderation flow (admin)', () => {
     const user = userEvent.setup();
     await renderApp();
 
-    const reportsButton = await screen.findByRole('button', { name: /reports/i });
-    await user.click(reportsButton);
+    // Admin tools are behind a single Admin menu in the header now, rather
+    // than three buttons sitting in the player's own navigation.
+    await user.click(await screen.findByRole('button', { name: /admin tools/i }));
+    await user.click(await screen.findByRole('menuitem', { name: /moderation reports/i }));
 
     await waitFor(() => expect(screen.getByText(/Moderation Reports Queue/i)).toBeInTheDocument());
     expect(screen.getByText(/Spam content/)).toBeInTheDocument();

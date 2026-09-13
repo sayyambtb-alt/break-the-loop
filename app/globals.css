@@ -1,28 +1,379 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Break The Loop — design tokens
+
+   One accent rule, applied everywhere:
+     ORANGE = action. Anything you tap to move forward is orange.
+     GOLD   = reward. XP, rarity, streaks, badges, ranks — things you earn.
+     STONE  = surface and text.
+   Before this, orange and amber were used interchangeably, so nothing on the
+   page told you what was a button and what was a trophy.
+--------------------------------------------------------------------------- */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #fffaf4;
+  --foreground: #1c1917;
+
+  /* Action */
+  --action: #ea580c;
+  --action-hover: #f97316;
+  --action-deep: #9a3412;
+  --action-ink: #c2410c;
+
+  /* Reward */
+  --reward: #b45309;
+  --reward-bright: #f59e0b;
+
+  /* Ink ramp — every one of these clears 4.5:1 on white. The old UI leaned on
+     stone-400/stone-500 for real content, which did not. */
+  --ink-strong: #1c1917;
+  --ink: #44403c;
+  --ink-soft: #57534e;
+
+  --line: #e7e0d8;
+  --surface: #ffffff;
+  --surface-sunk: #faf7f3;
+
+  /* Type scale. Nothing below 11px ships — the old UI had 9px body copy. */
+  --text-micro: 0.6875rem; /* 11px — labels only */
+  --text-small: 0.8125rem; /* 13px — secondary copy */
+  --text-body: 0.9375rem; /* 15px — body */
+
+  /* Three radii, not five. */
+  --r-sm: 0.625rem;
+  --r-md: 1rem;
+  --r-lg: 1.5rem;
+
+  /* One elevation language. */
+  --shadow-card: 0 1px 2px rgba(68, 64, 60, 0.04), 0 4px 16px rgba(68, 64, 60, 0.06);
+  --shadow-lift: 0 2px 4px rgba(68, 64, 60, 0.06), 0 12px 32px rgba(68, 64, 60, 0.1);
+  --shadow-modal: 0 24px 64px rgba(28, 25, 23, 0.22);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", monospace;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Tabular numerals everywhere a number changes in place, so stat rows and
+   countdowns don't jitter as digits swap. */
+.nums {
+  font-family: var(--font-display);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ---------------------------------------------------------------------------
+   Buttons — the app's one tactile language.
+
+   A press-depth shadow (a solid offset that collapses on :active) reads as a
+   physical key. It suits a game far better than a drop shadow, and the old UI
+   already used it in three places; this makes it the rule rather than a
+   one-off.
+--------------------------------------------------------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  text-align: center;
+  line-height: 1.25;
+  font-weight: 700;
+  border-radius: var(--r-sm);
+  transition: background-color 0.15s ease, box-shadow 0.1s ease, transform 0.1s ease,
+    color 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+  cursor: pointer;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+}
+
+.btn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: var(--action);
+  color: #fff;
+  box-shadow: 0 4px 0 0 var(--action-deep);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--action-hover);
+}
+
+.btn-primary:active:not(:disabled) {
+  box-shadow: 0 1px 0 0 var(--action-deep);
+  transform: translateY(3px);
+}
+
+.btn-primary:disabled {
+  background: #e7e0d8;
+  color: #a8a29e;
+  box-shadow: 0 4px 0 0 #d6cec4;
+}
+
+.btn-reward {
+  background: var(--reward-bright);
+  color: #1c1917;
+  box-shadow: 0 4px 0 0 #b45309;
+}
+
+.btn-reward:hover:not(:disabled) {
+  background: #fbbf24;
+}
+
+.btn-reward:active:not(:disabled) {
+  box-shadow: 0 1px 0 0 #b45309;
+  transform: translateY(3px);
+}
+
+.btn-reward:disabled {
+  background: #e7e0d8;
+  color: #a8a29e;
+  box-shadow: 0 4px 0 0 #d6cec4;
+}
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--ink-strong);
+  border: 1px solid var(--line);
+  box-shadow: 0 2px 0 0 var(--line);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--surface-sunk);
+}
+
+.btn-secondary:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(2px);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink-soft);
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface-sunk);
+  color: var(--ink-strong);
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #fff;
+  box-shadow: 0 2px 0 0 #991b1b;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #ef4444;
+}
+
+.btn-danger:active:not(:disabled) {
+  box-shadow: none;
+  transform: translateY(2px);
+}
+
+/* ---------------------------------------------------------------------------
+   Surfaces
+--------------------------------------------------------------------------- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.card-lift {
+  box-shadow: var(--shadow-lift);
+}
+
+/* Icon buttons need a real 40px hit target — several of the old ones were
+   under 24px, which is below every touch-target guideline going. */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+  background: var(--surface);
+  transition: all 0.15s ease;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  color: var(--ink-strong);
+  background: var(--surface-sunk);
+}
+
+.icon-btn:focus-visible {
+  outline: 2px solid var(--action);
+  outline-offset: 2px;
+}
+
+.icon-btn[aria-pressed="true"] {
+  color: var(--action-ink);
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion
+--------------------------------------------------------------------------- */
+
+@keyframes btl-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes btl-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  60% {
+    transform: scale(1.01);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes btl-drop {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -14px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@keyframes btl-sweep {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes btl-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.85;
+    transform: scale(1.06);
+  }
+}
+
+.a-rise {
+  animation: btl-rise 0.3s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.a-pop {
+  animation: btl-pop 0.32s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.a-drop {
+  animation: btl-drop 0.28s cubic-bezier(0.2, 0.8, 0.3, 1) both;
+}
+
+.a-breathe {
+  animation: btl-breathe 3.5s ease-in-out infinite;
+}
+
+/* The shimmer that runs across a card while its mission is being "decrypted". */
+.a-sweep {
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    rgba(234, 88, 12, 0.1) 40%,
+    rgba(245, 158, 11, 0.16) 50%,
+    rgba(234, 88, 12, 0.1) 60%,
+    transparent 80%
+  );
+  background-size: 200% 100%;
+  animation: btl-sweep 1.4s linear infinite;
+}
+
+/* Skeleton blocks share the sweep so loading states feel like one system. */
+.skeleton {
+  background: linear-gradient(100deg, #f2ede7 30%, #e9e2da 50%, #f2ede7 70%);
+  background-size: 200% 100%;
+  animation: btl-sweep 1.5s linear infinite;
+}
+
+/* The app is full of motion — spinners, confetti, pulses, reveals. None of it
+   was gated before, which makes it genuinely unusable for anyone with a
+   vestibular disorder. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .a-rise,
+  .a-pop,
+  .a-drop {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Scrollbars inside panels, so the many overflow regions stop rendering a
+   chunky default bar over the cream. */
+.scroll-soft {
+  scrollbar-width: thin;
+  scrollbar-color: #d6cec4 transparent;
+}
+
+.scroll-soft::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.scroll-soft::-webkit-scrollbar-thumb {
+  background: #d6cec4;
+  border-radius: 999px;
+}
+
+.scroll-soft::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 /* Only when installed as a home-screen app -- a regular browser tab should

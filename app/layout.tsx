@@ -23,11 +23,12 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#EA580C",
+  themeColor: "#FFFAF4",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  // Pinch-zoom stays available. It was previously locked off to make the app
+  // feel native, but that also removes the only way a low-vision user can read
+  // a proof photo or a mission card, and it is a WCAG 1.4.4 failure.
   viewportFit: "cover",
 };
 
@@ -38,7 +39,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased bg-[#FFF8F0] text-stone-900">
+      <body className="antialiased bg-[#FFFAF4] text-stone-900">
         {children}
       </body>
     </html>

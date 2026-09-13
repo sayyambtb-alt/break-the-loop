@@ -3,7 +3,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
+import { getRankTitle } from './lib/ranks';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
+import RankProgress from "./components/RankProgress";
+import { Modal, Button, Chip, Stat, SectionLabel, inputClass } from "./components/ui";
+import {
+  IconBell, IconBellOff, IconShield, IconFlag, IconMap, IconPencil,
+  IconUsers, IconUser, IconUserPlus, IconCamera, IconTrophy,
+  IconFlame, IconBolt, IconShare, IconSend, IconChat, IconHeadphones,
+  IconCompass, IconTarget, IconTrash, IconBan, IconSave, IconClock,
+  IconSearch, IconWhatsApp, IconInbox, IconCrown, IconGem, IconSparkle, IconLock,
+  IconRefresh, IconCheck, IconMail,
+} from "./components/Icons";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
@@ -19,22 +30,6 @@ const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 });
 
 const ADMIN_EMAIL = 'sayyambtb@gmail.com';
-
-const RANK_TIERS: { minXp: number; title: string }[] = [
-  { minXp: 0, title: 'Fresh Escapee' },
-  { minXp: 100, title: 'Chaos Local' },
-  { minXp: 300, title: 'Boredom Slayer' },
-  { minXp: 700, title: 'Street Legend' },
-  { minXp: 1500, title: 'Mumbai Made' },
-];
-
-const getRankTitle = (totalXp: number): string => {
-  let title = RANK_TIERS[0].title;
-  for (const tier of RANK_TIERS) {
-    if (totalXp >= tier.minXp) title = tier.title;
-  }
-  return title;
-};
 
 interface FeedItem {
   id: string;
@@ -206,6 +201,10 @@ export default function Home() {
   const [showDevModal, setShowDevModal] = useState(false);
   const devTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Admin tools are collapsed behind one menu rather than three header buttons.
+  const [showAdminMenu, setShowAdminMenu] = useState(false);
+  const adminMenuRef = useRef<HTMLDivElement>(null);
+
   // Admin Reports Modal
   const [showReportsModal, setShowReportsModal] = useState(false);
   const [adminReports, setAdminReports] = useState<ReportItem[]>([]);
@@ -275,6 +274,31 @@ export default function Home() {
       setShowWelcomeModal(true);
     }
   }, []);
+
+  // Dismiss the admin menu on an outside click or Escape. The pointerdown
+  // must ignore presses inside the menu itself: closing on any pointerdown
+  // unmounts the item before its click event lands, so no menu entry would
+  // ever fire.
+  useEffect(() => {
+    if (!showAdminMenu) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (adminMenuRef.current?.contains(e.target as Node)) return;
+      setShowAdminMenu(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAdminMenu(false);
+    };
+    // Defer so the click that opened the menu doesn't immediately close it.
+    const id = setTimeout(() => {
+      document.addEventListener('pointerdown', onPointerDown);
+      document.addEventListener('keydown', onKeyDown);
+    }, 0);
+    return () => {
+      clearTimeout(id);
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showAdminMenu]);
 
   const dismissWelcomeModal = () => {
     if (typeof window !== 'undefined') {
@@ -920,8 +944,8 @@ export default function Home() {
     }
   };
 
-  const handleSendEmailOtp = async (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleSendEmailOtp = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     setAuthError('');
     if (!emailInput.includes('@')) return setAuthError('Please enter a valid email address');
     const { error } = await supabase.auth.signInWithOtp({
@@ -932,8 +956,8 @@ export default function Home() {
     else setIsOtpSent(true);
   };
 
-  const handleVerifyEmailOtp = async (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleVerifyEmailOtp = async (e?: React.SyntheticEvent) => {
+    e?.preventDefault();
     setAuthError('');
     if (!otpInput.trim()) return setAuthError('Please enter the 6-digit code');
     const { data, error } = await supabase.auth.verifyOtp({
@@ -1913,95 +1937,140 @@ export default function Home() {
     }
   };
 
-  const generateShareCard = (newStreak: number, newSavedMins: number) => {
+  // Rebranded onto the app's own palette (it was still slate/rose from the
+  // pre-light-theme design), and given the right numbers: it used to print the
+  // running time_saved_mins total under an "IRL XP GAINED" heading, which is
+  // neither XP nor a gain.
+  const generateShareCard = (
+    newStreak: number,
+    xpEarned: number,
+    newTotalXp: number
+  ) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
-    bgGradient.addColorStop(0, '#090d16');
-    bgGradient.addColorStop(1, '#020617');
+    const INK = '#1C1917';
+    const MUTED = '#78716C';
+    const ACTION = '#EA580C';
+    const REWARD = '#B45309';
+    const LINE = '#E7E0D8';
+
+    const bgGradient = ctx.createLinearGradient(0, 0, 540, 1920);
+    bgGradient.addColorStop(0, '#FFFAF4');
+    bgGradient.addColorStop(0.55, '#FFF4E6');
+    bgGradient.addColorStop(1, '#FDE9D0');
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
+    const g = ctx.createRadialGradient(540, 420, 0, 540, 420, 460);
+    g.addColorStop(0, 'rgba(234, 88, 12, 0.16)');
+    g.addColorStop(1, 'rgba(255, 250, 244, 0)');
+    ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(540, 400, 350, 0, Math.PI * 2);
+    ctx.arc(540, 420, 460, 0, Math.PI * 2);
     ctx.fill();
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 52px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 220);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
+    ctx.fillStyle = ACTION;
+    ctx.font = '700 50px "Space Grotesk", sans-serif';
+    ctx.letterSpacing = '2px';
+    ctx.fillText('BREAK THE LOOP', 540, 214);
+    ctx.letterSpacing = '0px';
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
+    ctx.fillStyle = MUTED;
+    ctx.font = '600 32px Inter, sans-serif';
+    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 272);
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = LINE;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(100, 360, 880, 1100, 40);
+    ctx.roundRect(90, 350, 900, 1140, 48);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
+    // Mode pill
+    const pillLabel = `${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN`;
+    ctx.font = '700 34px Inter, sans-serif';
+    const pillWidth = ctx.measureText(pillLabel).width + 72;
+    ctx.fillStyle = '#FFF7ED';
+    ctx.strokeStyle = '#FED7AA';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(140, 420, 800, 80, 20);
+    ctx.roundRect(540 - pillWidth / 2, 424, pillWidth, 72, 36);
     ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = ACTION;
+    ctx.fillText(pillLabel, 540, 472);
 
-    ctx.fillStyle = '#fda4af';
-    ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '600 42px sans-serif';
+    // Quest text, wrapped
+    ctx.fillStyle = INK;
+    ctx.font = '500 46px "Space Grotesk", sans-serif';
     const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
     const words = text.split(' ');
     let line = '';
-    let y = 600;
+    let y = 620;
 
     for (let i = 0; i < words.length; i++) {
       const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > 780 && i > 0) {
-        ctx.fillText(line, 540, y);
+      if (ctx.measureText(testLine).width > 760 && i > 0) {
+        ctx.fillText(line.trim(), 540, y);
         line = words[i] + ' ';
-        y += 60;
+        y += 62;
       } else {
         line = testLine;
       }
     }
-    ctx.fillText(line, 540, y);
+    ctx.fillText(line.trim(), 540, y);
 
-    const statsY = Math.max(y + 100, 1050);
+    const statsY = Math.max(y + 160, 1090);
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 32px sans-serif';
+    ctx.strokeStyle = LINE;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(180, statsY - 92);
+    ctx.lineTo(900, statsY - 92);
+    ctx.stroke();
+
+    ctx.font = '600 30px Inter, sans-serif';
+    ctx.fillStyle = MUTED;
     ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('IRL XP GAINED', 760, statsY);
+    ctx.fillText('XP EARNED', 760, statsY);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
+    ctx.font = '700 70px "Space Grotesk", sans-serif';
+    ctx.fillStyle = ACTION;
+    ctx.fillText(`${newStreak} days`, 320, statsY + 82);
+    ctx.fillStyle = REWARD;
+    ctx.fillText(`+${xpEarned}`, 760, statsY + 82);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
+    ctx.font = '600 30px Inter, sans-serif';
+    ctx.fillStyle = MUTED;
+    ctx.fillText(
+      `${newTotalXp.toLocaleString()} XP total • ${getRankTitle(newTotalXp)}`,
+      540,
+      statsY + 168
+    );
 
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '700 40px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
+    ctx.fillStyle = INK;
+    ctx.font = '700 42px "Space Grotesk", sans-serif';
+    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1610);
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '500 32px sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
+    ctx.fillStyle = MUTED;
+    ctx.font = '500 32px Inter, sans-serif';
+    ctx.fillText('Join at breaktheloopapp.in', 540, 1676);
 
     setCardDataUrl(canvas.toDataURL('image/png'));
   };
 
+  // The share card is the one part of the app that travels -- it lands on
+  // someone else's Instagram story with no other context. It was still on the
+  // pre-redesign slate/rose/purple palette, so the thing representing the brand
+  // in public looked like a different product. It also printed time_saved_mins
+  // under an "XP" label, baking the footer's bug into an image people share.
   const generateSpotifyWrappedCard = () => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
@@ -2009,85 +2078,111 @@ export default function Home() {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
-    bgGradient.addColorStop(0, '#0f172a');
-    bgGradient.addColorStop(0.3, '#1e1b4b');
-    bgGradient.addColorStop(0.7, '#881337');
-    bgGradient.addColorStop(1, '#020617');
+    const INK = '#1C1917';
+    const MUTED = '#78716C';
+    const ACTION = '#EA580C';
+    const REWARD = '#B45309';
+    const LINE = '#E7E0D8';
+
+    const bgGradient = ctx.createLinearGradient(0, 0, 540, 1920);
+    bgGradient.addColorStop(0, '#FFFAF4');
+    bgGradient.addColorStop(0.55, '#FFF4E6');
+    bgGradient.addColorStop(1, '#FDE9D0');
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, 1080, 1920);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.arc(200, 300, 250, 0, Math.PI * 2);
-    ctx.fill();
+    // Soft brand blooms, matching the app's hero rings.
+    const bloom = (x: number, y: number, r: number, rgba: string) => {
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, rgba);
+      g.addColorStop(1, 'rgba(255,250,244,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    };
+    bloom(190, 330, 420, 'rgba(234, 88, 12, 0.18)');
+    bloom(900, 1500, 520, 'rgba(245, 158, 11, 0.20)');
 
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-    ctx.beginPath();
-    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 48px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 200);
 
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
+    ctx.fillStyle = ACTION;
+    ctx.font = '700 46px "Space Grotesk", sans-serif';
+    ctx.letterSpacing = '2px';
+    ctx.fillText('BREAK THE LOOP', 540, 196);
+    ctx.letterSpacing = '0px';
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
+    ctx.fillStyle = MUTED;
+    ctx.font = '600 32px Inter, sans-serif';
+    ctx.fillText('YOUR IRL RECAP', 540, 252);
+
+    // Card
+    ctx.fillStyle = '#FFFFFF';
+    ctx.strokeStyle = LINE;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.roundRect(100, 340, 880, 1250, 40);
+    ctx.roundRect(90, 330, 900, 1270, 48);
     ctx.fill();
     ctx.stroke();
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 56px sans-serif';
-    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
+    ctx.fillStyle = INK;
+    ctx.font = '700 58px "Space Grotesk", sans-serif';
+    ctx.fillText('YOU DESTROYED ROUTINE', 540, 452);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
+    ctx.fillStyle = MUTED;
+    ctx.font = '400 30px Inter, sans-serif';
+    ctx.fillText('Real-world time reclaimed from the scroll', 540, 508);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} XP`, 540, 680);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
+    const rank = getRankTitle(totalXp);
 
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '900 80px sans-serif';
-    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
+    const stat = (value: string, label: string, y: number, color: string) => {
+      ctx.fillStyle = color;
+      ctx.font = '700 86px "Space Grotesk", sans-serif';
+      ctx.fillText(value, 540, y);
+      ctx.fillStyle = MUTED;
+      ctx.font = '600 30px Inter, sans-serif';
+      ctx.fillText(label, 540, y + 56);
+    };
 
-    const topBadge = badges[badges.length - 1] || '🌱 First Step';
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(topBadge, 540, 1120);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
+    const divider = (y: number) => {
+      ctx.strokeStyle = LINE;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(200, y);
+      ctx.lineTo(880, y);
+      ctx.stroke();
+    };
 
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
+    // Real XP now, not minutes -- and the minutes get their own honest line.
+    stat(`${totalXp.toLocaleString()} XP`, 'Total experience earned', 660, REWARD);
+    divider(756);
+    stat(`${streak} DAY STREAK`, 'Consecutive days unbroken', 872, ACTION);
+    divider(968);
+    stat(`${savedMins} MIN`, 'Real-world time reclaimed', 1084, INK);
+    divider(1180);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
+    ctx.fillStyle = REWARD;
+    ctx.font = '700 64px "Space Grotesk", sans-serif';
+    ctx.fillText(rank, 540, 1296);
+    ctx.fillStyle = MUTED;
+    ctx.font = '600 30px Inter, sans-serif';
+    ctx.fillText('Current rank', 540, 1352);
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
+    const topBadge = badges[badges.length - 1] || '\u{1F331} First Step';
+    ctx.fillStyle = INK;
+    ctx.font = '600 44px Inter, sans-serif';
+    ctx.fillText(topBadge, 540, 1456);
+    ctx.fillStyle = MUTED;
+    ctx.font = '600 30px Inter, sans-serif';
+    ctx.fillText(`${friendsList.length} raid partners in your squad`, 540, 1524);
+
+    ctx.fillStyle = INK;
+    ctx.font = '700 42px "Space Grotesk", sans-serif';
+    ctx.fillText(`@${handle} \u2022 Mumbai, MH`, 540, 1716);
+
+    ctx.fillStyle = MUTED;
+    ctx.font = '500 30px Inter, sans-serif';
+    ctx.fillText('breaktheloopapp.in', 540, 1780);
 
     const url = canvas.toDataURL('image/png');
     setWrappedCardDataUrl(url);
@@ -2155,13 +2250,17 @@ export default function Home() {
         if (data.new_total_xp !== undefined) {
           const newRankTitle = getRankTitle(data.new_total_xp);
           if (newRankTitle !== oldRankTitle) {
-            showToast(`🎖️ Rank up! You're now a ${newRankTitle}.`, 'success');
+            showToast(`Rank up! You're now a ${newRankTitle}.`, 'success');
           }
         }
 
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
-          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+          generateShareCard(
+            data.new_streak || 0,
+            activeQuestXp,
+            data.new_total_xp ?? totalXp
+          );
         } catch {
         }
 
@@ -2205,152 +2304,283 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] text-stone-900 flex flex-col items-center justify-between pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans select-none">
-      {/* Toast Stack */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
+    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(120%_80%_at_50%_0%,_#FFFDFA_0%,_#FFF8F0_45%,_#FBE7CE_100%)] text-stone-900 flex flex-col items-center justify-between gap-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans">
+      {/* Toast Stack. Toasts were left over from the old dark theme -- near-black
+          panels dropped into a cream page. They now read as one system, and
+          carry an icon so success/error is legible without relying on colour. */}
+      <div
+        className="fixed top-3 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center gap-2 w-[calc(100%-1.5rem)] max-w-sm pointer-events-none"
+        role="status"
+        aria-live="polite"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
+            className={`a-drop w-full flex items-start gap-2.5 px-3.5 py-3 rounded-[0.875rem] text-[0.8125rem] font-semibold border shadow-[0_8px_28px_rgba(28,25,23,0.16)] ${
               t.type === 'error'
-                ? 'bg-orange-950/95 border-orange-500/40 text-orange-200'
+                ? 'bg-red-50 border-red-200 text-red-800'
                 : t.type === 'success'
-                ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-white border-stone-300 text-stone-800'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                : 'bg-white border-[#e7e0d8] text-stone-800'
             }`}
           >
-            {t.message}
+            <span className="shrink-0 mt-px">
+              {t.type === 'error' ? (
+                <IconBan size={15} />
+              ) : t.type === 'success' ? (
+                <IconCheck size={15} />
+              ) : (
+                <IconSparkle size={15} />
+              )}
+            </span>
+            <span className="leading-snug">{t.message}</span>
           </div>
         ))}
       </div>
 
-      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-stone-200">
+      {/* The three admin buttons used to sit inline here, competing with the
+          product's own navigation for the one account on earth that can see
+          them. They now collapse into a single Admin control. */}
+      <header className="w-full max-w-md flex justify-between items-center gap-3 py-3">
         <h1
           onMouseDown={handleDevPressStart}
           onMouseUp={handleDevPressEnd}
           onTouchStart={handleDevPressStart}
           onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-black tracking-tight font-['Space_Grotesk'] text-orange-600 drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
+          className="flex items-center gap-2 cursor-pointer select-none active:scale-[0.98] transition-transform"
           title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
         >
-          BREAK THE LOOP
+          <span
+            aria-hidden="true"
+            className="w-7 h-7 rounded-[0.5rem] bg-gradient-to-br from-orange-500 to-orange-600 shadow-[0_2px_0_0_#9A3412] flex items-center justify-center text-white shrink-0"
+          >
+            <IconBolt size={15} />
+          </span>
+          <span className="font-display text-[0.9375rem] font-bold tracking-tight text-stone-900 leading-none whitespace-nowrap">
+            Break The Loop
+          </span>
         </h1>
-        <div className="flex items-center flex-wrap gap-2">
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchAdminReports}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Admin Moderation Queue"
-            >
-              🚩 Reports
-            </button>
-          )}
 
+        <div className="flex items-center gap-1.5">
           {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingQuests}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Pending Quest Suggestions"
-            >
-              📝 Quests
-            </button>
-          )}
+            <div className="relative" ref={adminMenuRef}>
+              <button
+                onClick={() => setShowAdminMenu((v) => !v)}
+                aria-expanded={showAdminMenu}
+                aria-haspopup="menu"
+                className="icon-btn relative"
+                title="Admin tools"
+              >
+                <IconShield size={17} />
+                {pendingGemCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-orange-600 text-white text-[0.625rem] font-bold min-w-[17px] h-[17px] px-1 rounded-full flex items-center justify-center border-2 border-[#FFFAF4]">
+                    {pendingGemCount}
+                  </span>
+                )}
+                <span className="sr-only">Admin tools</span>
+              </button>
 
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingGems}
-              className="relative bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Manage Hidden Gems"
-            >
-              🗺️ Gems
-              {pendingGemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-orange-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
-                  {pendingGemCount}
-                </span>
+              {showAdminMenu && (
+                <div
+                  role="menu"
+                  className="a-rise absolute right-0 top-full mt-1.5 z-50 w-52 bg-white border border-[#e7e0d8] rounded-[1rem] shadow-[0_12px_32px_rgba(28,25,23,0.16)] p-1.5"
+                >
+                  <SectionLabel className="px-2.5 py-1.5">Admin</SectionLabel>
+                  {[
+                    { label: 'Moderation reports', icon: <IconFlag size={15} />, run: fetchAdminReports, badge: 0 },
+                    { label: 'Quest suggestions', icon: <IconPencil size={15} />, run: fetchPendingQuests, badge: 0 },
+                    { label: 'Hidden gems', icon: <IconMap size={15} />, run: fetchPendingGems, badge: pendingGemCount },
+                  ].map((entry) => (
+                    <button
+                      key={entry.label}
+                      role="menuitem"
+                      onClick={() => {
+                        setShowAdminMenu(false);
+                        entry.run();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-[0.625rem] text-[0.8125rem] font-semibold text-stone-700 hover:bg-stone-50 hover:text-stone-900 transition"
+                    >
+                      <span className="text-stone-500">{entry.icon}</span>
+                      <span className="flex-1 text-left">{entry.label}</span>
+                      {entry.badge > 0 && (
+                        <span className="nums bg-orange-100 text-orange-700 text-[0.6875rem] font-bold px-1.5 rounded-full">
+                          {entry.badge}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
               )}
-            </button>
+            </div>
           )}
 
           <button
             onClick={requestNotificationPermission}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
-              notificationsEnabled
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
-                : 'bg-white border-stone-200 text-stone-600 hover:text-stone-900'
-            }`}
+            aria-pressed={notificationsEnabled}
+            className="icon-btn"
             title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
           >
-            {notificationsEnabled ? '🔔' : '🔕'}
+            {notificationsEnabled ? <IconBell size={17} /> : <IconBellOff size={17} />}
+            <span className="sr-only">
+              {notificationsEnabled ? 'Notifications are on' : 'Turn on notifications'}
+            </span>
           </button>
 
-          <div className="flex bg-white border border-stone-200 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setTab('quest')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'quest' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Quest
-            </button>
-            <button
-              onClick={() => setTab('feed')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'feed' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Feed
-            </button>
+          <div
+            role="group"
+            aria-label="View"
+            className="flex bg-white border border-[#e7e0d8] rounded-[0.625rem] p-1 shadow-[0_1px_2px_rgba(68,64,60,0.04)]"
+          >
+            {(['quest', 'feed'] as const).map((t) => (
+              <button
+                key={t}
+                aria-pressed={tab === t}
+                onClick={() => setTab(t)}
+                className={`px-3 py-1 rounded-[0.4rem] text-[0.8125rem] font-bold capitalize transition-all ${
+                  tab === t
+                    ? 'bg-orange-600 text-white shadow-[0_1px_2px_rgba(154,52,18,0.4)]'
+                    : 'text-stone-600 hover:text-stone-900'
+                }`}
+              >
+                {t === 'quest' ? 'Quest' : 'Feed'}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
-      {/* Incoming Live Raid Invite Banner */}
+      {/* Incoming Live Raid Invite Banner. This used to be a near-black panel
+          running animate-bounce forever -- it never stopped moving until you
+          answered it, which is hard to read and hard to dismiss. It now drops
+          in once and holds still. */}
       {incomingInvite && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-orange-950 border-2 border-orange-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(249,115,22,0.5)] animate-bounce text-center space-y-2">
-          <div className="text-2xl">⚡</div>
-          <h3 className="font-extrabold text-sm text-stone-100">
-            @{incomingInvite.sender_handle} challenged you to a Duo Raid!
-          </h3>
-          <p className="text-[11px] text-orange-200 italic">
-            "{incomingInvite.quest_text}"
-          </p>
-          <div className="flex space-x-2 pt-2">
-            <button
-              onClick={declineDirectInvite}
-              className="flex-1 bg-white text-stone-700 py-2 rounded-xl text-xs font-bold"
+        <div
+          role="alertdialog"
+          aria-label={`Duo raid invite from ${incomingInvite.sender_handle}`}
+          className="a-drop fixed top-3 left-1/2 -translate-x-1/2 w-[calc(100%-1.5rem)] max-w-sm z-50 bg-white border border-orange-200 p-4 rounded-[1.25rem] shadow-[0_16px_48px_rgba(234,88,12,0.24)]"
+        >
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden="true"
+              className="shrink-0 w-9 h-9 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"
             >
+              <IconBolt size={18} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <h3 className="font-display text-[0.875rem] font-bold text-stone-900 leading-snug">
+                @{incomingInvite.sender_handle} challenged you to a Duo Raid
+              </h3>
+              <p className="text-[0.8125rem] text-stone-600 mt-1 leading-snug line-clamp-2">
+                "{incomingInvite.quest_text}"
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-3">
+            <Button variant="secondary" size="sm" full onClick={declineDirectInvite}>
               Decline
-            </button>
-            <button
-              onClick={acceptDirectInvite}
-              className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-orange-600/40"
-            >
-              Accept Raid 🔥
-            </button>
+            </Button>
+            <Button variant="primary" size="sm" full onClick={acceptDirectInvite}>
+              <IconFlame size={14} />
+              Accept Raid
+            </Button>
           </div>
         </div>
       )}
 
       {/* Explorer Public Profile Modal */}
-      {selectedProfile && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-5 space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setSelectedProfile(null)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
-              ✕
-            </button>
+      <Modal open={!!selectedProfile} onClose={() => setSelectedProfile(null)}>
+        {selectedProfile && (
+          <div className="space-y-4 -mt-2">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden="true"
+                className="shrink-0 w-12 h-12 rounded-full bg-gradient-to-br from-orange-500 to-orange-600 text-white flex items-center justify-center shadow-[0_2px_0_0_#9A3412]"
+              >
+                <IconUser size={22} />
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-display text-base font-bold text-stone-900 truncate">
+                  @{selectedProfile.handle}
+                </h2>
+                <span className="flex items-center gap-1 text-[0.8125rem] text-amber-700 font-semibold">
+                  <IconCrown size={13} />
+                  {getRankTitle(selectedProfile.total_xp || 0)}
+                </span>
+              </div>
+            </div>
 
-            <div className="text-center space-y-1">
-              <div className="text-3xl">👤</div>
-              <h2 className="text-base font-extrabold text-orange-700">
-                @{selectedProfile.handle}{' '}
-                <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
-              </h2>
-              <p className="text-[10px] text-stone-500">
-                Explorer • Active Mumbai Loop Destroyer
-              </p>
+            {/* A public profile now shows real XP, which is what actually drives
+                the rank shown right above it. It previously showed
+                time_saved_mins under an "IRL XP" label. */}
+            <div className="flex justify-around bg-[#faf7f3] p-3.5 rounded-[1rem] border border-[#e7e0d8]">
+              <Stat
+                label="Streak"
+                value={selectedProfile.streak ?? 0}
+                suffix="d"
+                icon={<IconFlame size={12} />}
+                tone="action"
+              />
+              <div className="w-px bg-[#e7e0d8]" />
+              <Stat
+                label="Total XP"
+                value={(selectedProfile.total_xp ?? 0).toLocaleString()}
+                icon={<IconBolt size={12} />}
+                tone="reward"
+              />
+              <div className="w-px bg-[#e7e0d8]" />
+              <Stat
+                label="Saved"
+                value={selectedProfile.time_saved_mins ?? 0}
+                suffix="m"
+                icon={<IconClock size={12} />}
+              />
+            </div>
+
+            {selectedProfile.badges && selectedProfile.badges.length > 0 && (
+              <div className="space-y-2">
+                <SectionLabel>Unlocked badges</SectionLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedProfile.badges.map((b, i) => (
+                    <Chip key={i} tone="reward">
+                      {b}
+                    </Chip>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <SectionLabel>Recent missions</SectionLabel>
+              <div className="max-h-44 overflow-y-auto scroll-soft space-y-2 pr-1">
+                {selectedProfile.history && selectedProfile.history.length > 0 ? (
+                  selectedProfile.history.map((h) => (
+                    <div
+                      key={h.id}
+                      className="bg-[#faf7f3] p-2 rounded-[0.875rem] border border-[#e7e0d8] flex gap-2.5 items-center"
+                    >
+                      {h.photo_url && (
+                        <img
+                          src={h.photo_url}
+                          alt=""
+                          className="w-11 h-11 object-cover rounded-[0.625rem] shrink-0"
+                        />
+                      )}
+                      <div className="text-left overflow-hidden min-w-0">
+                        <p className="text-[0.8125rem] text-stone-800 truncate font-medium">
+                          "{h.quest_text}"
+                        </p>
+                        <span className="text-[0.6875rem] text-stone-500 uppercase font-bold tracking-wide">
+                          {h.mode} mission
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-[0.8125rem] text-stone-500 text-center py-3">
+                    No public missions logged yet.
+                  </p>
+                )}
+              </div>
             </div>
 
             {selectedProfile.handle !== handle && (
@@ -2365,112 +2595,71 @@ export default function Home() {
                     showToast('Could not block this user.', 'error');
                   }
                 }}
-                className="w-full bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-orange-700 text-[10px] font-bold py-2 rounded-lg border border-stone-200 transition-all"
+                className="w-full flex items-center justify-center gap-1.5 text-[0.8125rem] font-semibold text-stone-500 hover:text-red-700 py-2 rounded-[0.625rem] border border-transparent hover:border-red-200 hover:bg-red-50 transition"
               >
-                🚫 Block this Explorer
+                <IconBan size={14} />
+                Block this Explorer
               </button>
             )}
-
-            <div className="flex justify-around bg-stone-50 p-3 rounded-2xl border border-stone-200 text-center">
-              <div>
-                <p className="text-[10px] text-stone-500 font-semibold">STREAK</p>
-                <p className="text-sm font-black text-stone-800">{selectedProfile.streak} Days 🔥</p>
-              </div>
-              <div className="w-px bg-stone-100" />
-              <div>
-                <p className="text-[10px] text-stone-500 font-semibold">IRL XP</p>
-                <p className="text-sm font-black text-orange-700">{selectedProfile.time_saved_mins} ⚡</p>
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-stone-600 uppercase">Unlocked Badges</span>
-              <div className="flex flex-wrap gap-1">
-                {selectedProfile.badges?.map((b, i) => (
-                  <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-medium">
-                    {b}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <span className="text-[10px] font-bold text-stone-600 uppercase">Recent Missions Conquered</span>
-              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
-                {selectedProfile.history && selectedProfile.history.length > 0 ? (
-                  selectedProfile.history.map((h) => (
-                    <div key={h.id} className="bg-stone-50 p-2 rounded-xl border border-stone-200 flex space-x-2 items-center">
-                      {h.photo_url && (
-                        <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
-                      )}
-                      <div className="text-left overflow-hidden">
-                        <p className="text-[10px] text-stone-700 truncate font-medium">"{h.quest_text}"</p>
-                        <span className="text-[9px] text-orange-700/80 uppercase font-mono font-bold">{h.mode} Mission</span>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <p className="text-[10px] text-stone-400 text-center py-2">No public missions logged yet.</p>
-                )}
-              </div>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </Modal>
 
       {/* Admin Moderation Queue Modal */}
-      {showReportsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🛡️ Moderation Reports Queue ({adminReports.length})
-              </h2>
-              <button
-                onClick={() => setShowReportsModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+      <Modal
+        open={showReportsModal && userEmail === ADMIN_EMAIL}
+        onClose={() => setShowReportsModal(false)}
+        size="md"
+        title={
+          <span className="flex items-center gap-1.5">
+            <IconShield size={15} className="text-amber-600" />
+            Moderation Reports Queue ({adminReports.length})
+          </span>
+        }
+      >
+        <div>
+            <div className="max-h-[60vh] overflow-y-auto scroll-soft space-y-2 pr-1">
               {adminReports.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">Queue clear! Zero reported content.</p>
+                <div className="text-center py-10 space-y-2">
+                  <span className="inline-flex w-11 h-11 rounded-full bg-emerald-50 text-emerald-600 items-center justify-center">
+                    <IconCheck size={22} />
+                  </span>
+                  <p className="text-[0.875rem] font-semibold text-stone-800">Queue clear! Zero reported content.</p>
+                </div>
               ) : (
                 adminReports.map((r) => (
-                  <div key={r.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="text-orange-700 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
+                  <div key={r.id} className="bg-[#faf7f3] p-3 rounded-[1rem] border border-[#e7e0d8] space-y-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <Chip tone="action">Flagged {r.reported_type.toUpperCase()}</Chip>
+                      <span className="nums text-[0.6875rem] text-stone-500 shrink-0 pt-1">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-stone-700 text-[11px]">
-                      <strong>Reason:</strong> "{r.reason}"
+                    <p className="text-stone-700 text-[0.8125rem]">
+                      <strong className="font-semibold">Reason:</strong> "{r.reason}"
                     </p>
                     {r.content_text && (
-                      <p className="text-stone-800 text-[11px] bg-white border border-stone-200 rounded-lg p-2">
-                        <strong className="text-amber-700">Reported content:</strong> "{r.content_text}"
+                      <p className="text-stone-800 text-[0.8125rem] bg-white border border-[#e7e0d8] rounded-[0.625rem] p-2.5">
+                        <strong className="text-amber-700 font-semibold">Reported content:</strong> "{r.content_text}"
                       </p>
                     )}
                     {r.content_photo_url && (
                       <img
                         src={r.content_photo_url}
                         alt="Reported proof photo"
-                        className="w-full max-h-40 object-cover rounded-lg border border-stone-200"
+                        className="w-full max-h-40 object-cover rounded-[0.625rem] border border-[#e7e0d8]"
                       />
                     )}
-                    <p className="text-stone-500 text-[10px]">
+                    <p className="text-stone-500 text-[0.6875rem]">
                       Reported by @{r.reporter_handle}
                       {r.offender_handle ? ` • Posted by @${r.offender_handle}` : ''}
                     </p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-[#e7e0d8]">
                       {r.reported_type === 'feed' && (
                         <button
                           onClick={() => {
                             handleAdminDeleteFeedPost(r.target_id);
                             handleResolveReport(r.id);
                           }}
-                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                          className="btn btn-danger text-[0.75rem] px-3 py-1.5"
                         >
                           Delete Post
                         </button>
@@ -2481,7 +2670,7 @@ export default function Home() {
                             handleAdminDeleteChatMessage(r.target_id);
                             handleResolveReport(r.id);
                           }}
-                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                          className="btn btn-danger text-[0.75rem] px-3 py-1.5"
                         >
                           Delete Message
                         </button>
@@ -2497,14 +2686,14 @@ export default function Home() {
                               showToast('Failed to ban user.', 'error');
                             }
                           }}
-                          className="bg-red-950 hover:bg-red-900 text-red-300 text-[10px] px-3 py-1 rounded-lg font-bold border border-red-500/40 transition-all"
+                          className="btn text-[0.75rem] px-3 py-1.5 bg-white text-red-700 border border-red-300 hover:bg-red-50"
                         >
                           Ban User
                         </button>
                       )}
                       <button
                         onClick={() => handleResolveReport(r.id)}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                        className="btn btn-secondary text-[0.75rem] px-3 py-1.5"
                       >
                         Dismiss Flag
                       </button>
@@ -2513,61 +2702,52 @@ export default function Home() {
                 ))
               )}
             </div>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Admin Pending Quest Suggestions Modal */}
-      {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                📝 Pending Quest Suggestions ({pendingQuests.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={fetchPendingQuests}
-                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
-                  title="Refresh"
-                >
-                  🔄
-                </button>
-                <button
-                  onClick={() => setShowPendingQuestsModal(false)}
-                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+      <Modal
+        open={showPendingQuestsModal && userEmail === ADMIN_EMAIL}
+        onClose={() => setShowPendingQuestsModal(false)}
+        size="md"
+        title={
+          <span className="flex items-center gap-1.5">
+            <IconPencil size={15} className="text-amber-600" />
+            Pending Quest Suggestions ({pendingQuests.length})
+          </span>
+        }
+        action={
+          <button onClick={fetchPendingQuests} className="icon-btn !w-8 !h-8 border-transparent bg-transparent" title="Refresh">
+            <IconRefresh size={15} />
+            <span className="sr-only">Refresh</span>
+          </button>
+        }
+      >
+        <div>
+            <div className="max-h-[60vh] overflow-y-auto scroll-soft space-y-2 pr-1">
               {loadingPendingQuests ? (
-                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
+                <p className="text-[0.875rem] text-stone-500 text-center py-10">Loading...</p>
               ) : pendingQuests.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">No quests awaiting review.</p>
+                <p className="text-[0.875rem] text-stone-500 text-center py-10">No quests awaiting review.</p>
               ) : (
                 pendingQuests.map((q) => (
-                  <div key={q.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                        {q.mode}
-                      </span>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
+                  <div key={q.id} className="bg-[#faf7f3] p-3 rounded-[1rem] border border-[#e7e0d8] space-y-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <Chip tone="reward" className="uppercase">{q.mode}</Chip>
+                      <span className="nums text-[0.6875rem] text-stone-500 shrink-0 pt-1">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-stone-700 text-[11px]">"{q.quest_text}"</p>
-                    <p className="text-stone-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
+                    <p className="text-stone-800 text-[0.875rem]">"{q.quest_text}"</p>
+                    <p className="text-stone-500 text-[0.6875rem]">Suggested by @{q.submitted_by_handle}</p>
+                    <div className="flex gap-2 pt-2 border-t border-[#e7e0d8]">
                       <button
                         onClick={() => handleApproveQuest(q.id)}
-                        className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                        className="btn btn-primary text-[0.75rem] px-3 py-1.5"
                       >
                         Approve
                       </button>
                       <button
                         onClick={() => handleRejectQuest(q.id)}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                        className="btn btn-secondary text-[0.75rem] px-3 py-1.5"
                       >
                         Reject
                       </button>
@@ -2576,98 +2756,92 @@ export default function Home() {
                 ))
               )}
             </div>
-          </div>
         </div>
-      )}
+      </Modal>
 
-      {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🗺️ Manage Hidden Gems ({pendingGems.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={fetchPendingGems}
-                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
-                  title="Refresh"
-                >
-                  🔄
-                </button>
-                <button
-                  onClick={() => setShowPendingGemsModal(false)}
-                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-                >
-                  ✕
-                </button>
-              </div>
-            </div>
-
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+      <Modal
+        open={showPendingGemsModal && userEmail === ADMIN_EMAIL}
+        onClose={() => setShowPendingGemsModal(false)}
+        size="md"
+        title={
+          <span className="flex items-center gap-1.5">
+            <IconMap size={15} className="text-amber-600" />
+            Manage Hidden Gems ({pendingGems.length})
+          </span>
+        }
+        action={
+          <button onClick={fetchPendingGems} className="icon-btn !w-8 !h-8 border-transparent bg-transparent" title="Refresh">
+            <IconRefresh size={15} />
+            <span className="sr-only">Refresh</span>
+          </button>
+        }
+      >
+        <div>
+            <div className="max-h-[60vh] overflow-y-auto scroll-soft space-y-2 pr-1">
               {loadingPendingGems ? (
-                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
+                <p className="text-[0.875rem] text-stone-500 text-center py-10">Loading...</p>
               ) : pendingGems.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">No spots awaiting review.</p>
+                <p className="text-[0.875rem] text-stone-500 text-center py-10">No spots awaiting review.</p>
               ) : (
                 pendingGems.map((g) => (
-                  <div key={g.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
+                  <div key={g.id} className="bg-[#faf7f3] p-3 rounded-[1rem] border border-[#e7e0d8] space-y-2">
                     <div className="flex justify-between items-start gap-2">
                       <div className="flex items-center gap-1.5">
                         <select
                           value={g.neighborhood}
                           onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
-                          className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
+                          className="bg-amber-50 text-amber-800 text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase border border-amber-200 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                         >
                           {MUMBAI_NEIGHBORHOODS.map((n) => (
                             <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
                           ))}
                         </select>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          g.status === 'pending' ? 'bg-stone-100 text-stone-600' : 'bg-orange-500/10 text-orange-700'
+                        <span className={`text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase border ${
+                          g.status === 'pending' ? 'bg-stone-100 text-stone-700 border-stone-200' : 'bg-orange-50 text-orange-700 border-orange-200'
                         }`}>
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
                         {dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-100 text-amber-800">
+                          <span className="text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase bg-amber-100 text-amber-900 border border-amber-300">
                             Unsaved
                           </span>
                         )}
                         {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-800">
-                            ✓ Saved
+                          <span className="inline-flex items-center gap-1 text-[0.6875rem] font-bold px-2 py-1 rounded-full uppercase bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            <IconCheck size={11} />
+                            Saved
                           </span>
                         )}
                       </div>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
+                      <span className="nums text-[0.6875rem] text-stone-500 shrink-0 pt-1">{new Date(g.created_at).toLocaleTimeString()}</span>
                     </div>
                     <input
                       type="text"
                       value={g.name}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
                       maxLength={100}
-                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-800 text-[11px] font-bold focus:outline-none focus:border-amber-500"
+                      className="w-full bg-white border border-[#e7e0d8] rounded-[0.625rem] px-2.5 py-2 text-stone-900 text-[0.875rem] font-semibold focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                     />
                     <textarea
                       value={g.description}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
                       maxLength={300}
                       rows={3}
-                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-700 text-[11px] resize-none focus:outline-none focus:border-amber-500"
+                      className="w-full bg-white border border-[#e7e0d8] rounded-[0.625rem] px-2.5 py-2 text-stone-800 text-[0.8125rem] resize-none focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20"
                     />
-                    <p className="text-stone-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
+                    <p className="text-stone-500 text-[0.6875rem]">Suggested by @{g.submitted_by_handle}</p>
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-[#e7e0d8]">
                       {g.status === 'pending' ? (
                         <>
                           <button
                             onClick={() => handleApproveGem(g)}
-                            className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                            className="btn btn-primary text-[0.75rem] px-3 py-1.5"
                           >
                             Approve
                           </button>
                           <button
                             onClick={() => handleRejectGem(g.id)}
-                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                            className="btn btn-secondary text-[0.75rem] px-3 py-1.5"
                           >
                             Reject
                           </button>
@@ -2677,11 +2851,7 @@ export default function Home() {
                           <button
                             onClick={() => handleUpdateGem(g)}
                             disabled={!dirtyGemIds.includes(g.id)}
-                            className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
-                              dirtyGemIds.includes(g.id)
-                                ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
-                                : 'bg-stone-100 text-stone-500 cursor-not-allowed'
-                            }`}
+                            className="btn btn-reward text-[0.75rem] px-3 py-1.5"
                           >
                             {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
                           </button>
@@ -2691,7 +2861,7 @@ export default function Home() {
                                 handleRejectGem(g.id);
                               }
                             }}
-                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                            className="btn btn-secondary text-[0.75rem] px-3 py-1.5"
                           >
                             Delete
                           </button>
@@ -2702,27 +2872,18 @@ export default function Home() {
                 ))
               )}
             </div>
-          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Developer Access Modal */}
-      {showDevModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🛠️ Developer Tools ({userEmail})
-              </h2>
-              <button
-                onClick={() => setShowDevModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="text-[10px] font-mono bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-stone-600 space-y-1">
+      <Modal
+        open={showDevModal && userEmail === ADMIN_EMAIL}
+        onClose={() => setShowDevModal(false)}
+        title="Developer Tools"
+        subtitle={userEmail}
+      >
+        <div className="space-y-4">
+            <div className="text-[0.75rem] font-mono bg-[#faf7f3] p-3 rounded-[0.875rem] border border-[#e7e0d8] text-stone-700 space-y-1 break-all">
               <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
               <p><strong>Session:</strong> {userEmail}</p>
               <p><strong>Room:</strong> {roomId || 'None'}</p>
@@ -2741,7 +2902,7 @@ export default function Home() {
                     showToast('Queue locks released.', 'success');
                   }
                 }}
-                className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 py-2 rounded-xl text-xs font-mono font-bold border border-orange-300"
+                className="btn btn-secondary w-full text-[0.8125rem] py-2.5"
               >
                 Force Clear Queue Locks
               </button>
@@ -2752,406 +2913,448 @@ export default function Home() {
                   sessionStorage.clear();
                   window.location.reload();
                 }}
-                className="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-xs font-mono font-bold border border-red-300"
+                className="btn w-full text-[0.8125rem] py-2.5 bg-white text-red-700 border border-red-300 hover:bg-red-50"
               >
                 Hard Reset Local Storage & Reload
               </button>
             </div>
-          </div>
         </div>
-      )}
+      </Modal>
 
-      {/* Handle Setup Modal */}
-      {showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-3xl">🏷️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
-            <p className="text-xs text-stone-600">
-              Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
+      {/* Handle Setup Modal. Not dismissible -- the app needs a handle before
+          anyone can be matched or credited. */}
+      <Modal open={showHandleModal} dismissible={false}>
+        <div className="text-center space-y-4">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+          >
+            <IconUser size={24} />
+          </span>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-lg font-bold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+              Pick a unique handle so other Mumbai explorers can recognize and add you to their squad.
             </p>
-            <div className="relative">
-              <span className="absolute left-4 top-3 text-orange-700 font-bold text-sm">@</span>
-              <input
-                type="text"
-                placeholder="ExplorerTag"
-                value={newHandleInput}
-                onChange={(e) => setNewHandleInput(e.target.value)}
-                maxLength={20}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-stone-900 font-bold focus:outline-none focus:border-orange-500"
-              />
-            </div>
-            <button
-              onClick={() => saveHandleDirect(newHandleInput || handle)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-            >
-              Claim Tag & Start
-            </button>
           </div>
+          <div className="relative">
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-[0.875rem]">@</span>
+            <input
+              type="text"
+              placeholder="ExplorerTag"
+              value={newHandleInput}
+              onChange={(e) => setNewHandleInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && saveHandleDirect(newHandleInput || handle)}
+              maxLength={20}
+              className={`${inputClass} pl-7 font-semibold`}
+            />
+          </div>
+          <Button variant="primary" size="lg" full onClick={() => saveHandleDirect(newHandleInput || handle)}>
+            Claim Tag & Start
+          </Button>
         </div>
-      )}
+      </Modal>
 
-      {/* Auth Modal */}
-      {(!isLoggedIn || showAuthModal) && !showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
-            {isLoggedIn && (
-              <button
-                onClick={() => setShowAuthModal(false)}
-                className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
-                ✕
-              </button>
-            )}
-            <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-stone-900">
+      {/* Auth Modal. Only dismissible once you're already signed in -- a first
+          visit has to resolve to either an email or a guest session. */}
+      <Modal
+        open={(!isLoggedIn || showAuthModal) && !showHandleModal}
+        onClose={() => setShowAuthModal(false)}
+        dismissible={isLoggedIn}
+      >
+        <div className="text-center space-y-4 -mt-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+          >
+            <IconMail size={24} />
+          </span>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-xl font-bold text-stone-900">
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
-            <p className="text-xs text-stone-600">
+            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
               {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
-
-            {authError && (
-              <p className="text-xs text-orange-700 bg-orange-500/10 p-2 rounded-xl font-medium">{authError}</p>
-            )}
-
-            {!isOtpSent ? (
-              <div className="space-y-3">
-                <input
-                  type="email"
-                  placeholder="yourname@gmail.com"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
-                />
-                <button
-                  onClick={handleSendEmailOtp}
-                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                >
-                  Send 6-Digit Code
-                </button>
-
-                <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-stone-200"></div></div>
-                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-2 text-stone-500">Or</span></div>
-                </div>
-
-                <button
-                  onClick={handleGuestLogin}
-                  className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
-                >
-                  ⚡ Continue as Guest (Solo Mode Only)
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <input
-                  type="text"
-                  placeholder="Enter 6-digit Email Code"
-                  value={otpInput}
-                  onChange={(e) => setOtpInput(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
-                />
-                <button
-                  onClick={handleVerifyEmailOtp}
-                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                >
-                  Verify & Continue
-                </button>
-                <button
-                  onClick={() => setIsOtpSent(false)}
-                  className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
-                >
-                  Change Email
-                </button>
-              </div>
-            )}
           </div>
-        </div>
-      )}
 
-      {/* Save My Progress Modal */}
-      {showSaveProgressModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowSaveProgressModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+          {authError && (
+            <p
+              role="alert"
+              className="text-[0.8125rem] text-red-800 bg-red-50 border border-red-200 px-3 py-2 rounded-[0.625rem] font-medium text-left"
             >
-              ✕
-            </button>
-            <div className="text-3xl">💾</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SAVE MY PROGRESS</h2>
-            <p className="text-xs text-stone-600">
-              Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
+              {authError}
             </p>
+          )}
+
+          {!isOtpSent ? (
             <div className="space-y-3">
               <input
                 type="email"
+                inputMode="email"
+                autoComplete="email"
                 placeholder="yourname@gmail.com"
-                value={saveProgressEmail}
-                onChange={(e) => setSaveProgressEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSendEmailOtp()}
+                className={`${inputClass} text-center`}
               />
-              <button
-                onClick={() => handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-              >
-                Send Confirmation Link
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              <Button variant="primary" size="lg" full onClick={handleSendEmailOtp}>
+                Send 6-Digit Code
+              </Button>
 
-      {/* Suggest a Quest Modal */}
-      {showSuggestQuestModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowSuggestQuestModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
-              ✕
-            </button>
-            <div className="text-3xl">✍️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A QUEST</h2>
-            <p className="text-xs text-stone-600">
-              Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
-            </p>
-            <div className="space-y-3">
-              <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
-                {(['solo', 'duo', 'squad'] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setSuggestQuestMode(m)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                      suggestQuestMode === m
-                        ? 'bg-orange-600 text-white'
-                        : 'text-stone-600 hover:text-stone-900'
-                    }`}
-                  >
-                    {m}
-                  </button>
-                ))}
+              <div className="relative py-1">
+                <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-[#e7e0d8]"></div></div>
+                <div className="relative flex justify-center"><span className="bg-white px-2 text-[0.6875rem] uppercase tracking-wide text-stone-500 font-semibold">Or</span></div>
               </div>
-              <textarea
-                placeholder="Describe the mission (15-300 characters)..."
-                value={suggestQuestText}
-                onChange={(e) => setSuggestQuestText(e.target.value)}
-                maxLength={300}
-                rows={4}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-orange-500 resize-none"
-              />
-              <button
-                onClick={handleSubmitQuestSuggestion}
-                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-              >
-                Submit for Review
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {showSuggestGemModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowSuggestGemModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
-              ✕
-            </button>
-            <div className="text-3xl">🗺️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A HIDDEN GEM</h2>
-            <p className="text-xs text-stone-600">
-              A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
-            </p>
+              <Button variant="secondary" size="lg" full onClick={handleGuestLogin}>
+                <IconBolt size={16} />
+                Continue as Guest
+              </Button>
+              <p className="text-[0.6875rem] text-stone-500 -mt-1">Solo missions only</p>
+            </div>
+          ) : (
             <div className="space-y-3">
               <input
                 type="text"
-                placeholder="Place name"
-                value={suggestGemName}
-                onChange={(e) => setSuggestGemName(e.target.value)}
-                maxLength={100}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="Enter 6-digit Email Code"
+                value={otpInput}
+                onChange={(e) => setOtpInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleVerifyEmailOtp()}
+                className={`${inputClass} text-center font-mono tracking-[0.3em]`}
               />
-              <div className="flex flex-wrap gap-2 justify-center">
+              <Button variant="primary" size="lg" full onClick={handleVerifyEmailOtp}>
+                Verify & Continue
+              </Button>
+              <button
+                onClick={() => setIsOtpSent(false)}
+                className="text-[0.8125rem] text-stone-500 hover:text-stone-800 hover:underline pt-1 block mx-auto"
+              >
+                Change Email
+              </button>
+            </div>
+          )}
+        </div>
+      </Modal>
+
+      {/* Save My Progress Modal */}
+      <Modal open={showSaveProgressModal} onClose={() => setShowSaveProgressModal(false)}>
+        <div className="text-center space-y-4 -mt-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+          >
+            <IconSave size={23} />
+          </span>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-lg font-bold text-stone-900">SAVE MY PROGRESS</h2>
+            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+              Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <input
+              type="email"
+              inputMode="email"
+              autoComplete="email"
+              placeholder="yourname@gmail.com"
+              value={saveProgressEmail}
+              onChange={(e) => setSaveProgressEmail(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
+              className={`${inputClass} text-center`}
+            />
+            <Button variant="primary" size="lg" full onClick={() => handleSaveProgress(saveProgressEmail.trim())}>
+              Send Confirmation Link
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Suggest a Quest Modal */}
+      <Modal open={showSuggestQuestModal} onClose={() => setShowSuggestQuestModal(false)}>
+        <div className="text-center space-y-4 -mt-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+          >
+            <IconPencil size={22} />
+          </span>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-lg font-bold text-stone-900">SUGGEST A QUEST</h2>
+            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+              Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
+            </p>
+          </div>
+          <div className="space-y-3">
+            <div className="flex bg-[#faf7f3] p-1 rounded-[0.75rem] border border-[#e7e0d8] gap-1">
+              {(['solo', 'duo', 'squad'] as const).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setSuggestQuestMode(m)}
+                  aria-pressed={suggestQuestMode === m}
+                  className={`flex-1 py-2 text-[0.8125rem] font-bold rounded-[0.5rem] capitalize transition-all ${
+                    suggestQuestMode === m
+                      ? 'bg-orange-600 text-white shadow-[0_1px_2px_rgba(154,52,18,0.4)]'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <textarea
+              placeholder="Describe the mission (15-300 characters)..."
+              value={suggestQuestText}
+              onChange={(e) => setSuggestQuestText(e.target.value)}
+              maxLength={300}
+              rows={4}
+              className={`${inputClass} resize-none`}
+            />
+            <div className="flex justify-end -mt-1">
+              <span className="nums text-[0.6875rem] text-stone-500">{suggestQuestText.length}/300</span>
+            </div>
+            <Button variant="primary" size="lg" full onClick={handleSubmitQuestSuggestion}>
+              Submit for Review
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={showSuggestGemModal} onClose={() => setShowSuggestGemModal(false)}>
+        <div className="text-center space-y-4 -mt-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-amber-100 text-amber-700 items-center justify-center"
+          >
+            <IconGem size={22} />
+          </span>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-lg font-bold text-stone-900">SUGGEST A HIDDEN GEM</h2>
+            <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+              A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
+            </p>
+          </div>
+          <div className="space-y-3 text-left">
+            <input
+              type="text"
+              placeholder="Place name"
+              value={suggestGemName}
+              onChange={(e) => setSuggestGemName(e.target.value)}
+              maxLength={100}
+              className={inputClass}
+            />
+            <div className="space-y-1.5">
+              <SectionLabel>Neighborhood</SectionLabel>
+              <div className="flex flex-wrap gap-1.5">
                 {MUMBAI_NEIGHBORHOODS.map((n) => (
                   <button
                     key={n}
                     onClick={() => setSuggestGemNeighborhood(n)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                    aria-pressed={suggestGemNeighborhood === n}
+                    className={`px-2.5 py-1 rounded-full text-[0.75rem] font-semibold border transition-all ${
                       suggestGemNeighborhood === n
-                        ? 'bg-amber-500 text-stone-950 border-amber-500'
-                        : 'bg-stone-50 text-stone-600 border-stone-200'
+                        ? 'bg-amber-500 text-stone-900 border-amber-500'
+                        : 'bg-white text-stone-600 border-[#e7e0d8] hover:border-amber-300 hover:text-stone-900'
                     }`}
                   >
                     {n}
                   </button>
                 ))}
               </div>
-              <textarea
-                placeholder="Why is it special? (15-300 characters)..."
-                value={suggestGemDescription}
-                onChange={(e) => setSuggestGemDescription(e.target.value)}
-                maxLength={300}
-                rows={4}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500 resize-none"
-              />
-              <button
-                onClick={handleSubmitGemSuggestion}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 transition-all active:scale-95"
-              >
-                Submit for Review
-              </button>
             </div>
+            <textarea
+              placeholder="Why is it special? (15-300 characters)..."
+              value={suggestGemDescription}
+              onChange={(e) => setSuggestGemDescription(e.target.value)}
+              maxLength={300}
+              rows={4}
+              className={`${inputClass} resize-none`}
+            />
+            <Button variant="reward" size="lg" full onClick={handleSubmitGemSuggestion}>
+              Submit for Review
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* Sign In / Recover Account Modal */}
-      {showWelcomeModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-gradient-to-b from-white to-stone-50 border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <div className="text-4xl">👋</div>
-            <h2 className="text-xl font-black text-stone-900">Welcome to Break The Loop</h2>
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Tap the big button. Get handed a real, random micro-mission near you.
-              Do it, snap a photo, earn XP. That's the whole game.
-            </p>
-            <p className="text-xs text-stone-500">
-              Bring friends into it later — for now, let's get your first one done.
-            </p>
-            <button
-              onClick={dismissWelcomeModal}
-              className="w-full bg-orange-600 text-white font-black py-3 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
+      {/* First-visit welcome. Now walks through the actual three-step loop
+          rather than describing it in a paragraph -- it is the one screen that
+          has to land the concept. */}
+      <Modal open={showWelcomeModal} onClose={dismissWelcomeModal}>
+        <div className="text-center space-y-5 -mt-2">
+          <div className="space-y-2">
+            <span
+              aria-hidden="true"
+              className="inline-flex w-14 h-14 rounded-[1rem] bg-gradient-to-br from-orange-500 to-orange-600 text-white items-center justify-center shadow-[0_3px_0_0_#9A3412]"
             >
-              I'm in →
-            </button>
+              <IconBolt size={26} />
+            </span>
+            <h2 className="font-display text-xl font-bold text-stone-900 pt-1">
+              Welcome to Break The Loop
+            </h2>
+            <p className="text-[0.875rem] text-stone-600 leading-relaxed">
+              Stuck scrolling? We hand you something real to go do instead.
+            </p>
           </div>
-        </div>
-      )}
 
-      {showRecoverModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowRecoverModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
+          <ol className="space-y-2.5 text-left">
+            {[
+              { icon: <IconTarget size={17} />, title: 'Tap the button', body: 'You get one random micro-mission somewhere near you.' },
+              { icon: <IconCamera size={17} />, title: 'Go do it', body: 'Snap a photo as proof you actually showed up.' },
+              { icon: <IconBolt size={17} />, title: 'Earn XP and rank up', body: 'Build a streak, unlock badges, climb from Fresh Escapee to Mumbai Made.' },
+            ].map((step, i) => (
+              <li key={i} className="flex gap-3 items-start bg-[#faf7f3] border border-[#e7e0d8] rounded-[0.875rem] p-3">
+                <span
+                  aria-hidden="true"
+                  className="shrink-0 w-8 h-8 rounded-[0.5rem] bg-white border border-[#e7e0d8] text-orange-600 flex items-center justify-center"
+                >
+                  {step.icon}
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-display text-[0.875rem] font-bold text-stone-900 leading-tight">
+                    {step.title}
+                  </span>
+                  <span className="block text-[0.8125rem] text-stone-600 leading-snug mt-0.5">
+                    {step.body}
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ol>
+
+          <Button variant="primary" size="lg" full onClick={dismissWelcomeModal}>
+            Let's go
+          </Button>
+        </div>
+      </Modal>
+
+      <Modal open={showRecoverModal} onClose={() => setShowRecoverModal(false)}>
+        <div className="text-center space-y-4 -mt-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+          >
+            <IconLock size={22} />
+          </span>
+          <h2 className="font-display text-lg font-bold text-stone-900">SIGN IN ON THIS DEVICE</h2>
+          {!isRecoverOtpSent ? (
+            <>
+              <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+                Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
+              </p>
+              <div className="space-y-3">
+                <input
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  placeholder="yourname@gmail.com"
+                  value={recoverEmail}
+                  onChange={(e) => setRecoverEmail(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
+                  className={`${inputClass} text-center`}
+                />
+                <Button variant="primary" size="lg" full onClick={() => handleRecoverAccount(recoverEmail.trim())}>
+                  Send Sign-In Code
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <p className="text-[0.8125rem] text-stone-600 leading-relaxed">
+                Enter the 6-digit code we emailed to {recoverEmail}.
+              </p>
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="Enter 6-digit Email Code"
+                  value={recoverOtpInput}
+                  onChange={(e) => setRecoverOtpInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
+                  className={`${inputClass} text-center font-mono tracking-[0.3em]`}
+                />
+                <Button variant="primary" size="lg" full onClick={handleVerifyRecoverOtp}>
+                  Verify & Sign In
+                </Button>
+                <button
+                  onClick={() => setIsRecoverOtpSent(false)}
+                  className="text-[0.8125rem] text-stone-500 hover:text-stone-800 hover:underline pt-1 block mx-auto"
+                >
+                  Change Email
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </Modal>
+
+      {/* Safety gate before any multiplayer match. */}
+      <Modal open={showSafetyModal} onClose={() => setShowSafetyModal(false)}>
+        <div className="text-center space-y-4 -mt-2">
+          <span
+            aria-hidden="true"
+            className="inline-flex w-12 h-12 rounded-full bg-orange-100 text-orange-600 items-center justify-center"
+          >
+            <IconShield size={23} />
+          </span>
+          <h2 className="font-display text-lg font-bold text-stone-900">SAFETY FIRST</h2>
+          <ul className="text-left space-y-2.5">
+            {[
+              ['Meet in public', 'Coordinate only at visible, public landmarks.'],
+              ['Trust your instincts', 'Leave or cancel the mission immediately if you feel uncomfortable.'],
+              ['Never share private data', 'Do not disclose banking details, OTPs, or exact home addresses.'],
+            ].map(([title, body]) => (
+              <li key={title} className="flex gap-2.5 items-start">
+                <span aria-hidden="true" className="shrink-0 mt-0.5 text-orange-600">
+                  <IconCheck size={16} />
+                </span>
+                <span className="text-[0.8125rem] leading-snug">
+                  <strong className="font-semibold text-stone-900">{title}:</strong>{' '}
+                  <span className="text-stone-600">{body}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex gap-2 pt-1">
+            <Button variant="secondary" full onClick={() => setShowSafetyModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              full
+              onClick={() => isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking()}
             >
-              ✕
-            </button>
-            <div className="text-3xl">🔑</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SIGN IN ON THIS DEVICE</h2>
-            {!isRecoverOtpSent ? (
-              <>
-                <p className="text-xs text-stone-600">
-                  Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
-                </p>
-                <div className="space-y-3">
-                  <input
-                    type="email"
-                    placeholder="yourname@gmail.com"
-                    value={recoverEmail}
-                    onChange={(e) => setRecoverEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
-                  />
-                  <button
-                    onClick={() => handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
-                  >
-                    Send Sign-In Code
-                  </button>
-                </div>
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-stone-600">
-                  Enter the 6-digit code we emailed to {recoverEmail}.
-                </p>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Enter 6-digit Email Code"
-                    value={recoverOtpInput}
-                    onChange={(e) => setRecoverOtpInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
-                  />
-                  <button
-                    onClick={handleVerifyRecoverOtp}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                  >
-                    Verify & Sign In
-                  </button>
-                  <button
-                    onClick={() => setIsRecoverOtpSent(false)}
-                    className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
-                  >
-                    Change Email
-                  </button>
-                </div>
-              </>
-            )}
+              I Agree & Search
+            </Button>
           </div>
         </div>
-      )}
+      </Modal>
 
-      {/* Safety Modal */}
-      {showSafetyModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-3xl">🛡️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SAFETY FIRST</h2>
-            <div className="text-xs text-stone-700 text-left space-y-2 bg-stone-50 p-3 rounded-xl border border-stone-200">
-              <p>• <strong>Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
-              <p>• <strong>Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
-              <p>• <strong>Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
-            </div>
-            <div className="flex space-x-2 pt-2">
-              <button
-                onClick={() => setShowSafetyModal(false)}
-                className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl font-bold text-xs"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking()}
-                className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-orange-600/30"
-              >
-                I Agree & Search
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Friends List Modal */}
-      {showFriendsModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-sm font-bold text-stone-800">🤝 Raid Squad ({friendsList.length})</h2>
-              <button
-                onClick={() => setShowFriendsModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
+      {/* Friends List / Leaderboard Modal */}
+      <Modal
+        open={showFriendsModal}
+        onClose={() => setShowFriendsModal(false)}
+        title={
+          <span className="flex items-center gap-1.5">
+            <IconUsers size={15} className="text-orange-600" />
+            Raid Squad ({friendsList.length})
+          </span>
+        }
+      >
+        <div className="space-y-3">
+            <div role="group" aria-label="Squad view" className="flex bg-[#faf7f3] p-1 rounded-[0.75rem] border border-[#e7e0d8] gap-1">
               {(['squad', 'leaderboard'] as const).map((t) => (
                 <button
                   key={t}
+                  aria-pressed={leaderboardTab === t}
                   onClick={() => setLeaderboardTab(t)}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
+                  className={`flex-1 py-2 text-[0.8125rem] font-bold rounded-[0.5rem] transition-all ${
                     leaderboardTab === t
-                      ? 'bg-orange-600 text-white'
+                      ? 'bg-orange-600 text-white shadow-[0_1px_2px_rgba(154,52,18,0.4)]'
                       : 'text-stone-600 hover:text-stone-900'
                   }`}
                 >
@@ -3161,80 +3364,99 @@ export default function Home() {
             </div>
 
             {leaderboardTab === 'leaderboard' ? (
-              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+              <div className="max-h-[52vh] overflow-y-auto scroll-soft space-y-1.5 pr-1">
                 {leaderboard.map((entry, i) => (
                   <div
                     key={entry.handle}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                    data-leaderboard-row
+                    className={`p-2.5 rounded-[0.875rem] border flex items-center justify-between gap-2 ${
                       entry.is_self
-                        ? 'bg-orange-500/10 border-orange-500/40'
-                        : 'bg-stone-50 border-stone-200'
+                        ? 'bg-orange-50 border-orange-200'
+                        : 'bg-[#faf7f3] border-[#e7e0d8]'
                     }`}
                   >
-                    <div className="flex items-center space-x-2">
-                      <span className="text-stone-500 font-bold w-4 text-center">{i + 1}</span>
-                      <div>
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {/* The top three get a medal treatment -- a leaderboard
+                          where every row looks the same isn't much of a prize. */}
+                      <span
+                        className={`nums shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[0.75rem] font-bold ${
+                          i === 0
+                            ? 'bg-amber-400 text-stone-900'
+                            : i === 1
+                            ? 'bg-stone-300 text-stone-800'
+                            : i === 2
+                            ? 'bg-orange-200 text-orange-900'
+                            : 'text-stone-500'
+                        }`}
+                      >
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
                         <button
                           onClick={() => inspectProfile(entry.handle)}
-                          className="font-bold text-orange-700 hover:underline"
+                          className="text-[0.875rem] font-bold text-orange-700 hover:underline truncate block"
                         >
                           @{entry.handle}
                         </button>
-                        <span className="block text-[9px] text-stone-500">{getRankTitle(entry.total_xp)}</span>
+                        <span className="block text-[0.6875rem] text-stone-500">{getRankTitle(entry.total_xp)}</span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-stone-800">{entry.total_xp} XP</p>
-                      <p className="text-[9px] text-stone-500">{entry.streak} Days 🔥</p>
+                    <div className="text-right shrink-0">
+                      <p className="nums text-[0.875rem] font-bold text-stone-900">{entry.total_xp} XP</p>
+                      <p className="flex items-center justify-end gap-0.5 text-[0.6875rem] text-stone-500">
+                        <IconFlame size={11} />
+                        <span className="nums">{entry.streak}</span> days
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+            <div className="max-h-[52vh] overflow-y-auto scroll-soft space-y-1.5 pr-1">
               {friendsList.length === 0 ? (
-                <div className="text-center py-8 space-y-2">
-                  <div className="text-3xl">🤝</div>
-                  <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
-                    No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!
+                <div className="text-center py-10 space-y-2.5">
+                  <span className="inline-flex w-11 h-11 rounded-full bg-stone-100 text-stone-400 items-center justify-center">
+                    <IconUsers size={22} />
+                  </span>
+                  <p className="text-[0.8125rem] text-stone-600 max-w-[240px] mx-auto leading-relaxed">
+                    No squad friends added yet. Complete a Duo or Squad mission and tap Add Friend.
                   </p>
                 </div>
               ) : (
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
                   return (
-                    <div key={i} className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 flex justify-between items-center text-xs">
-                      <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-stone-300'}`} />
+                    <div key={i} className="bg-[#faf7f3] p-2.5 rounded-[0.875rem] border border-[#e7e0d8] flex justify-between items-center gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            aria-hidden="true"
+                            className={`w-2 h-2 rounded-full shrink-0 ${isOnline ? 'bg-emerald-500' : 'bg-stone-300'}`}
+                          />
                           <button
                             onClick={() => inspectProfile(f.handle)}
-                            className="font-bold text-orange-700 hover:underline"
+                            className="text-[0.875rem] font-bold text-orange-700 hover:underline truncate"
                           >
                             @{f.handle}
                           </button>
                         </div>
-                        <span className="block text-[9px] text-stone-500 pl-3.5">
-                          {isOnline ? 'Online in App' : 'Offline'}
+                        <span className="block text-[0.6875rem] text-stone-500 pl-3.5">
+                          {isOnline ? 'Online in app' : 'Offline'}
                         </span>
                       </div>
-                      <div className="flex space-x-1.5">
+                      <div className="flex gap-1.5 shrink-0">
                         <button
                           onClick={() => inspectProfile(f.handle)}
-                          className="bg-white hover:bg-stone-100 text-stone-700 text-[10px] px-2 py-1 rounded-lg border border-stone-200 font-bold"
+                          className="btn btn-secondary text-[0.75rem] px-2.5 py-1.5"
                         >
                           Profile
                         </button>
                         <button
                           onClick={() => sendDirectRaidInvite(f)}
                           disabled={!isOnline || sendingInviteTo === f.handle}
-                          className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
-                            isOnline
-                              ? 'bg-orange-600 text-white shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]'
-                              : 'bg-white text-stone-400 border border-stone-200 cursor-not-allowed'
-                          }`}
+                          className="btn btn-primary text-[0.75rem] px-2.5 py-1.5"
                         >
-                          <span>⚡</span>
+                          <IconBolt size={12} />
                           <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Raid' : 'Offline'}</span>
                         </button>
                       </div>
@@ -3244,73 +3466,87 @@ export default function Home() {
               )}
             </div>
             )}
-          </div>
         </div>
-      )}
+      </Modal>
 
       {/* Journey Recap Modal */}
-      {showWrappedModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
-            <button
-              onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
-              ✕
-            </button>
-            <h2 className="text-sm font-black text-orange-700 uppercase tracking-wider">🎧 Your IRL Recap</h2>
-            {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
-                <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
-              </div>
-            )}
-            <button
-              onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
-            >
-              <span>📲</span>
-              <span>Share Recap to Story / WhatsApp</span>
-            </button>
-          </div>
+      <Modal
+        open={showWrappedModal}
+        onClose={() => setShowWrappedModal(false)}
+        tone="reward"
+        title={
+          <span className="flex items-center gap-1.5">
+            <IconHeadphones size={15} className="text-amber-600" />
+            Your IRL Recap
+          </span>
+        }
+      >
+        <div className="space-y-3">
+          {wrappedCardDataUrl && (
+            <div className="rounded-[1rem] overflow-hidden border border-[#e7e0d8] bg-[#faf7f3]">
+              <img src={wrappedCardDataUrl} alt="Your recap card" className="w-full h-80 object-contain mx-auto" />
+            </div>
+          )}
+          <Button variant="primary" size="lg" full onClick={() => handleShareCard(wrappedCardDataUrl)}>
+            <IconShare size={16} />
+            Share Recap to Story / WhatsApp
+          </Button>
         </div>
-      )}
+      </Modal>
 
       {tab === 'quest' ? (
         <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-gradient-to-b from-white to-stone-50 p-1.5 rounded-2xl border border-stone-200 w-full justify-between shadow-xl shadow-stone-900/10">
+          {/* Track choice. Each side now says what it actually does -- "Quest"
+              and "Explore" alone never explained the difference. */}
+          <div className="flex bg-white p-1.5 rounded-[1.25rem] border border-[#e7e0d8] w-full gap-1.5 shadow-[0_1px_2px_rgba(68,64,60,0.04),0_4px_16px_rgba(68,64,60,0.06)]">
             <button
               onClick={handleSelectQuestTrack}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
+              aria-pressed={!isExplorerMode}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 px-2 rounded-[0.875rem] transition-all active:scale-[0.98] ${
                 !isExplorerMode
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-orange-600 text-white shadow-[0_2px_0_0_#9A3412]'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
               }`}
             >
-              Quest
+              <span className="flex items-center gap-1.5 font-display text-[0.9375rem] font-bold leading-none">
+                <IconTarget size={16} />
+                Quest
+              </span>
+              <span className={`text-[0.6875rem] font-medium ${!isExplorerMode ? 'text-orange-100' : 'text-stone-500'}`}>
+                Random dare
+              </span>
             </button>
             <button
               onClick={handleSelectExplorer}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
+              aria-pressed={isExplorerMode}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 px-2 rounded-[0.875rem] transition-all active:scale-[0.98] ${
                 isExplorerMode
-                  ? 'bg-amber-500 text-stone-950 shadow-lg shadow-amber-500/30'
-                  : 'text-stone-600 hover:text-stone-900'
+                  ? 'bg-amber-500 text-stone-900 shadow-[0_2px_0_0_#B45309]'
+                  : 'text-stone-600 hover:text-stone-900 hover:bg-stone-50'
               }`}
             >
-              Explore
+              <span className="flex items-center gap-1.5 font-display text-[0.9375rem] font-bold leading-none">
+                <IconCompass size={16} />
+                Explore
+              </span>
+              <span className={`text-[0.6875rem] font-medium ${isExplorerMode ? 'text-amber-950' : 'text-stone-500'}`}>
+                Hidden gems
+              </span>
             </button>
           </div>
 
           {/* Deliberately lighter-weight than the Quest/Explore choice above --
               this is a refinement of that choice, not a second equal decision. */}
-          <div className="flex items-center justify-center gap-1">
+          <div className="flex items-center justify-center gap-1" role="group" aria-label="Party size">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => handleSelectMode(m)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
+                aria-pressed={mode === m}
+                className={`px-3.5 py-1.5 text-[0.8125rem] font-bold rounded-full capitalize transition-all active:scale-95 ${
                   mode === m
                     ? 'bg-stone-800 text-white'
-                    : 'text-stone-500 hover:text-stone-900'
+                    : 'text-stone-500 hover:text-stone-900 hover:bg-white'
                 }`}
               >
                 {m === 'squad' ? 'Squad (2-8)' : m}
@@ -3319,50 +3555,66 @@ export default function Home() {
           </div>
 
           {isExplorerMode && !activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <p className="text-sm text-stone-700 font-semibold">
-                Pick a neighborhood to discover a hidden gem someone local actually knows about.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {MUMBAI_NEIGHBORHOODS.map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setSelectedNeighborhood(n)}
-                    disabled={isSearching}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
-                      selectedNeighborhood === n
-                        ? 'bg-amber-500 text-stone-950 border-amber-500'
-                        : 'bg-stone-50 text-stone-600 border-stone-200 hover:text-stone-900'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
+            <div className="w-full card card-lift p-5 space-y-4 a-rise">
+              <div className="text-center space-y-1">
+                <span
+                  aria-hidden="true"
+                  className="inline-flex w-11 h-11 rounded-full bg-amber-100 text-amber-700 items-center justify-center"
+                >
+                  <IconCompass size={22} />
+                </span>
+                <p className="text-[0.875rem] text-stone-700 leading-relaxed pt-1">
+                  Pick a neighborhood to discover a hidden gem someone local actually knows about.
+                </p>
               </div>
+
+              <div className="space-y-2">
+                <SectionLabel>Neighborhood</SectionLabel>
+                <div className="flex flex-wrap gap-1.5">
+                  {MUMBAI_NEIGHBORHOODS.map((n) => (
+                    <button
+                      key={n}
+                      onClick={() => setSelectedNeighborhood(n)}
+                      disabled={isSearching}
+                      aria-pressed={selectedNeighborhood === n}
+                      className={`px-2.5 py-1.5 rounded-full text-[0.75rem] font-semibold border transition-all disabled:opacity-40 ${
+                        selectedNeighborhood === n
+                          ? 'bg-amber-500 text-stone-900 border-amber-500'
+                          : 'bg-white text-stone-600 border-[#e7e0d8] hover:border-amber-300 hover:text-stone-900'
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <button
                 onClick={onStartMatchingClick}
                 disabled={!selectedNeighborhood || isSearching}
-                className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 ${
-                  !selectedNeighborhood
-                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                    : 'bg-amber-500 hover:bg-amber-400 text-stone-950'
-                }`}
+                className="btn btn-reward w-full text-[0.9375rem] py-3.5"
               >
                 {isSearching ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin">🌀</span>
-                    {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
-                  </span>
+                  <>
+                    <IconSearch size={16} className="animate-spin" />
+                    {squadRoster.length > 0
+                      ? `LOBBY (${squadRoster.length}/${squadCapacity})`
+                      : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
+                  </>
                 ) : !selectedNeighborhood ? (
                   'Pick a neighborhood first'
                 ) : (
-                  '🗺️ Reveal a Hidden Gem'
+                  <>
+                    <IconGem size={16} />
+                    Reveal a Hidden Gem
+                  </>
                 )}
               </button>
+
               {!isSearching && (
                 <button
                   onClick={() => setShowSuggestGemModal(true)}
-                  className="text-xs text-stone-500 hover:text-stone-900 font-semibold underline"
+                  className="w-full text-[0.8125rem] text-stone-500 hover:text-stone-900 font-semibold underline decoration-stone-300 underline-offset-2"
                 >
                   Know a spot? Suggest your own hidden gem
                 </button>
@@ -3371,68 +3623,76 @@ export default function Home() {
           )}
 
           {!activeQuest && !isCompleted && !isExplorerMode && (
-            <div className="flex flex-col items-center space-y-4">
+            <div className="flex flex-col items-center gap-5 py-2">
               <div className="relative flex items-center justify-center">
+                {/* Two soft rings behind the button give it somewhere to sit.
+                    The outer one breathes slowly so the idle screen isn't
+                    completely static, and stops entirely under
+                    prefers-reduced-motion. */}
                 <div
                   aria-hidden="true"
-                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.3)_0%,rgba(234,88,12,0)_70%)] pointer-events-none"
+                  className="absolute w-[19rem] h-[19rem] rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.16)_0%,rgba(234,88,12,0)_68%)] pointer-events-none a-breathe"
                 />
-                {!isSearching && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-2 right-6 text-xl rotate-12 pointer-events-none select-none"
-                  >
-                    ✨
-                  </span>
-                )}
+                <div
+                  aria-hidden="true"
+                  className="absolute w-64 h-64 rounded-full border border-orange-200/70 pointer-events-none"
+                />
+
                 <button
                   onClick={onStartMatchingClick}
                   disabled={isSearching}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 border-4 border-white shadow-2xl shadow-orange-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
-                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
+                  aria-label={isSearching ? 'Searching for a mission' : 'Destroy boredom — get a random mission'}
+                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 flex flex-col items-center justify-center text-white overflow-hidden touch-manipulation transition-transform duration-100 ring-[6px] ring-white shadow-[0_10px_0_0_#9A3412,0_24px_48px_rgba(234,88,12,0.35)] ${
+                    isSearching
+                      ? 'opacity-90 cursor-wait'
+                      : 'hover:scale-[1.03] active:translate-y-[6px] active:shadow-[0_4px_0_0_#9A3412,0_12px_24px_rgba(234,88,12,0.3)]'
                   }`}
                 >
+                  {/* Gloss highlight. */}
                   <span
                     aria-hidden="true"
-                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/25 rotate-[-20deg]"
+                    className="absolute -top-8 left-6 w-32 h-20 rounded-full bg-white/20 rotate-[-20deg] pointer-events-none"
                   />
                   {isSearching ? (
-                    <div className="flex flex-col items-center space-y-1">
-                      <span className="text-2xl animate-spin">🌀</span>
-                      <span className="text-xs text-orange-200 font-mono font-normal">
-                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
+                    <span className="flex flex-col items-center gap-2">
+                      <IconSearch size={26} className="animate-spin" />
+                      <span className="nums text-[0.75rem] text-orange-100 font-semibold tracking-wide">
+                        {squadRoster.length > 0
+                          ? `LOBBY ${squadRoster.length}/${squadCapacity}`
+                          : 'SEARCHING...'}
                       </span>
-                    </div>
+                    </span>
                   ) : (
                     <>
-                      <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                      <span className="font-['Space_Grotesk'] font-medium text-sm text-orange-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
+                      <span className="font-display font-bold text-[2rem] leading-none tracking-tight drop-shadow-[0_2px_4px_rgba(120,40,0,0.35)]">
+                        DESTROY
+                      </span>
+                      <span className="font-display font-medium text-[0.9375rem] text-orange-100 mt-1.5 tracking-[0.12em] line-through decoration-2 decoration-orange-200/80">
+                        BOREDOM
+                      </span>
                     </>
                   )}
                 </button>
               </div>
 
-              <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-stone-600 font-medium">
+              <div className="text-center space-y-3 max-w-xs">
+                <p className="text-[0.875rem] text-stone-600 leading-relaxed">
                   {isSearching
-                    ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
+                    ? `Searching the live queue for Mumbai ${mode.toUpperCase()} partners...`
                     : 'Tap to trigger a random real-world micro-mission.'}
                 </p>
 
                 {isSearching && (
-                  <div className="flex flex-col items-center space-y-2 pt-2">
-                    <button
-                      onClick={handleWhatsAppInvite}
-                      className="bg-orange-600 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                    >
-                      <span>📲</span>
-                      <span>Invite Friend via WhatsApp Now</span>
-                    </button>
+                  <div className="flex flex-col items-center gap-2">
+                    <Button variant="primary" onClick={handleWhatsAppInvite}>
+                      <IconWhatsApp size={15} />
+                      Invite a Friend on WhatsApp
+                    </Button>
                     <button
                       onClick={cancelSearch}
-                      className="text-[10px] text-stone-500 hover:underline"
+                      className="text-[0.8125rem] text-stone-500 hover:text-stone-800 hover:underline"
                     >
-                      Cancel Search
+                      Cancel search
                     </button>
                   </div>
                 )}
@@ -3441,39 +3701,43 @@ export default function Home() {
           )}
 
           {activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <div className="flex justify-between items-center">
-                <span className="bg-orange-500/10 text-orange-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
+            <div className="w-full card card-lift p-5 space-y-4 a-rise">
+              <div className="flex justify-between items-center gap-2">
+                <Chip tone="action" className="uppercase tracking-wide">
                   {isExplorerMode ? 'Explorer' : mode} Mission Assigned
-                </span>
-                <span className="text-xs text-amber-700 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>Active Mission</span>
+                </Chip>
+                <span className="flex items-center gap-1.5 text-[0.6875rem] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200 font-semibold whitespace-nowrap">
+                  <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  Active
                 </span>
               </div>
 
               {squadRoster.length > 0 && (
-                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl text-left space-y-1.5">
-                  <div className="flex justify-between items-center text-[10px] text-stone-600 font-bold uppercase">
-                    <span>👑 Active Squad Roster ({squadRoster.length})</span>
-                    <span className="text-amber-700 font-mono">Live Lobby</span>
+                <div className="bg-[#faf7f3] border border-[#e7e0d8] p-3 rounded-[0.875rem] text-left space-y-2">
+                  <div className="flex justify-between items-center gap-2">
+                    <SectionLabel className="flex items-center gap-1.5">
+                      <IconCrown size={13} className="text-amber-600" />
+                      Squad roster ({squadRoster.length})
+                    </SectionLabel>
+                    <span className="text-[0.6875rem] text-emerald-700 font-semibold">Live lobby</span>
                   </div>
                   <div className="flex flex-wrap gap-1.5">
                     {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-white border border-stone-200 px-2 py-1 rounded-lg text-xs">
+                      <div key={idx} className="flex items-center gap-1 bg-white border border-[#e7e0d8] pl-2.5 pr-1.5 py-1 rounded-full">
                         <button
                           onClick={() => inspectProfile(p.handle)}
-                          className="text-orange-700 font-bold hover:underline"
+                          className="text-[0.8125rem] text-orange-700 font-bold hover:underline"
                         >
                           @{p.handle}
                         </button>
                         {p.user_id !== currentUserId && (
                           <button
                             onClick={() => handleAddFriend(p.user_id)}
-                            className="text-[10px] text-stone-600 hover:text-orange-700 pl-1"
-                            title="Add as Friend"
+                            className="text-stone-400 hover:text-orange-700 p-0.5 rounded-full transition"
+                            title={`Add @${p.handle} as a friend`}
                           >
-                            +🤝
+                            <IconUserPlus size={14} />
+                            <span className="sr-only">Add @{p.handle} as a friend</span>
                           </button>
                         )}
                       </div>
@@ -3511,41 +3775,51 @@ export default function Home() {
               </div>
 
               {(mode === 'duo' || mode === 'squad') && (
-                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 flex flex-col space-y-2 text-left">
-                  <div className="flex justify-between items-center border-b border-stone-200 pb-1">
-                    <span className="text-[10px] font-bold text-orange-700 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
+                <div className="bg-[#faf7f3] border border-[#e7e0d8] rounded-[1rem] p-3 flex flex-col gap-2.5 text-left">
+                  <div className="flex justify-between items-center gap-2 border-b border-[#e7e0d8] pb-2">
+                    <SectionLabel className="flex items-center gap-1.5">
+                      <IconChat size={13} className="text-orange-600" />
+                      Live {mode} rally chat
+                    </SectionLabel>
                     <button
                       onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-orange-600/20 hover:bg-orange-600/30 text-orange-700 border border-orange-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
+                      className="btn btn-secondary text-[0.75rem] px-2.5 py-1"
                     >
-                      <span>📲</span>
-                      <span>Invite Friend</span>
+                      <IconWhatsApp size={13} />
+                      Invite
                     </button>
                   </div>
-                  <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
+
+                  <div className="h-32 overflow-y-auto scroll-soft space-y-1.5 pr-1">
                     {messages.length === 0 ? (
-                      <p className="text-[10px] text-stone-400 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
+                      <p className="text-[0.8125rem] text-stone-500 py-4 text-center">
+                        No messages yet. Coordinate your rally point.
+                      </p>
                     ) : (
                       messages.map((m) => (
-                        <div key={m.id || Math.random()} className="bg-white p-2 rounded-xl border border-stone-200/80 flex justify-between items-start">
-                          <div>
+                        <div
+                          key={m.id || Math.random()}
+                          className="bg-white p-2.5 rounded-[0.75rem] border border-[#e7e0d8] flex justify-between items-start gap-2"
+                        >
+                          <div className="min-w-0">
                             <button
                               onClick={() => inspectProfile(m.sender_handle)}
-                              className="text-[10px] font-bold text-orange-700 hover:underline"
+                              className="text-[0.6875rem] font-bold text-orange-700 hover:underline"
                             >
-                              @{m.sender_handle}: 
+                              @{m.sender_handle}
                             </button>
-                            <span className="text-stone-700 ml-1">
+                            <span className="block text-[0.8125rem] text-stone-800 leading-snug break-words">
                               {m.message}
                             </span>
                           </div>
                           {m.sender_handle !== handle && (
                             <button
                               onClick={() => handleReport('chat', m.id || m.message)}
-                              className="text-[9px] text-stone-400 hover:text-orange-700 pl-2"
+                              className="shrink-0 text-stone-300 hover:text-red-600 p-0.5 transition"
                               title="Report message"
                             >
-                              🚩
+                              <IconFlag size={13} />
+                              <span className="sr-only">Report this message</span>
                             </button>
                           )}
                         </div>
@@ -3553,39 +3827,54 @@ export default function Home() {
                     )}
                     <div ref={chatBottomRef} />
                   </div>
-                  <div className="flex space-x-2 pt-1">
+
+                  <div className="flex gap-2">
                     <input
                       type="text"
-                      placeholder="Say something (max 300 chars)..."
+                      placeholder="Say something..."
                       maxLength={300}
                       value={newMessage}
                       onChange={(e) => setNewMessage(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:border-orange-500"
+                      className={`${inputClass} flex-1 !py-2 bg-white`}
                     />
-                    <button
-                      onClick={sendMessage}
-                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
-                    >
-                      Send
+                    <button onClick={sendMessage} className="btn btn-primary px-3 py-2" title="Send message">
+                      <IconSend size={15} />
+                      <span className="sr-only">Send</span>
                     </button>
                   </div>
                 </div>
               )}
 
               {isMissionAccepted && (
-                <div className="border-2 border-dashed border-stone-200 rounded-2xl p-3 flex flex-col items-center justify-center bg-stone-50/50 space-y-1">
+                <div className="border-2 border-dashed border-[#e7e0d8] rounded-[1rem] p-3 flex flex-col items-center justify-center bg-[#faf7f3]/60">
                   {uploading ? (
-                    <div className="py-4 flex flex-col items-center space-y-1">
-                      <span className="animate-spin text-xl">☁️</span>
-                      <span className="text-xs text-orange-700 font-semibold">Compressing & Uploading (~50KB)...</span>
+                    <div className="py-5 flex flex-col items-center gap-2">
+                      <IconCamera size={22} className="text-orange-600 animate-pulse" />
+                      <span className="text-[0.8125rem] text-stone-700 font-semibold">
+                        Compressing &amp; uploading...
+                      </span>
                     </div>
                   ) : proofImage ? (
-                    <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
+                    <div className="relative w-full">
+                      <img src={proofImage} alt="Proof" className="w-full h-40 object-cover rounded-[0.75rem]" />
+                      <span className="absolute top-2 right-2 flex items-center gap-1 bg-emerald-600 text-white text-[0.6875rem] font-bold px-2 py-1 rounded-full shadow">
+                        <IconCheck size={12} />
+                        Proof ready
+                      </span>
+                    </div>
                   ) : (
-                    <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
-                      <span className="text-xl">📸</span>
-                      <span className="text-xs text-stone-600 font-semibold"></span>
+                    /* This label had no text at all before -- just a bare camera
+                       emoji with an empty span under it. */
+                    <label className="cursor-pointer flex flex-col items-center gap-1.5 w-full py-4 text-center">
+                      <span
+                        aria-hidden="true"
+                        className="w-11 h-11 rounded-full bg-white border border-[#e7e0d8] text-orange-600 flex items-center justify-center"
+                      >
+                        <IconCamera size={21} />
+                      </span>
+                      <span className="text-[0.875rem] text-stone-800 font-semibold">Tap to take your proof photo</span>
+                      <span className="text-[0.6875rem] text-stone-500">Compressed to about 50KB before upload</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -3598,158 +3887,196 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="flex flex-col space-y-2 pt-1">
+              <div className="flex flex-col gap-2 pt-1">
                 <button
                   onClick={handleCompleteMission}
                   disabled={uploading || !proofImage}
-                  className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
-                    proofImage && !uploading
-                      ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/30 cursor-pointer'
-                      : 'bg-stone-100 text-stone-500 cursor-not-allowed border border-stone-300'
-                  }`}
+                  className="btn btn-primary w-full text-[0.875rem] py-3.5"
                 >
-                  {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
+                  {proofImage ? (
+                    <>
+                      <IconFlame size={16} />
+                      <span>Complete &amp; Log Proof</span>
+                    </>
+                  ) : (
+                    <>
+                      <IconCamera size={16} />
+                      <span>Take Photo Proof to Complete</span>
+                    </>
+                  )}
                 </button>
                 <button
                   onClick={handleAbandonMission}
-                  className="text-xs text-stone-500 hover:text-stone-800 py-1 transition-colors"
+                  className="text-[0.8125rem] text-stone-500 hover:text-stone-800 py-1.5 transition-colors"
                 >
-                  Abandon Mission
+                  Abandon mission
                 </button>
               </div>
             </div>
           )}
 
           {isCompleted && (
-            <div className="w-full bg-white border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-              <div className="text-4xl">🎉</div>
-              <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
-              <p className="text-xs text-stone-700">
-                You broke routine and gained real-world experience today.
-              </p>
+            <div className="a-pop w-full card card-lift border-amber-200 bg-gradient-to-b from-amber-50/70 to-white p-6 text-center space-y-4">
+              <span
+                aria-hidden="true"
+                className="inline-flex w-14 h-14 rounded-full bg-amber-400 text-stone-900 items-center justify-center shadow-[0_3px_0_0_#B45309]"
+              >
+                <IconTrophy size={26} />
+              </span>
+              <div className="space-y-1.5">
+                <h2 className="font-display text-2xl font-bold text-stone-900">LOOP BROKEN!</h2>
+                <p className="text-[0.875rem] text-stone-600">
+                  You broke routine and gained real-world experience today.
+                </p>
+              </div>
+
+              {/* Where the XP actually landed. Completing a mission used to give
+                  no numeric feedback at all on this screen. */}
+              <div className="bg-white/80 border border-[#e7e0d8] rounded-[1rem] p-3.5">
+                <RankProgress totalXp={totalXp} />
+              </div>
 
               {cardDataUrl && (
-                <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-orange-500/30 shadow-xl bg-stone-50">
-                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
+                <div className="space-y-3">
+                  <div className="rounded-[1rem] overflow-hidden border border-[#e7e0d8] bg-[#faf7f3]">
+                    <img src={cardDataUrl} alt="Your shareable mission card" className="w-full h-64 object-contain mx-auto" />
                   </div>
 
-                  <button
-                    onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
-                  >
-                    <span>📲</span>
-                    <span>Share to Instagram Story / WhatsApp</span>
-                  </button>
+                  <Button variant="primary" size="lg" full onClick={() => handleShareCard(cardDataUrl)}>
+                    <IconShare size={16} />
+                    Share to Instagram Story / WhatsApp
+                  </Button>
                 </div>
               )}
 
-              <button
-                onClick={() => setIsCompleted(false)}
-                className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-              >
+              <Button variant="secondary" size="lg" full onClick={() => setIsCompleted(false)}>
                 Back to Home
-              </button>
+              </Button>
             </div>
           )}
         </div>
       ) : (
-        <div className="w-full max-w-md my-auto space-y-4">
-          <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-            <h2 className="text-sm font-bold text-stone-700">Community Proof Feed</h2>
-            <span className="text-xs text-stone-500">{feedItems.length} Missions Logged</span>
+        <div className="w-full max-w-md my-auto space-y-3">
+          <div className="flex justify-between items-baseline gap-2">
+            <h2 className="font-display text-base font-bold text-stone-900">Community Proof Feed</h2>
+            <span className="nums text-[0.8125rem] text-stone-500">
+              {feedItems.length} logged
+            </span>
           </div>
 
-          <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="flex flex-col gap-3 max-h-[62vh] overflow-y-auto scroll-soft pr-1">
             {loadingFeed ? (
               [1, 2, 3].map((i) => (
-                <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3 animate-pulse">
-                  <div className="w-full h-48 bg-stone-100 rounded-xl" />
+                <div key={i} className="card p-3 flex flex-col gap-3">
+                  <div className="w-full h-48 skeleton rounded-[0.875rem]" />
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
-                      <div className="h-3 w-20 bg-stone-100 rounded" />
-                      <div className="h-3 w-6 bg-stone-100 rounded" />
+                      <div className="h-3 w-24 skeleton rounded-full" />
+                      <div className="h-3 w-8 skeleton rounded-full" />
                     </div>
-                    <div className="h-3 w-full bg-stone-100 rounded" />
-                    <div className="h-3 w-2/3 bg-stone-100 rounded" />
+                    <div className="h-3 w-full skeleton rounded-full" />
+                    <div className="h-3 w-2/3 skeleton rounded-full" />
                   </div>
                 </div>
               ))
             ) : feedItems.length > 0 ? (
               feedItems.map((item) => (
-                <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
+                <article key={item.id} className="card overflow-hidden">
                   {item.photo_url && (
-                    <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
+                    <img
+                      src={item.photo_url}
+                      alt={`Proof photo for: ${item.quest_text}`}
+                      loading="lazy"
+                      className="w-full h-52 object-cover"
+                    />
                   )}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
+                  <div className="p-3.5 space-y-2.5">
+                    <div className="flex justify-between items-center gap-2">
                       <button
                         onClick={() => inspectProfile(item.handle)}
-                        className="text-xs font-bold text-orange-700 hover:underline"
+                        className="flex items-center gap-1.5 text-[0.875rem] font-bold text-orange-700 hover:underline min-w-0"
                       >
-                        @{item.handle || 'Explorer'}
+                        <span
+                          aria-hidden="true"
+                          className="shrink-0 w-6 h-6 rounded-full bg-orange-100 text-orange-600 flex items-center justify-center"
+                        >
+                          <IconUser size={13} />
+                        </span>
+                        <span className="truncate">@{item.handle || 'Explorer'}</span>
                       </button>
-                      <div className="flex items-center space-x-2">
+                      <div className="flex items-center gap-1 shrink-0">
                         {userEmail === ADMIN_EMAIL && (
                           <button
                             onClick={() => handleAdminDeleteFeedPost(item.id)}
-                            className="text-[10px] bg-red-950/80 border border-red-500/40 text-red-300 px-2 py-0.5 rounded-lg font-bold hover:bg-red-900"
-                            title="Admin: Delete post"
+                            className="text-stone-300 hover:text-red-600 p-1 rounded transition"
+                            title="Admin: delete post"
                           >
-                            🗑️ Delete
+                            <IconTrash size={14} />
+                            <span className="sr-only">Delete this post</span>
                           </button>
                         )}
                         <button
                           onClick={() => handleReport('feed', item.id)}
-                          className="text-[10px] text-stone-400 hover:text-orange-700"
+                          className="text-stone-300 hover:text-red-600 p-1 rounded transition"
                           title="Report post"
                         >
-                          🚩
+                          <IconFlag size={14} />
+                          <span className="sr-only">Report this post</span>
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs text-stone-800 italic font-medium">"{item.quest_text}"</p>
 
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200/80">
+                    <p className="text-[0.875rem] text-stone-800 leading-snug">"{item.quest_text}"</p>
+
+                    {/* The emoji here stay -- 🔥 and ✋ are the reactions
+                        themselves, not UI chrome standing in for an icon. */}
+                    <div className="flex gap-2 pt-2.5 border-t border-[#e7e0d8]">
                       <button
                         onClick={() => handleReact(item.id, 'fire')}
-                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
+                        className="flex items-center gap-1.5 bg-[#faf7f3] hover:bg-orange-50 hover:border-orange-200 border border-[#e7e0d8] px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold text-stone-700 transition-all active:scale-95"
                       >
-                        <span>🔥</span>
-                        <span>{item.fire_count || 0}</span>
+                        <span aria-hidden="true">🔥</span>
+                        <span className="nums">{item.fire_count || 0}</span>
+                        <span className="sr-only">fire reactions</span>
                       </button>
                       <button
                         onClick={() => handleReact(item.id, 'five')}
-                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
+                        className="flex items-center gap-1.5 bg-[#faf7f3] hover:bg-orange-50 hover:border-orange-200 border border-[#e7e0d8] px-3 py-1.5 rounded-full text-[0.8125rem] font-semibold text-stone-700 transition-all active:scale-95"
                       >
-                        <span>✋</span>
-                        <span>{item.five_count || 0}</span>
+                        <span aria-hidden="true">✋</span>
+                        <span className="nums">{item.five_count || 0}</span>
+                        <span className="sr-only">high fives</span>
                       </button>
                     </div>
                   </div>
-                </div>
+                </article>
               ))
             ) : (
-              <div className="text-center py-10 space-y-3">
-                <div className="text-4xl">📭</div>
-                <h3 className="text-sm font-bold text-stone-800">No missions logged yet</h3>
-                <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
-                  Be the first to complete one and show up here.
-                </p>
-                <button
-                  onClick={() => setTab('quest')}
-                  className="bg-orange-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
-                >
+              <div className="text-center py-12 space-y-3">
+                <span className="inline-flex w-14 h-14 rounded-full bg-stone-100 text-stone-400 items-center justify-center">
+                  <IconInbox size={26} />
+                </span>
+                <div className="space-y-1">
+                  <h3 className="font-display text-[0.9375rem] font-bold text-stone-900">No missions logged yet</h3>
+                  <p className="text-[0.8125rem] text-stone-600 max-w-[240px] mx-auto leading-relaxed">
+                    Be the first to complete one and show up here.
+                  </p>
+                </div>
+                <Button variant="primary" onClick={() => setTab('quest')}>
                   Start a mission
-                </button>
+                </Button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-stone-900/15">
-        <div className="flex justify-between items-center border-b border-stone-200/60 pb-2">
+      {/* The profile card. This was previously a single flat stack doing five
+          unrelated jobs -- identity, badges, stats, auth CTA and legal links --
+          with no hierarchy between them. It now reads top to bottom: who you
+          are, how far along you are, what you've done, what you've unlocked. */}
+      <footer className="w-full max-w-md card card-lift p-4 flex flex-col gap-3.5 mt-auto">
+        <div className="flex justify-between items-center gap-2">
           {isEditingHandle ? (
             <input
               type="text"
@@ -3757,44 +4084,53 @@ export default function Home() {
               onBlur={(e) => saveHandle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
               autoFocus
-              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-700 font-bold focus:outline-none"
+              maxLength={20}
+              aria-label="Your handle"
+              className="bg-[#faf7f3] border border-orange-400 rounded-[0.5rem] px-2 py-1 text-[0.875rem] text-stone-900 font-bold focus:outline-none focus:ring-2 focus:ring-orange-500/20 min-w-0 flex-1"
             />
           ) : (
             <button
               onClick={() => setIsEditingHandle(true)}
-              className="text-xs font-bold text-orange-700 hover:underline flex items-center space-x-1"
+              className="flex items-center gap-1.5 min-w-0 group"
+              title="Edit your handle"
             >
-              <span>@{handle}</span>
-              <span className="text-[10px] text-stone-500 font-medium">· {getRankTitle(totalXp)}</span>
-              <span className="text-[10px] text-stone-500">✏️</span>
+              <span className="text-[0.9375rem] font-bold text-orange-700 truncate">@{handle}</span>
+              <IconPencil size={13} className="text-stone-400 group-hover:text-stone-700 shrink-0 transition" />
             </button>
           )}
-          <div className="flex items-center space-x-2">
+
+          <div className="flex items-center gap-1 shrink-0">
             <button
               onClick={() => setShowFriendsModal(true)}
-              className="text-[10px] text-orange-700 hover:underline font-semibold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
+              className="icon-btn !w-8 !h-8"
+              title={`Squad (${friendsList.length})`}
             >
-              🤝 Squad ({friendsList.length})
+              <IconUsers size={16} />
+              <span className="sr-only">Squad ({friendsList.length})</span>
             </button>
             <button
               onClick={generateSpotifyWrappedCard}
-              className="text-[10px] text-amber-700 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
+              className="icon-btn !w-8 !h-8"
+              title="Your IRL recap"
             >
-              🎧 Recap
+              <IconHeadphones size={16} />
+              <span className="sr-only">Recap</span>
             </button>
             <button
               onClick={() => {
                 setSuggestQuestMode(mode);
                 setShowSuggestQuestModal(true);
               }}
-              className="text-[10px] text-orange-700 hover:underline font-bold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
+              className="icon-btn !w-8 !h-8"
+              title="Suggest a quest"
             >
-              ✍️ Suggest Quest
+              <IconPencil size={16} />
+              <span className="sr-only">Suggest Quest</span>
             </button>
             {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
               <button
                 onClick={handleSignOut}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
+                className="text-[0.75rem] text-stone-500 hover:text-stone-900 hover:underline font-semibold px-1.5"
               >
                 Sign Out
               </button>
@@ -3804,7 +4140,7 @@ export default function Home() {
                   setAuthModalReason('');
                   setShowAuthModal(true);
                 }}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
+                className="text-[0.75rem] text-orange-700 hover:underline font-semibold px-1.5"
               >
                 Verify
               </button>
@@ -3812,50 +4148,69 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
-          <span className="text-stone-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
-          {badges.map((b, i) => (
-            <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
-              {b}
-            </span>
-          ))}
+        {/* Progression. The app tracked XP and five rank tiers but never showed
+            how close you were to the next one. */}
+        <RankProgress totalXp={totalXp} showXp={false} />
+
+        {/* These three were previously two stats, one of which was wrong: the
+            footer printed time_saved_mins under a "Total IRL XP" label, so the
+            number shown had nothing to do with the rank beside it. */}
+        <div className="flex justify-around items-center border-t border-[#e7e0d8] pt-3">
+          <Stat
+            label="Streak"
+            value={streak}
+            suffix={streak === 1 ? 'day' : 'days'}
+            icon={<IconFlame size={12} />}
+            tone="action"
+          />
+          <div className="w-px h-8 bg-[#e7e0d8]" />
+          <Stat
+            label="Total XP"
+            value={totalXp.toLocaleString()}
+            icon={<IconBolt size={12} />}
+            tone="reward"
+          />
+          <div className="w-px h-8 bg-[#e7e0d8]" />
+          <Stat
+            label="Saved"
+            value={savedMins}
+            suffix="min"
+            icon={<IconClock size={12} />}
+          />
         </div>
 
-        <div className="flex justify-around text-center border-t border-stone-200/60 pt-2">
-          <div>
-            <p className="text-xs text-stone-500">Loop Streak</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-stone-800">{streak} Days 🔥</p>
+        {badges.length > 0 && (
+          <div className="space-y-1.5 border-t border-[#e7e0d8] pt-3">
+            <SectionLabel>Badges</SectionLabel>
+            <div className="flex items-center gap-1.5 overflow-x-auto scroll-soft pb-1">
+              {badges.map((b, i) => (
+                <Chip key={i} tone="reward">{b}</Chip>
+              ))}
+            </div>
           </div>
-          <div className="w-px bg-stone-100" />
-          <div>
-            <p className="text-xs text-stone-500">Total IRL XP</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-orange-700">{savedMins} XP ⚡</p>
-          </div>
-        </div>
+        )}
 
         {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center space-y-1.5 border-t border-stone-200/60 pt-2">
-            <button
-              onClick={() => setShowSaveProgressModal(true)}
-              className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
-            >
-              💾 Save My Progress
-            </button>
+          <div className="flex flex-col items-center gap-2 border-t border-[#e7e0d8] pt-3">
+            <Button variant="secondary" full onClick={() => setShowSaveProgressModal(true)}>
+              <IconSave size={15} />
+              Save My Progress
+            </Button>
             <button
               onClick={() => setShowRecoverModal(true)}
-              className="text-[10px] text-stone-500 hover:underline"
+              className="text-[0.75rem] text-stone-500 hover:text-stone-800 hover:underline"
             >
               Already have an account? Sign in
             </button>
           </div>
         )}
 
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Link href="/privacy" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
+        <div className="flex items-center justify-center gap-3 border-t border-[#e7e0d8] pt-3">
+          <Link href="/privacy" className="text-[0.75rem] text-stone-500 hover:text-stone-800 hover:underline">
             Privacy
           </Link>
-          <span className="text-[10px] text-stone-300">·</span>
-          <Link href="/terms" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
+          <span aria-hidden="true" className="text-stone-300">·</span>
+          <Link href="/terms" className="text-[0.75rem] text-stone-500 hover:text-stone-800 hover:underline">
             Terms
           </Link>
         </div>

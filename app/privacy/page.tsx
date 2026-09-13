@@ -18,23 +18,23 @@ function TODO({ children }: { children: React.ReactNode }) {
 }
 
 function H2({ children }: { children: React.ReactNode }) {
-  return <h2 className="text-xl font-extrabold text-stone-900 mt-8 mb-3">{children}</h2>;
+  return <h2 className="font-display text-xl font-bold text-stone-900 mt-8 mb-3">{children}</h2>;
 }
 
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-stone-700 leading-relaxed mb-3">{children}</p>;
+  return <p className="text-[0.9375rem] text-stone-700 leading-relaxed mb-3">{children}</p>;
 }
 
 export default function PrivacyPolicy() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] px-6 py-10">
+    <main className="min-h-screen bg-[radial-gradient(120%_80%_at_50%_0%,_#FFFDFA_0%,_#FFF8F0_45%,_#FBE7CE_100%)] px-6 py-10">
       <div className="max-w-2xl mx-auto">
-        <Link href="/" className="text-orange-600 font-bold text-sm hover:underline">
+        <Link href="/" className="inline-flex items-center gap-1 text-orange-700 font-semibold text-[0.875rem] hover:underline">
           ← Back to Break The Loop
         </Link>
 
-        <div className="bg-gradient-to-b from-white to-stone-50 rounded-3xl shadow-xl shadow-orange-900/10 p-6 sm:p-10 mt-4">
-          <h1 className="text-2xl sm:text-3xl font-black text-stone-900 mb-1">Privacy Policy</h1>
+        <div className="bg-white border border-[#e7e0d8] rounded-[1.5rem] shadow-[0_2px_4px_rgba(68,64,60,0.06),0_12px_32px_rgba(68,64,60,0.1)] p-6 sm:p-10 mt-4">
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 mb-1">Privacy Policy</h1>
           <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
 
           <P>

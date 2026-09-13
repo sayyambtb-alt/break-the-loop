@@ -38,9 +38,9 @@ describe('friends leaderboard', () => {
 
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: /🤝 Squad/ }));
+    await user.click(screen.getByRole('button', { name: /^squad \(\d+\)$/i }));
     const heading = await screen.findByText(/Raid Squad/);
-    const modal = within(heading.closest('.rounded-3xl') as HTMLElement);
+    const modal = within(heading.closest('[role="dialog"]') as HTMLElement);
 
     await user.click(modal.getByRole('button', { name: 'Leaderboard' }));
 
@@ -49,9 +49,9 @@ describe('friends leaderboard', () => {
     );
     expect(call).toBeTruthy();
 
-    const topRow = (await modal.findByText('@TopDog')).closest('.rounded-xl') as HTMLElement;
-    const selfRow = modal.getByText('@Tester').closest('.rounded-xl') as HTMLElement;
-    const lastRow = modal.getByText('@Rookie').closest('.rounded-xl') as HTMLElement;
+    const topRow = (await modal.findByText('@TopDog')).closest('[data-leaderboard-row]') as HTMLElement;
+    const selfRow = modal.getByText('@Tester').closest('[data-leaderboard-row]') as HTMLElement;
+    const lastRow = modal.getByText('@Rookie').closest('[data-leaderboard-row]') as HTMLElement;
 
     // Ranked in the order the backend returned (sorted by total_xp desc).
     expect(within(topRow).getByText('1')).toBeInTheDocument();
@@ -63,9 +63,9 @@ describe('friends leaderboard', () => {
     expect(within(selfRow).getByText('Chaos Local')).toBeInTheDocument();
 
     // Only the caller's own row gets the highlight treatment.
-    expect(selfRow.className).toContain('border-orange-500/40');
-    expect(topRow.className).not.toContain('border-orange-500/40');
-    expect(lastRow.className).not.toContain('border-orange-500/40');
+    expect(selfRow.className).toContain('border-orange-200');
+    expect(topRow.className).not.toContain('border-orange-200');
+    expect(lastRow.className).not.toContain('border-orange-200');
 
     await user.click(screen.getByText('@TopDog'));
     const profileCall = mockState.calls.find(

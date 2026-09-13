@@ -4,8 +4,8 @@
   "description": "Real-world micro-missions to break doomscrolling habits.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#FFF8F0",
-  "theme_color": "#EA580C",
+  "background_color": "#FFFAF4",
+  "theme_color": "#FFFAF4",
   "icons": [
     {
       "src": "/icons/icon-192.png",

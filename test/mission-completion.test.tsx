@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockState, resetMockState, buildSupabaseClient } from './mocks/supabase';
 
@@ -33,6 +33,7 @@ describe('mission completion end-to-end', () => {
         success: true,
         new_streak: 2,
         new_saved_mins: 30,
+        new_total_xp: 45,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -60,7 +61,7 @@ describe('mission completion end-to-end', () => {
     const uploadCall = mockState.calls.find((c) => c.type === 'storage-upload');
     expect(uploadCall?.args[0]).toBe('Proofs');
 
-    const completeButton = screen.getByText('Complete & Log Proof 🔥');
+    const completeButton = screen.getByText('Complete & Log Proof');
     await user.click(completeButton);
 
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
@@ -69,8 +70,13 @@ describe('mission completion end-to-end', () => {
     expect(rpcCall).toBeTruthy();
     expect(rpcCall?.args[0]).toMatchObject({ p_mode: 'solo' });
 
-    expect(screen.getByText('2 Days 🔥')).toBeInTheDocument();
-    expect(screen.getByText('30 XP ⚡')).toBeInTheDocument();
+    // XP and time-saved are distinct stats. The footer used to print
+    // new_saved_mins under a "Total IRL XP" label, so the number on screen had
+    // nothing to do with the rank shown beside it.
+    const profile = screen.getByRole('contentinfo');
+    expect(within(profile).getByText('Streak').parentElement).toHaveTextContent('2days');
+    expect(within(profile).getByText('Total XP').parentElement).toHaveTextContent('45');
+    expect(within(profile).getByText('Saved').parentElement).toHaveTextContent('30min');
   });
 
   it('auto-surfaces the Recap card when a new badge is earned', async () => {
@@ -98,14 +104,14 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete & Log Proof'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
     await waitFor(
-      () => expect(screen.getByText('🎧 Your IRL Recap')).toBeInTheDocument(),
+      () => expect(screen.getByText('Your IRL Recap')).toBeInTheDocument(),
       { timeout: 4000 }
     );
-    expect(screen.getByAltText('Recap')).toBeInTheDocument();
+    expect(screen.getByAltText('Your recap card')).toBeInTheDocument();
   });
 
   it('pays out the XP that matches the rarity shown on the card', async () => {
@@ -125,7 +131,7 @@ describe('mission completion end-to-end', () => {
       () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
       { timeout: 3000 }
     );
-    expect(screen.getByText('⚡ LEGENDARY QUEST')).toBeInTheDocument();
+    expect(screen.getByText('LEGENDARY QUEST')).toBeInTheDocument();
     expect(screen.getByText('+75 IRL XP')).toBeInTheDocument();
 
     await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
@@ -133,7 +139,7 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete & Log Proof'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
     const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_mission');
@@ -163,7 +169,7 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete & Log Proof'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
     await screen.findByText(/Rank up! You're now a Chaos Local/);
@@ -189,7 +195,7 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete & Log Proof'));
 
     await screen.findByText(/Unauthorized/);
     expect(screen.queryByText('LOOP BROKEN!')).not.toBeInTheDocument();
