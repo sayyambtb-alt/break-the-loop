@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { mockState, resetMockState, buildSupabaseClient } from './mocks/supabase';
+import { fake2dContext } from './setup';
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => buildSupabaseClient()
@@ -33,6 +34,7 @@ describe('mission completion end-to-end', () => {
         success: true,
         new_streak: 2,
         new_saved_mins: 30,
+        new_total_xp: 215,
         badges: ['🌱 First Step', '🔥 Warm Up']
       },
       error: null
@@ -69,8 +71,12 @@ describe('mission completion end-to-end', () => {
     expect(rpcCall).toBeTruthy();
     expect(rpcCall?.args[0]).toMatchObject({ p_mode: 'solo' });
 
-    expect(screen.getByText('2 Days 🔥')).toBeInTheDocument();
-    expect(screen.getByText('30 XP ⚡')).toBeInTheDocument();
+    // The three player-panel tiles read three different fields, and each one
+    // has to show the field its label names. The XP tile used to print
+    // time_saved_mins, which made it contradict the rank meter beside it.
+    expect(screen.getByText('2d 🔥')).toBeInTheDocument();
+    expect(screen.getByText('215 ⚡')).toBeInTheDocument();
+    expect(screen.getByText('30m 🌤️')).toBeInTheDocument();
   });
 
   it('auto-surfaces the Recap card when a new badge is earned', async () => {
@@ -193,5 +199,42 @@ describe('mission completion end-to-end', () => {
 
     await screen.findByText(/Unauthorized/);
     expect(screen.queryByText('LOOP BROKEN!')).not.toBeInTheDocument();
+  });
+
+  it('draws the XP this mission paid out and the lifetime total as separate figures on the share card', async () => {
+    const user = userEvent.setup();
+    // Keep the roll common so the reward is a known 15 XP.
+    vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    mockState.rpcResponses['complete_mission'] = {
+      // new_saved_mins is a minutes counter. The card used to print it under
+      // "IRL XP GAINED" with a + in front, so it was wrong twice over: the
+      // wrong quantity, shown as if it were the delta.
+      data: { success: true, new_streak: 4, new_saved_mins: 120, new_total_xp: 615, badges: [] },
+      error: null
+    };
+
+    await renderApp();
+
+    await user.click(await screen.findByRole('button', { name: /destroy/i }));
+    await waitFor(
+      () => expect(screen.getByText('ACCEPT MISSION & OPEN CAMERA')).toBeInTheDocument(),
+      { timeout: 3000 }
+    );
+    await user.click(screen.getByText('ACCEPT MISSION & OPEN CAMERA'));
+
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
+    await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
+
+    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
+
+    const drawn = fake2dContext.fillText.mock.calls.map((c) => String(c[0]));
+    expect(drawn).toContain('+15 XP');
+    expect(drawn).toContain('615');
+    expect(drawn).toContain('4 days');
+    expect(drawn).toContain('BOREDOM SLAYER');
+    // The minutes counter never appears on the card.
+    expect(drawn.some((t) => t.includes('120'))).toBe(false);
   });
 });

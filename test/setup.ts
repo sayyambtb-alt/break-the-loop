@@ -26,7 +26,7 @@ class FakeImage {
 // @ts-expect-error - test stub, not a full Image implementation
 window.Image = FakeImage;
 
-const fake2dContext = {
+export const fake2dContext = {
   drawImage: vi.fn(),
   fillRect: vi.fn(),
   fillText: vi.fn(),
@@ -35,13 +35,21 @@ const fake2dContext = {
   fill: vi.fn(),
   stroke: vi.fn(),
   roundRect: vi.fn(),
+  // The share cards clip the rarity ribbon to the card's rounded corners.
+  save: vi.fn(),
+  restore: vi.fn(),
+  clip: vi.fn(),
+  // measureText drives the quote wrapper; a fixed small width means every
+  // brief fits on one line here, which is fine — the wrapping itself is
+  // covered by a unit test that stubs a realistic width.
   measureText: vi.fn(() => ({ width: 10 })),
   createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
   set fillStyle(_v: unknown) {},
   set strokeStyle(_v: unknown) {},
   set lineWidth(_v: unknown) {},
   set font(_v: unknown) {},
-  set textAlign(_v: unknown) {}
+  set textAlign(_v: unknown) {},
+  set globalAlpha(_v: unknown) {}
 };
 
 // @ts-expect-error - jsdom has no real canvas backend; stub just enough
@@ -56,6 +64,10 @@ HTMLCanvasElement.prototype.toBlob = vi.fn(function (callback: BlobCallback) {
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
 
 beforeEach(() => {
+  // vi.fn() mocks created at module load aren't reset by restoreAllMocks, so
+  // the canvas calls would otherwise pile up across test files.
+  fake2dContext.fillText.mockClear();
+  fake2dContext.fillRect.mockClear();
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   vi.spyOn(window, 'confirm').mockImplementation(() => true);
   vi.spyOn(window, 'prompt').mockImplementation(() => 'Not appropriate for this app');

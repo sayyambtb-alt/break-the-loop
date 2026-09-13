@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
+import Overlay from "./components/Overlay";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
@@ -63,8 +64,6 @@ const getRankProgress = (totalXp: number): number => {
    Colour rule baked into these: white type only ever sits on ember-deep
    (5.18:1), never on the brighter ember, which is large-text-only at 3.56:1.
 --------------------------------------------------------------------------- */
-const SCRIM =
-  'fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-stone-950/95 p-4 backdrop-blur-md';
 const PANEL = 'relative w-full max-w-sm rounded-3xl sticker bg-white p-5 sm:p-6';
 const PANEL_WIDE = 'relative w-full max-w-md rounded-3xl sticker bg-white p-5 text-left';
 const CARD = 'w-full rounded-3xl sticker bg-white';
@@ -1982,181 +1981,303 @@ export default function Home() {
     }
   };
 
-  const generateShareCard = (newStreak: number, newSavedMins: number) => {
+  /* -------------------------------------------------------------------------
+     Share cards
+     -------------------------------------------------------------------------
+     These are the only part of the product that leaves the app — they get
+     posted to Instagram and WhatsApp, where they are the whole first
+     impression. They were still drawn in the pre-redesign palette (navy
+     #090d16 grounds, rose #f43f5e accents, generic sans-serif), so the most
+     public artifact looked like a different product from the one that made it.
+
+     They are redrawn here in the same language as the app: cream paper, an ink
+     hairline with a flat offset shadow, Space Grotesk, and ember/gold accents.
+
+     They also printed the wrong numbers. The mission card's "IRL XP GAINED"
+     read new_saved_mins — a cumulative minutes total, shown with a "+" as if
+     it were the XP just earned. The recap's headline figure was the same
+     minutes count labelled XP, and its "Highest Rank Unlocked" was whatever
+     badge happened to be last in the array, not the rank the app actually
+     computes from total_xp.
+  --------------------------------------------------------------------------- */
+
+  const CARD_INK = '#1C1410';
+  const CARD_CREAM = '#FFF3E2';
+  const CARD_CREAM_DEEP = '#FBE3C4';
+  const CARD_EMBER = '#C2410C';
+  const CARD_GOLD = '#F5A524';
+  const CARD_MUTED = '#6B5B50';
+  const DISPLAY = '"Space Grotesk", "Inter", sans-serif';
+  const BODY = '"Inter", sans-serif';
+
+  // Ink hairline + flat offset shadow, the .sticker recipe from globals.css
+  // expressed on a canvas.
+  const stickerBox = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radius: number,
+    fill: string
+  ) => {
+    ctx.fillStyle = CARD_INK;
+    ctx.beginPath();
+    ctx.roundRect(x + 14, y + 14, w, h, radius);
+    ctx.fill();
+
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, radius);
+    ctx.fill();
+
+    ctx.strokeStyle = CARD_INK;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, radius);
+    ctx.stroke();
+  };
+
+  // The printed-paper halftone, matching the .halftone class.
+  const halftone = (ctx: CanvasRenderingContext2D, alpha: number) => {
+    ctx.fillStyle = CARD_INK;
+    ctx.globalAlpha = alpha;
+    for (let y = 0; y < 1920; y += 26) {
+      for (let x = 0; x < 1080; x += 26) {
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  // The struck-through LOOP from the header, drawn as the wordmark.
+  const wordmark = (ctx: CanvasRenderingContext2D, y: number) => {
+    ctx.textAlign = 'center';
+    ctx.font = `700 54px ${DISPLAY}`;
+    const left = 'BREAK THE ';
+    const right = 'LOOP';
+    const lw = ctx.measureText(left).width;
+    const rw = ctx.measureText(right).width;
+    const startX = 540 - (lw + rw) / 2;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = CARD_INK;
+    ctx.fillText(left, startX, y);
+    ctx.fillStyle = CARD_EMBER;
+    ctx.fillText(right, startX + lw, y);
+
+    ctx.fillStyle = CARD_EMBER;
+    ctx.fillRect(startX + lw, y - 16, rw, 6);
+    ctx.textAlign = 'center';
+  };
+
+  // Wraps to a fixed width and returns the lines, so callers can lay out
+  // around the real height instead of guessing at it (the old card pinned its
+  // stats to y=1050 regardless, leaving ~350px of dead space on short quests).
+  const wrapLines = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+
+  const statBlock = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    label: string,
+    value: string,
+    accent: string,
+    fill: string
+  ) => {
+    stickerBox(ctx, x, y, w, 190, 28, fill);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 28px ${DISPLAY}`;
+    ctx.fillText(label, x + w / 2, y + 62);
+    ctx.fillStyle = accent;
+    ctx.font = `700 64px ${DISPLAY}`;
+    ctx.fillText(value, x + w / 2, y + 138);
+  };
+
+  // xpGained is the XP this mission actually paid out; totalXpNow is the
+  // lifetime figure the rank is derived from. They are different numbers and
+  // the card says which is which.
+  const generateShareCard = (newStreak: number, xpGained: number, totalXpNow: number) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
-    bgGradient.addColorStop(0, '#090d16');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = CARD_CREAM;
     ctx.fillRect(0, 0, 1080, 1920);
+    halftone(ctx, 0.05);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
-    ctx.beginPath();
-    ctx.arc(540, 400, 350, 0, Math.PI * 2);
-    ctx.fill();
+    wordmark(ctx, 180);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 52px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 220);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText('M U M B A I   ·   R E A L   W O R L D', 540, 236);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
+    const quoteFont = `700 56px ${DISPLAY}`;
+    ctx.font = quoteFont;
+    const quest = activeQuest || 'Completed a local real-world mission in Mumbai';
+    const lines = wrapLines(ctx, `“${quest}”`, 700);
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
+    // The card is sized to its content and then centred in the band between
+    // the header and the footer, rather than pinned to a fixed frame. The old
+    // card forced its stats to y=1050 and its panel to 1100px tall whatever
+    // the quest said, so a short brief left ~350px of empty card.
+    const quoteTop = 196;
+    const briefH = quoteTop + lines.length * 74 + 40;
+    const statsGap = 70;
+    const statsH = 190;
+    const rankGap = 78;
+    const contentH = briefH + statsGap + statsH + rankGap;
+
+    const bandTop = 300;
+    const bandBottom = 1620;
+    const briefTop = Math.max(bandTop, bandTop + (bandBottom - bandTop - contentH) / 2);
+    stickerBox(ctx, 90, briefTop, 860, briefH, 48, '#FFFFFF');
+
+    // Rarity ribbon across the top of the brief.
+    const ribbonFill =
+      activeQuestRarity === 'legendary' ? CARD_GOLD : activeQuestRarity === 'rare' ? '#FFE4E9' : CARD_CREAM_DEEP;
+    ctx.save();
     ctx.beginPath();
-    ctx.roundRect(100, 360, 880, 1100, 40);
-    ctx.fill();
-    ctx.stroke();
+    ctx.roundRect(90, briefTop, 860, briefH, 48);
+    ctx.clip();
+    ctx.fillStyle = ribbonFill;
+    ctx.fillRect(90, briefTop, 860, 110);
+    ctx.fillStyle = CARD_INK;
+    ctx.fillRect(90, briefTop + 104, 860, 6);
+    ctx.restore();
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.roundRect(140, 420, 800, 80, 20);
-    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText(
+      `${(isExplorerMode ? 'EXPLORER' : mode).toUpperCase()} MISSION BROKEN`,
+      140,
+      briefTop + 68
+    );
 
-    ctx.fillStyle = '#fda4af';
-    ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
+    ctx.textAlign = 'right';
+    ctx.font = `700 32px ${DISPLAY}`;
+    ctx.fillText(`+${xpGained} XP`, 900, briefTop + 68);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '600 42px sans-serif';
-    const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
-    const words = text.split(' ');
-    let line = '';
-    let y = 600;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = CARD_INK;
+    ctx.font = quoteFont;
+    lines.forEach((line, i) => {
+      ctx.fillText(line, 540, briefTop + quoteTop + i * 74);
+    });
 
-    for (let i = 0; i < words.length; i++) {
-      const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > 780 && i > 0) {
-        ctx.fillText(line, 540, y);
-        line = words[i] + ' ';
-        y += 60;
-      } else {
-        line = testLine;
-      }
-    }
-    ctx.fillText(line, 540, y);
+    // Stats sit under the brief wherever it actually ends.
+    const statsY = briefTop + briefH + statsGap;
+    statBlock(ctx, 90, statsY, 410, 'STREAK', `${newStreak} days`, CARD_INK, CARD_CREAM_DEEP);
+    statBlock(ctx, 540, statsY, 410, 'IRL XP', `${totalXpNow}`, CARD_EMBER, '#FFEAD8');
 
-    const statsY = Math.max(y + 100, 1050);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText(getRankTitle(totalXpNow).toUpperCase(), 540, statsY + 268);
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('IRL XP GAINED', 760, statsY);
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 42px ${DISPLAY}`;
+    ctx.fillText(`@${handle}`, 540, 1740);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
-
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '700 40px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '500 32px sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `500 30px ${BODY}`;
+    ctx.fillText('breaktheloopapp.in', 540, 1800);
 
     setCardDataUrl(canvas.toDataURL('image/png'));
   };
 
-  const generateSpotifyWrappedCard = () => {
+  // The auto-surfaced Recap fires from a setTimeout inside the completion
+  // handler, where streak/xp/badges in scope are still the pre-completion
+  // values. Taking them as arguments lets that path pass the fresh numbers
+  // instead of showing you a recap of the run before the one you just did.
+  const generateSpotifyWrappedCard = (
+    recapStreak: number = streak,
+    recapTotalXp: number = totalXp,
+    recapBadges: string[] = badges
+  ) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
-    bgGradient.addColorStop(0, '#0f172a');
-    bgGradient.addColorStop(0.3, '#1e1b4b');
-    bgGradient.addColorStop(0.7, '#881337');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = CARD_CREAM;
     ctx.fillRect(0, 0, 1080, 1920);
+    halftone(ctx, 0.05);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.arc(200, 300, 250, 0, Math.PI * 2);
-    ctx.fill();
+    wordmark(ctx, 170);
 
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-    ctx.beginPath();
-    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 48px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 200);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText('Y O U R   I R L   R E C A P', 540, 226);
 
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
+    stickerBox(ctx, 90, 300, 860, 1210, 48, '#FFFFFF');
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 340, 880, 1250, 40);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 62px ${DISPLAY}`;
+    ctx.fillText('YOU BROKE', 540, 430);
+    ctx.fillText('THE ROUTINE', 540, 500);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 56px sans-serif';
-    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `500 30px ${BODY}`;
+    ctx.fillText('Everything you have done outside, so far.', 540, 560);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
+    // Lifetime XP, not the minutes counter the old card printed here.
+    statBlock(ctx, 150, 620, 340, 'IRL XP', `${recapTotalXp}`, CARD_EMBER, '#FFEAD8');
+    statBlock(ctx, 560, 620, 340, 'STREAK', `${recapStreak}d`, CARD_INK, CARD_CREAM_DEEP);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} XP`, 540, 680);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
+    // The real rank the app computes, rather than the last badge in the array.
+    stickerBox(ctx, 150, 890, 750, 190, 28, CARD_GOLD);
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 28px ${DISPLAY}`;
+    ctx.fillText('RANK', 525, 952);
+    ctx.font = `700 56px ${DISPLAY}`;
+    ctx.fillText(getRankTitle(recapTotalXp).toUpperCase(), 525, 1024);
 
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '900 80px sans-serif';
-    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
+    const topBadge = recapBadges[recapBadges.length - 1] || '🌱 First Step';
+    stickerBox(ctx, 150, 1150, 750, 190, 28, '#FFF0CF');
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 28px ${DISPLAY}`;
+    ctx.fillText('LATEST BADGE', 525, 1212);
+    ctx.fillStyle = '#7A4B05';
+    ctx.font = `700 48px ${DISPLAY}`;
+    ctx.fillText(topBadge, 525, 1286);
 
-    const topBadge = badges[badges.length - 1] || '🌱 First Step';
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(topBadge, 540, 1120);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
+    const partners = friendsList.length;
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 40px ${DISPLAY}`;
+    ctx.fillText(`${partners} raid ${partners === 1 ? 'partner' : 'partners'}`, 540, 1430);
 
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 42px ${DISPLAY}`;
+    ctx.fillText(`@${handle}`, 540, 1700);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `500 30px ${BODY}`;
+    ctx.fillText('breaktheloopapp.in', 540, 1760);
 
     const url = canvas.toDataURL('image/png');
     setWrappedCardDataUrl(url);
@@ -2228,17 +2349,27 @@ export default function Home() {
           }
         }
 
+        // The XP this mission paid out and the lifetime total are different
+        // numbers, and the card labels them separately. Fall back to the
+        // pre-completion total plus the reward if the RPC omits the total.
+        const freshStreak = data.new_streak ?? streak;
+        const freshTotalXp = data.new_total_xp ?? totalXp + activeQuestXp;
+        const freshBadges: string[] = Array.isArray(data.badges) ? data.badges : badges;
+
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
-          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+          generateShareCard(freshStreak || 0, activeQuestXp, freshTotalXp);
         } catch {
         }
 
         // Auto-surface the Recap at a genuine peak moment, after the completion
         // animation has had time to play rather than instantly on top of it.
+        // The values are passed in: this closure captured the pre-completion
+        // state, so reading them off the component would recap the run before
+        // the one that just triggered it.
         if (justEarnedNewBadge || wasLegendary) {
           setTimeout(() => {
-            generateSpotifyWrappedCard();
+            generateSpotifyWrappedCard(freshStreak, freshTotalXp, freshBadges);
           }, 2500);
         }
       }
@@ -2409,7 +2540,12 @@ export default function Home() {
         </div>
       </nav>
 
-      <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 px-4 pb-28 pt-4 lg:max-w-5xl lg:grid-cols-[minmax(0,36rem)_20rem] lg:items-start lg:justify-center lg:gap-7 lg:px-8 lg:pb-12 lg:pt-5">
+      {/* The board column takes the leftover width rather than being pinned to
+          36rem and centred. Fixed columns plus lg:justify-center left the pair
+          18px narrower than the container, so the board's left edge and the
+          rail's right edge both sat inside the wordmark and nav above them —
+          three left edges on one page that should agree and didn't. */}
+      <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 px-4 pb-28 pt-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-7 lg:px-8 lg:pb-12 lg:pt-5">
         {tab === 'quest' ? (
           <section className="flex flex-col gap-4">
             {/* Track banner: says which of the two tracks you're on and what it
@@ -2648,14 +2784,17 @@ export default function Home() {
             {/* ---------------- Active mission workspace ---------------- */}
             {activeQuest && !isCompleted && (
               <div className={`${CARD} animate-rise p-4 sm:p-5`}>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                {/* justify-between here dropped the second chip to its own
+                    line and shoved it back to the left as soon as the pair no
+                    longer fit, which is every phone width. They just wrap. */}
+                <div className="flex flex-wrap items-center gap-2">
                   <span className={CHIP_EMBER}>
                     <span aria-hidden="true">🎯</span>
                     {isExplorerMode ? 'EXPLORER' : mode.toUpperCase()} MISSION ASSIGNED
                   </span>
                   <span className={CHIP_GOLD}>
                     <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-full bg-gold-deep" />
-                    Active Mission
+                    Live
                   </span>
                 </div>
 
@@ -2747,7 +2886,11 @@ export default function Home() {
                       ) : (
                         messages.map((m) => (
                           <div
-                            key={m.id || Math.random()}
+                            // Math.random() as a key gave every message a new
+                            // identity on every render, so React tore down and
+                            // rebuilt the whole list each time — losing any
+                            // text selection in it. created_at is stable.
+                            key={m.id || `${m.sender_handle}-${m.created_at}`}
                             className="flex items-start justify-between gap-2 rounded-xl sticker-flat bg-white px-2.5 py-2"
                           >
                             <p className="min-w-0 text-xs text-ink">
@@ -3068,14 +3211,23 @@ export default function Home() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <div className="rounded-2xl sticker-flat bg-cream px-3 py-2.5 text-center">
-                  <p className="eyebrow text-muted">Loop streak</p>
-                  <p className="mt-0.5 font-display text-xl font-bold text-ink">{streak} Days 🔥</p>
+              {/* The tile under this label used to print time_saved_mins — a
+                  minutes count — while total_xp was what actually drove the
+                  rank meter directly above it. The card contradicted itself:
+                  "90 XP" sitting under "285 XP to Street Legend" at 415 XP.
+                  IRL XP means total_xp; minutes get their own tile. */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl sticker-flat bg-cream px-2 py-2.5 text-center">
+                  <p className="eyebrow text-muted">Streak</p>
+                  <p className="mt-0.5 font-display text-lg font-bold text-ink">{streak}d 🔥</p>
                 </div>
-                <div className="rounded-2xl sticker-flat bg-ember-wash px-3 py-2.5 text-center">
+                <div className="rounded-2xl sticker-flat bg-ember-wash px-2 py-2.5 text-center">
                   <p className="eyebrow text-muted">IRL XP</p>
-                  <p className="mt-0.5 font-display text-xl font-bold text-ember-ink">{savedMins} XP ⚡</p>
+                  <p className="mt-0.5 font-display text-lg font-bold text-ember-ink">{totalXp} ⚡</p>
+                </div>
+                <div className="rounded-2xl sticker-flat bg-gold-wash px-2 py-2.5 text-center">
+                  <p className="eyebrow text-muted">Offline</p>
+                  <p className="mt-0.5 font-display text-lg font-bold text-gold-ink">{savedMins}m 🌤️</p>
                 </div>
               </div>
 
@@ -3097,7 +3249,7 @@ export default function Home() {
                 <button onClick={() => setShowFriendsModal(true)} className={BTN_MINI}>
                   🤝 Squad ({friendsList.length})
                 </button>
-                <button onClick={generateSpotifyWrappedCard} className={BTN_MINI}>
+                <button onClick={() => generateSpotifyWrappedCard()} className={BTN_MINI}>
                   🎧 Recap
                 </button>
                 <button
@@ -3196,7 +3348,7 @@ export default function Home() {
 
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
-        <div className={`${SCRIM} z-[60]`}>
+        <Overlay label="Explorer profile" onClose={() => setSelectedProfile(null)} className="z-[60]">
           <div className={`${PANEL} my-auto space-y-4`}>
             <button onClick={() => setSelectedProfile(null)} className={CLOSE_BTN} aria-label="Close">
               ✕
@@ -3237,10 +3389,12 @@ export default function Home() {
                 <p className="eyebrow text-muted">Streak</p>
                 <p className="mt-0.5 font-display text-base font-bold text-ink">{selectedProfile.streak} Days 🔥</p>
               </div>
+              {/* Same fix as the player panel: the rank title rendered above
+                  reads total_xp, so the XP stat has to read it too. */}
               <div className="rounded-2xl sticker-flat bg-ember-wash px-3 py-2.5 text-center">
                 <p className="eyebrow text-muted">IRL XP</p>
                 <p className="mt-0.5 font-display text-base font-bold text-ember-ink">
-                  {selectedProfile.time_saved_mins} ⚡
+                  {selectedProfile.total_xp ?? 0} ⚡
                 </p>
               </div>
             </div>
@@ -3286,12 +3440,12 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Admin Moderation Queue Modal */}
       {showReportsModal && userEmail === ADMIN_EMAIL && (
-        <div className={SCRIM}>
+        <Overlay label="Moderation queue" onClose={() => setShowReportsModal(false)}>
           <div className={`${PANEL_WIDE} my-auto space-y-4`}>
             <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
               <h2 className="eyebrow text-ink">🛡️ Moderation Reports Queue ({adminReports.length})</h2>
@@ -3379,12 +3533,12 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Admin Pending Quest Suggestions Modal */}
       {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
-        <div className={SCRIM}>
+        <Overlay label="Pending quest suggestions" onClose={() => setShowPendingQuestsModal(false)}>
           <div className={`${PANEL_WIDE} my-auto space-y-4`}>
             <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
               <h2 className="eyebrow text-ink">📝 Pending Quest Suggestions ({pendingQuests.length})</h2>
@@ -3427,11 +3581,11 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
-        <div className={SCRIM}>
+        <Overlay label="Manage hidden gems" onClose={() => setShowPendingGemsModal(false)}>
           <div className={`${PANEL_WIDE} my-auto space-y-4`}>
             <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
               <h2 className="eyebrow text-ink">🗺️ Manage Hidden Gems ({pendingGems.length})</h2>
@@ -3545,12 +3699,12 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
-        <div className={SCRIM}>
+        <Overlay label="Developer access" onClose={() => setShowDevModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-left`}>
             <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
               <h2 className="eyebrow text-ink">🛠️ Developer Tools</h2>
@@ -3595,12 +3749,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Handle Setup Modal */}
       {showHandleModal && (
-        <div className={SCRIM}>
+        <Overlay label="Choose your explorer tag">
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <div aria-hidden="true" className="text-3xl">🏷️</div>
             <h2 className="font-display text-xl font-bold text-ink">CHOOSE YOUR EXPLORER TAG</h2>
@@ -3625,12 +3779,12 @@ export default function Home() {
               Claim Tag &amp; Start
             </button>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Auth Modal */}
       {(!isLoggedIn || showAuthModal) && !showHandleModal && (
-        <div className={SCRIM}>
+        <Overlay label="Verify your email" onClose={isLoggedIn ? () => setShowAuthModal(false) : undefined}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             {isLoggedIn && (
               <button onClick={() => setShowAuthModal(false)} className={CLOSE_BTN} aria-label="Close">
@@ -3698,12 +3852,12 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Save My Progress Modal */}
       {showSaveProgressModal && (
-        <div className={SCRIM}>
+        <Overlay label="Save your progress" onClose={() => setShowSaveProgressModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <button onClick={() => setShowSaveProgressModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
@@ -3728,12 +3882,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Suggest a Quest Modal */}
       {showSuggestQuestModal && (
-        <div className={SCRIM}>
+        <Overlay label="Suggest a quest" onClose={() => setShowSuggestQuestModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <button onClick={() => setShowSuggestQuestModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
@@ -3771,11 +3925,11 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {showSuggestGemModal && (
-        <div className={SCRIM}>
+        <Overlay label="Suggest a hidden gem" onClose={() => setShowSuggestGemModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <button onClick={() => setShowSuggestGemModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
@@ -3825,12 +3979,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* First-visit Welcome */}
       {showWelcomeModal && (
-        <div className={SCRIM}>
+        <Overlay label="Welcome to Break The Loop" onClose={dismissWelcomeModal}>
           <div className="relative my-auto w-full max-w-sm overflow-hidden rounded-3xl sticker bg-white text-center">
             <div className="border-b-2 border-ink bg-gold px-5 py-5">
               <div aria-hidden="true" className="text-4xl">👋</div>
@@ -3851,12 +4005,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Sign In / Recover Account Modal */}
       {showRecoverModal && (
-        <div className={SCRIM}>
+        <Overlay label="Sign in to an existing account" onClose={() => setShowRecoverModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <button onClick={() => setShowRecoverModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
@@ -3911,12 +4065,12 @@ export default function Home() {
               </>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Safety Modal */}
       {showSafetyModal && (
-        <div className={SCRIM}>
+        <Overlay label="Safety guidelines" onClose={() => setShowSafetyModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <div aria-hidden="true" className="text-3xl">🛡️</div>
             <h2 className="font-display text-xl font-bold text-ink">SAFETY FIRST</h2>
@@ -3937,12 +4091,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Friends List Modal */}
       {showFriendsModal && (
-        <div className={SCRIM}>
+        <Overlay label="Raid squad" onClose={() => setShowFriendsModal(false)}>
           <div className={`${PANEL} my-auto space-y-4`}>
             <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
               <h2 className="font-display text-sm font-bold text-ink">🤝 Raid Squad ({friendsList.length})</h2>
@@ -4057,12 +4211,12 @@ export default function Home() {
             </div>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Journey Recap Modal */}
       {showWrappedModal && (
-        <div className={SCRIM}>
+        <Overlay label="Your IRL recap" onClose={() => setShowWrappedModal(false)}>
           <div className={`${PANEL} my-auto space-y-4 text-center`}>
             <button onClick={() => setShowWrappedModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
@@ -4077,7 +4231,7 @@ export default function Home() {
               <span aria-hidden="true">📲 </span>Share Recap to Story / WhatsApp
             </button>
           </div>
-        </div>
+        </Overlay>
       )}
     </main>
   );
