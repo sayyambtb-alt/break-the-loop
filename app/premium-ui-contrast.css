@@ -1,0 +1,31 @@
+/* Contrast guardrails for the premium visual layer.
+   Bright ember remains available for large/display decoration; normal-size
+   white labels use a deeper ember that clears WCAG AA. */
+:root {
+  --accent:#c74818;
+  --accent-deep:#b94419;
+  --accent-vivid:#f15a24;
+}
+
+.primary-button,
+.start-button,
+.explore-panel>button:first-of-type,
+.share-story-button {
+  background:#c74818;
+  color:#fff;
+}
+.primary-button:hover:not(:disabled),
+.start-button:hover:not(:disabled),
+.explore-panel>button:first-of-type:hover:not(:disabled),
+.share-story-button:hover {
+  background:#b94419;
+}
+.neighborhood-chips button[aria-pressed=true] {
+  background:#c74818;
+  border-color:#c74818;
+  color:#fff;
+}
+.main-nav [aria-current=page] { color:#231f1b; }
+@media(max-width:600px) {
+  .main-nav [aria-current=page] { color:#9b3918; }
+}
