@@ -28,6 +28,7 @@ window.Image = FakeImage;
 
 const fake2dContext = {
   drawImage: vi.fn(),
+  transform: vi.fn(),
   fillRect: vi.fn(),
   fillText: vi.fn(),
   beginPath: vi.fn(),
@@ -54,6 +55,10 @@ HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,fake'
 HTMLCanvasElement.prototype.toBlob = vi.fn(function (callback: BlobCallback) {
   callback(new Blob(['fake-image-bytes'], { type: 'image/jpeg' }));
 });
+
+HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); };
+window.matchMedia = vi.fn().mockReturnValue({ matches: false });
 
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
 

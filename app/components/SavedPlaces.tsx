@@ -1,25 +1,39 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react';
 import type { GemDetails } from './SuspenseMissionCard';
 import AppIcon from './AppIcon';
 import { getPlaceCity, getPlaceMapsUrl } from '../lib/city';
 
+const subscribe = (notify: () => void) => {
+  window.addEventListener('storage', notify);
+  window.addEventListener('btl:saved-places', notify);
+  return () => { window.removeEventListener('storage', notify); window.removeEventListener('btl:saved-places', notify); };
+};
+const serverSnapshot = () => null;
+
 export default function SavedPlaces({ userId, activeGem }: { userId: string | null; activeGem: GemDetails | null }) {
-  const [places, setPlaces] = useState<GemDetails[]>([]);
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState('');
+  const [writeError, setWriteError] = useState('');
   const key = `btl_saved_places_${userId ?? 'visitor'}`;
-  useEffect(() => {
-    setPlaces([]);
-    try {
-      const stored: unknown = JSON.parse(localStorage.getItem(key) || '[]');
-      if (Array.isArray(stored)) setPlaces(stored.filter((p): p is GemDetails => p && typeof p.name === 'string' && typeof p.neighborhood === 'string' && typeof p.description === 'string' && (p.city === undefined || typeof p.city === 'string')).slice(0, 100));
-    } catch { setError('Saved places could not be read on this device.'); }
-    setReady(true);
+  const getSnapshot = useCallback(() => {
+    try { return localStorage.getItem(key) || '[]'; }
+    catch { return 'storage-unavailable'; }
   }, [key]);
+  const raw = useSyncExternalStore(subscribe, getSnapshot, serverSnapshot);
+  const ready = raw !== null;
+  const { places, readError } = useMemo(() => {
+    try {
+      const stored: unknown = JSON.parse(raw || '[]');
+      if (!Array.isArray(stored)) throw new Error('Invalid saved places');
+      return { places: stored.filter((p): p is GemDetails => p && typeof p.name === 'string' && typeof p.neighborhood === 'string' && typeof p.description === 'string' && (p.city === undefined || typeof p.city === 'string')).slice(0, 100), readError: '' };
+    } catch { return { places: [], readError: 'Saved places could not be read on this device.' }; }
+  }, [raw]);
+  const error = writeError || readError;
   const update = (next: GemDetails[]) => {
-    try { localStorage.setItem(key, JSON.stringify(next)); setPlaces(next); setError(''); }
-    catch { setError('This browser could not save your places. Please allow site storage and try again.'); }
+    try {
+      localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(new Event('btl:saved-places'));
+      setWriteError('');
+    } catch { setWriteError('This browser could not save your places. Please allow site storage and try again.'); }
   };
   const matches = (a: GemDetails, b: GemDetails) => a.name === b.name && a.neighborhood === b.neighborhood && getPlaceCity(a) === getPlaceCity(b);
   const isSaved = activeGem && places.some(p => matches(p, activeGem));
