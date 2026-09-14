@@ -9,8 +9,9 @@ export const LAUNCH_CITY: City = {
   slug: 'mumbai',
   name: 'Mumbai',
   neighborhoods: [
-    'Colaba', 'Fort', 'Marine Drive', 'Dadar', 'Matunga', 'Mahim', 'Wadala', 'Sewri',
-    'Bandra', 'Worli', 'Andheri', 'Juhu', 'Powai', 'Borivali',
+    'Colaba', 'Fort', 'Marine Drive', 'Girgaum', 'Malabar Hill', 'Worli',
+    'Dadar', 'Matunga', 'Mahim', 'Sion', 'Wadala', 'Sewri',
+    'Bandra', 'Andheri', 'Juhu', 'Powai', 'Borivali', 'Gorai',
   ],
 };
 
