@@ -38,7 +38,7 @@ describe('friends leaderboard', () => {
 
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: /🤝 Squad/ }));
+    await user.click(screen.getByRole('button', { name: /^Squad \(\d+\)/ }));
     const heading = await screen.findByText(/Raid Squad/);
     const modal = within(heading.closest('.rounded-3xl') as HTMLElement);
 

@@ -6,10 +6,15 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "./globals.css";
+import "./premium-ui.css";
+import "./premium-ui-refinement.css";
+import "./premium-ui-final.css";
+import "./premium-ui-contrast.css";
+import "./premium-ui-cleanup.css";
 
 export const metadata: Metadata = {
   title: "Break The Loop",
-  description: "Destroy boredom with real-world micro-missions.",
+  description: "Discover real-world missions, local hidden gems, and people to explore with. Less scrolling. More living.",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -26,8 +31,6 @@ export const viewport: Viewport = {
   themeColor: "#EA580C",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
   viewportFit: "cover",
 };
 
@@ -38,7 +41,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="antialiased bg-[#FFF8F0] text-stone-900">
+      <body className="antialiased">
         {children}
       </body>
     </html>

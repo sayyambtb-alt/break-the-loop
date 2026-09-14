@@ -2,7 +2,11 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import AppIcon from './components/AppIcon';
+import SavedPlaces from './components/SavedPlaces';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
+import { createStoryCard, type StoryCardData } from './lib/story-cards';
+import { CURRENT_CITY } from './lib/city';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
@@ -25,7 +29,7 @@ const RANK_TIERS: { minXp: number; title: string }[] = [
   { minXp: 100, title: 'Chaos Local' },
   { minXp: 300, title: 'Boredom Slayer' },
   { minXp: 700, title: 'Street Legend' },
-  { minXp: 1500, title: 'Mumbai Made' },
+  { minXp: 1500, title: 'Loop Breaker' },
 ];
 
 const getRankTitle = (totalXp: number): string => {
@@ -142,6 +146,7 @@ export default function Home() {
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
   const [isExplorerMode, setIsExplorerMode] = useState(false);
+  const [neighborhoodSearch, setNeighborhoodSearch] = useState('');
   const [selectedNeighborhood, setSelectedNeighborhood] = useState<string | null>(null);
   const [hiddenGemSubmittedBy, setHiddenGemSubmittedBy] = useState<string | null>(null);
   const [activeGem, setActiveGem] = useState<GemDetails | null>(null);
@@ -156,11 +161,6 @@ export default function Home() {
   const [pendingGemCount, setPendingGemCount] = useState<number>(0);
   const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
-  const MUMBAI_NEIGHBORHOODS = [
-    'Colaba', 'Fort', 'Marine Drive', 'Girgaum', 'Malabar Hill', 'Worli',
-    'Dadar', 'Matunga', 'Mahim', 'Sion', 'Wadala', 'Sewri',
-    'Bandra', 'Andheri', 'Juhu', 'Powai', 'Borivali', 'Gorai'
-  ];
   const [isSearching, setIsSearching] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
@@ -172,8 +172,7 @@ export default function Home() {
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [streak, setStreak] = useState(1);
-  const [savedMins, setSavedMins] = useState(15);
+  const [streak, setStreak] = useState(0);
   const [totalXp, setTotalXp] = useState(0);
   const [handle, setHandle] = useState('Explorer');
   const [badges, setBadges] = useState<string[]>(['🌱 First Step']);
@@ -237,6 +236,7 @@ export default function Home() {
   const [leaderboard, setLeaderboard] = useState<{ handle: string; total_xp: number; streak: number; is_self: boolean }[]>([]);
   const [showWrappedModal, setShowWrappedModal] = useState(false);
   const [wrappedCardDataUrl, setWrappedCardDataUrl] = useState<string | null>(null);
+  const [pendingRecap, setPendingRecap] = useState<Extract<StoryCardData, { kind: 'recap' }> | null>(null);
   const [incomingInvite, setIncomingInvite] = useState<IncomingInvite | null>(null);
   const [sendingInviteTo, setSendingInviteTo] = useState<string | null>(null);
 
@@ -440,7 +440,8 @@ export default function Home() {
           setActiveGem({
             name: joinResult.gem_name,
             neighborhood: joinResult.neighborhood,
-            description: joinResult.gem_description
+            description: joinResult.gem_description,
+            city: CURRENT_CITY.name
           });
           setHiddenGemSubmittedBy(joinResult.gem_submitted_by || null);
         }
@@ -1020,8 +1021,7 @@ export default function Home() {
   const handleSignOut = async () => {
     cleanupAllChannels();
     if (typeof window !== 'undefined') {
-      localStorage.clear();
-      sessionStorage.clear();
+      localStorage.removeItem('btl_user_handle');
     }
     await supabase.auth.signOut();
     const { data } = await supabase.auth.signInAnonymously();
@@ -1034,8 +1034,8 @@ export default function Home() {
     setOtpInput('');
     setEmailInput('');
     setHandle('Explorer');
-    setStreak(1);
-    setSavedMins(15);
+    setStreak(0);
+    setTotalXp(0);
     setBadges(['🌱 First Step']);
     setFriendsList([]);
     if (uid) {
@@ -1053,8 +1053,7 @@ export default function Home() {
           setHandle(data.handle);
           if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', data.handle);
         }
-        setStreak(data.streak || 1);
-        setSavedMins(data.time_saved_mins || 15);
+        setStreak(data.streak ?? 0);
         setTotalXp(data.total_xp || 0);
         if (data.badges) setBadges(data.badges);
         if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
@@ -1155,7 +1154,7 @@ export default function Home() {
 
   const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
     if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${selectedMode.toUpperCase()} mode.`);
+      setAuthModalReason(`Verify your email to match with other ${CURRENT_CITY.name} explorers in ${selectedMode.toUpperCase()} mode.`);
       setShowAuthModal(true);
       return;
     }
@@ -1249,7 +1248,7 @@ export default function Home() {
     setActiveQuestCredit(null);
     setHiddenGemSubmittedBy(data.submitted_by_handle || null);
     setIsMissionAccepted(false);
-    setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description });
+    setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description, city: CURRENT_CITY.name });
     // activeQuest still drives photo-proof, completion logging and the share
     // card, so it stays set even though the gem card renders from activeGem.
     setActiveQuest(`📍 ${data.name} (${data.neighborhood}) — ${data.description}`);
@@ -1317,7 +1316,8 @@ export default function Home() {
           setActiveGem({
             name: matchResult.gem_name,
             neighborhood: matchResult.neighborhood,
-            description: matchResult.gem_description
+            description: matchResult.gem_description,
+            city: CURRENT_CITY.name
           });
           setHiddenGemSubmittedBy(matchResult.gem_submitted_by || null);
           setActiveQuest(matchResult.quest_text);
@@ -1511,7 +1511,7 @@ export default function Home() {
     }
 
     if ((mode === 'duo' || mode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
-      setAuthModalReason(`Verify your email to match with other Mumbai explorers in ${mode.toUpperCase()} mode.`);
+      setAuthModalReason(`Verify your email to match with other ${CURRENT_CITY.name} explorers in ${mode.toUpperCase()} mode.`);
       setShowAuthModal(true);
       return;
     }
@@ -1583,7 +1583,8 @@ export default function Home() {
             setActiveGem({
               name: payload.new.gem_name,
               neighborhood: payload.new.neighborhood,
-              description: payload.new.gem_description
+              description: payload.new.gem_description,
+              city: CURRENT_CITY.name
             });
             setHiddenGemSubmittedBy(payload.new.gem_submitted_by || null);
           } else {
@@ -1623,7 +1624,7 @@ export default function Home() {
         p_user_id: currentUserId,
         p_mode: mode,
         p_handle: handle,
-        p_city: 'mumbai'
+        p_city: CURRENT_CITY.slug
       });
 
       if (error) {
@@ -1914,186 +1915,36 @@ export default function Home() {
     }
   };
 
-  const generateShareCard = (newStreak: number, newSavedMins: number) => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1920;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
-    bgGradient.addColorStop(0, '#090d16');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, 0, 1080, 1920);
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
-    ctx.beginPath();
-    ctx.arc(540, 400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 52px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 220);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 360, 880, 1100, 40);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.roundRect(140, 420, 800, 80, 20);
-    ctx.fill();
-
-    ctx.fillStyle = '#fda4af';
-    ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '600 42px sans-serif';
-    const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
-    const words = text.split(' ');
-    let line = '';
-    let y = 600;
-
-    for (let i = 0; i < words.length; i++) {
-      const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > 780 && i > 0) {
-        ctx.fillText(line, 540, y);
-        line = words[i] + ' ';
-        y += 60;
-      } else {
-        line = testLine;
-      }
+  const generateRecapCard = () => {
+    try {
+      const url = createStoryCard({ kind: 'recap', handle, cityName: CURRENT_CITY.name, streak, totalXp, rank: getRankTitle(totalXp), friendCount: friendsList.length });
+      if (!url) throw new Error('Canvas unavailable');
+      setWrappedCardDataUrl(url);
+      setShowWrappedModal(true);
+    } catch {
+      showToast('Could not create your recap. Please try again.', 'error');
     }
-    ctx.fillText(line, 540, y);
-
-    const statsY = Math.max(y + 100, 1050);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('IRL XP GAINED', 760, statsY);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
-
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '700 40px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '500 32px sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
-
-    setCardDataUrl(canvas.toDataURL('image/png'));
   };
 
-  const generateSpotifyWrappedCard = () => {
-    const canvas = document.createElement('canvas');
-    canvas.width = 1080;
-    canvas.height = 1920;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
-    bgGradient.addColorStop(0, '#0f172a');
-    bgGradient.addColorStop(0.3, '#1e1b4b');
-    bgGradient.addColorStop(0.7, '#881337');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
-    ctx.fillRect(0, 0, 1080, 1920);
-
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.arc(200, 300, 250, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-    ctx.beginPath();
-    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 48px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 200);
-
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
-
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 340, 880, 1250, 40);
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 56px sans-serif';
-    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
-
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} XP`, 540, 680);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
-
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '900 80px sans-serif';
-    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
-
-    const topBadge = badges[badges.length - 1] || '🌱 First Step';
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(topBadge, 540, 1120);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
-
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
-
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
-
-    const url = canvas.toDataURL('image/png');
-    setWrappedCardDataUrl(url);
-    setShowWrappedModal(true);
-  };
+  // Capture the RPC result at completion. A delayed callback that reads the
+  // previous render's state would show the old XP, streak and rank.
+  useEffect(() => {
+    if (!pendingRecap || !isCompleted) return;
+    const timer = setTimeout(() => {
+      try {
+        const url = createStoryCard(pendingRecap);
+        if (url) {
+          setWrappedCardDataUrl(url);
+          setShowWrappedModal(true);
+        }
+      } catch {
+        // A share-image failure must not interrupt a successfully logged mission.
+      }
+      setPendingRecap(null);
+    }, 2500);
+    // Also cancel if the player leaves the completion screen or unmounts.
+    return () => clearTimeout(timer);
+  }, [pendingRecap, isCompleted]);
 
   const handleCompleteMission = async () => {
     if (!proofImage) {
@@ -2149,7 +2000,6 @@ export default function Home() {
 
         // Safely check for data before setting state so the page does not crash
         if (data.new_streak !== undefined) setStreak(data.new_streak);
-        if (data.new_saved_mins !== undefined) setSavedMins(data.new_saved_mins);
         if (data.badges !== undefined) setBadges(data.badges);
         if (data.new_total_xp !== undefined) setTotalXp(data.new_total_xp);
 
@@ -2160,19 +2010,30 @@ export default function Home() {
           }
         }
 
-        // Wrap card generation in try/catch and provide fallback 0 values
+        const completedStats = {
+          handle,
+          cityName: CURRENT_CITY.name,
+          streak: data.new_streak ?? streak,
+          totalXp: data.new_total_xp ?? totalXp,
+          rank: getRankTitle(data.new_total_xp ?? totalXp),
+        };
+        // Mission XP and lifetime XP are different fields; saved minutes are
+        // neither. Prefer the awarded XP returned by complete_mission.
         try {
-          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+          setCardDataUrl(createStoryCard({
+            kind: 'mission',
+            ...completedStats,
+            quest: activeQuest || 'Completed a real-world adventure',
+            mode: isExplorerMode ? 'explorer' : mode,
+            xpEarned: data.xp_earned ?? activeQuestXp,
+          }));
         } catch {
+          setCardDataUrl(null);
         }
 
-        // Auto-surface the Recap at a genuine peak moment, after the completion
-        // animation has had time to play rather than instantly on top of it.
-        if (justEarnedNewBadge || wasLegendary) {
-          setTimeout(() => {
-            generateSpotifyWrappedCard();
-          }, 2500);
-        }
+        setPendingRecap(justEarnedNewBadge || wasLegendary
+          ? { kind: 'recap', ...completedStats, friendCount: friendsList.length }
+          : null);
       }
     } catch {
       showToast('Failed to log mission completion. Please try again.', 'error');
@@ -2189,7 +2050,7 @@ export default function Home() {
         await navigator.share({
           files: [file],
           title: 'Break The Loop 🔥',
-          text: 'I just broke the reel addiction loop in Mumbai! Check this out.'
+          text: 'I made time for a little adventure with Break The Loop. Come find yours.'
         });
       } else {
         const a = document.createElement('a');
@@ -2205,13 +2066,28 @@ export default function Home() {
     }
   };
 
+  const goToTrack = async (explore: boolean) => {
+    if (isExplorerMode !== explore) {
+      if ((activeQuest || isSearching) && !window.confirm('Leave this mission and switch activities? Your progress so far will not be saved.')) return;
+      if (activeQuest || isSearching) await cancelSearch();
+      if (explore) handleSelectExplorer(); else handleSelectQuestTrack();
+      setIsMissionAccepted(false);
+    }
+    setTab('quest');
+    window.scrollTo({ top: 0 });
+  };
+  const showFeed = () => { setTab('feed'); window.scrollTo({ top: 0 }); };
+  const nextRank = RANK_TIERS.find(tier => tier.minXp > totalXp);
+
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] text-stone-900 flex flex-col items-center justify-between pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans select-none">
+    <main className="btl-app">
+      <a className="skip-link" href="#activity">Skip to activity</a>
       {/* Toast Stack */}
       <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
         {toasts.map((t) => (
           <div
             key={t.id}
+            role={t.type === 'error' ? 'alert' : 'status'}
             className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
               t.type === 'error'
                 ? 'bg-orange-950/95 border-orange-500/40 text-orange-200'
@@ -2225,85 +2101,26 @@ export default function Home() {
         ))}
       </div>
 
-      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-stone-200">
-        <h1
-          onMouseDown={handleDevPressStart}
-          onMouseUp={handleDevPressEnd}
-          onTouchStart={handleDevPressStart}
-          onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-black tracking-tight font-['Space_Grotesk'] text-orange-600 drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
-          title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
-        >
-          BREAK THE LOOP
-        </h1>
-        <div className="flex items-center flex-wrap gap-2">
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchAdminReports}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Admin Moderation Queue"
-            >
-              🚩 Reports
-            </button>
-          )}
-
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingQuests}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Pending Quest Suggestions"
-            >
-              📝 Quests
-            </button>
-          )}
-
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingGems}
-              className="relative bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Manage Hidden Gems"
-            >
-              🗺️ Gems
-              {pendingGemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-orange-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
-                  {pendingGemCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          <button
-            onClick={requestNotificationPermission}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
-              notificationsEnabled
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
-                : 'bg-white border-stone-200 text-stone-600 hover:text-stone-900'
-            }`}
-            title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
-          >
-            {notificationsEnabled ? '🔔' : '🔕'}
-          </button>
-
-          <div className="flex bg-white border border-stone-200 rounded-xl p-1 text-xs">
-            <button
-              onClick={() => setTab('quest')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'quest' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Quest
-            </button>
-            <button
-              onClick={() => setTab('feed')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'feed' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Feed
-            </button>
-          </div>
+      <header className="app-header">
+        <div className="brand" onMouseDown={handleDevPressStart} onMouseUp={handleDevPressEnd} onTouchStart={handleDevPressStart} onTouchEnd={handleDevPressEnd}>
+          <span className="brand-mark"><AppIcon name="bolt" size={25} /></span>
+          <span>BREAK<br />THE LOOP<span className="brand-period">.</span></span>
+        </div>
+        <nav className="main-nav" aria-label="Main navigation">
+          <button aria-current={tab === 'quest' && !isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(false)}><AppIcon name="bolt" />Today</button>
+          <button aria-current={tab === 'quest' && isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(true)}><AppIcon name="compass" />Explore</button>
+          <button aria-current={tab === 'feed' ? 'page' : undefined} onClick={showFeed}><AppIcon name="grid" />Feed</button>
+          <a href="#saved-places"><AppIcon name="bookmark" /><span>Saved</span></a>
+        </nav>
+        <div className="header-utilities">
+          <span className="city-label"><AppIcon name="pin" size={16} />{CURRENT_CITY.name}</span>
+          <button className="icon-button" onClick={requestNotificationPermission} aria-label={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}><AppIcon name="bell" /></button>
+          <a className="profile-avatar" href="#your-progress" aria-label="Your profile">{handle.charAt(0).toUpperCase()}</a>
         </div>
       </header>
+      {userEmail === ADMIN_EMAIL && <div className="admin-toolbar" aria-label="Admin tools">
+        <span>Admin</span><button onClick={fetchAdminReports}>🚩 Reports</button><button onClick={fetchPendingQuests}>📝 Quests</button><button onClick={fetchPendingGems}>🗺️ Gems {pendingGemCount > 0 && `(${pendingGemCount})`}</button>
+      </div>}
 
       {/* Incoming Live Raid Invite Banner */}
       {incomingInvite && (
@@ -2350,7 +2167,7 @@ export default function Home() {
                 <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
               </h2>
               <p className="text-[10px] text-stone-500">
-                Explorer • Active Mumbai Loop Destroyer
+                Explorer • Making time for real life
               </p>
             </div>
 
@@ -2620,7 +2437,7 @@ export default function Home() {
                           onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
                           className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
                         >
-                          {MUMBAI_NEIGHBORHOODS.map((n) => (
+                          {CURRENT_CITY.neighborhoods.map((n) => (
                             <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
                           ))}
                         </select>
@@ -2769,7 +2586,7 @@ export default function Home() {
             <div className="text-3xl">🏷️</div>
             <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
             <p className="text-xs text-stone-600">
-              Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
+              Pick a unique handle so other explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
               <span className="absolute left-4 top-3 text-orange-700 font-bold text-sm">@</span>
@@ -2979,8 +2796,8 @@ export default function Home() {
                 maxLength={100}
                 className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500"
               />
-              <div className="flex flex-wrap gap-2 justify-center">
-                {MUMBAI_NEIGHBORHOODS.map((n) => (
+              <div className="neighborhood-chips">
+                {CURRENT_CITY.neighborhoods.filter(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())).map((n) => (
                   <button
                     key={n}
                     onClick={() => setSuggestGemNeighborhood(n)}
@@ -3014,28 +2831,6 @@ export default function Home() {
       )}
 
       {/* Sign In / Recover Account Modal */}
-      {showWelcomeModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-gradient-to-b from-white to-stone-50 border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <div className="text-4xl">👋</div>
-            <h2 className="text-xl font-black text-stone-900">Welcome to Break The Loop</h2>
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Tap the big button. Get handed a real, random micro-mission near you.
-              Do it, snap a photo, earn XP. That's the whole game.
-            </p>
-            <p className="text-xs text-stone-500">
-              Bring friends into it later — for now, let's get your first one done.
-            </p>
-            <button
-              onClick={dismissWelcomeModal}
-              className="w-full bg-orange-600 text-white font-black py-3 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
-            >
-              I'm in →
-            </button>
-          </div>
-        </div>
-      )}
-
       {showRecoverModal && (
         <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
@@ -3252,83 +3047,55 @@ export default function Home() {
       {/* Journey Recap Modal */}
       {showWrappedModal && (
         <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
-            <button
-              onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
-              ✕
-            </button>
-            <h2 className="text-sm font-black text-orange-700 uppercase tracking-wider">🎧 Your IRL Recap</h2>
+          <div role="dialog" aria-modal="true" aria-labelledby="recap-title" className="recap-dialog w-full max-w-sm bg-white rounded-3xl p-5 space-y-4 shadow-2xl text-center">
+            <div className="recap-heading">
+              <h2 id="recap-title">Your IRL Recap</h2>
+              <button onClick={() => setShowWrappedModal(false)} aria-label="Close recap" className="icon-button">✕</button>
+            </div>
             {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
-                <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
-              </div>
+              <img src={wrappedCardDataUrl} alt="Recap" width={1080} height={1920} className="story-preview" />
             )}
             <button
               onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
+              className="share-story-button"
             >
-              <span>📲</span>
-              <span>Share Recap to Story / WhatsApp</span>
+              <AppIcon name="arrow" size={20} />
+              <span>Share your recap</span>
             </button>
           </div>
         </div>
       )}
 
+      <div className="page-intro">
+        <div><p className="eyebrow"><span className="tiny-rule" />LESS SCROLLING. MORE LIVING.</p>
+          <h1>{tab === 'feed' ? <>Life, actually <em>lived.</em></> : isExplorerMode ? <>Your city. <em>Rediscovered.</em></> : <>Make room for <em>real life.</em></>}</h1>
+          <p>{tab === 'feed' ? 'Small adventures, shared by the people doing them.' : isExplorerMode ? 'Good places, passed from one local to another.' : 'A small adventure is all it takes to change your day.'}</p>
+        </div><span className="edition-label">YOUR EVERYDAY ESCAPE <AppIcon name="sun" size={23} /></span>
+      </div>
+      <div className="app-grid">
+      <div className="activity-column" id="activity" tabIndex={-1}>
       {tab === 'quest' ? (
-        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-gradient-to-b from-white to-stone-50 p-1.5 rounded-2xl border border-stone-200 w-full justify-between shadow-xl shadow-stone-900/10">
-            <button
-              onClick={handleSelectQuestTrack}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
-                !isExplorerMode
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Quest
-            </button>
-            <button
-              onClick={handleSelectExplorer}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
-                isExplorerMode
-                  ? 'bg-amber-500 text-stone-950 shadow-lg shadow-amber-500/30'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Explore
-            </button>
-          </div>
-
-          {/* Deliberately lighter-weight than the Quest/Explore choice above --
-              this is a refinement of that choice, not a second equal decision. */}
-          <div className="flex items-center justify-center gap-1">
+        <div className="quest-workspace">
+          <div className="activity-heading"><h2>{isExplorerMode ? 'Find your next favourite place' : 'How are you heading out?'}</h2><span>{isExplorerMode ? 'LOCAL DISCOVERIES' : 'CHOOSE YOUR COMPANY'}</span></div>
+          <div className="mode-selector" role="group" aria-label="Mission company">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleSelectMode(m)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
-                  mode === m
-                    ? 'bg-stone-800 text-white'
-                    : 'text-stone-500 hover:text-stone-900'
-                }`}
-              >
-                {m === 'squad' ? 'Squad (2-8)' : m}
+              <button key={m} aria-label={m === 'squad' ? 'Squad (2-8)' : m} aria-pressed={mode === m} disabled={Boolean(activeQuest) || isSearching} onClick={() => { handleSelectMode(m); setIsMissionAccepted(false); }}>
+                <span className="mode-icon"><AppIcon name={m === 'solo' ? 'person' : 'people'} /></span><span><strong>{m === 'solo' ? 'Just me' : m === 'duo' ? 'With a partner' : 'With a squad'}</strong><small>{m === 'solo' ? 'A little time for yourself' : m === 'duo' ? 'Two is an adventure' : 'Bring 2–8 people'}</small></span><span className="mode-radio">{mode === m && <span />}</span>
               </button>
             ))}
           </div>
-
           {isExplorerMode && !activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <p className="text-sm text-stone-700 font-semibold">
-                Pick a neighborhood to discover a hidden gem someone local actually knows about.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {MUMBAI_NEIGHBORHOODS.map((n) => (
+            <div className="explore-panel">
+              <div className="section-label"><AppIcon name="pin" /><span>PICK A NEIGHBOURHOOD</span></div>
+              <h2>Take the unfamiliar turn.</h2>
+              <p>Choose an area. We’ll pick a local discovery for you.</p>
+              <label className="neighborhood-search"><AppIcon name="search" /><input type="search" aria-label="Search neighbourhoods" placeholder="Find your neighbourhood" value={neighborhoodSearch} onChange={e => setNeighborhoodSearch(e.target.value)} /></label>
+              <div className="neighborhood-chips">
+                {CURRENT_CITY.neighborhoods.filter(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())).map((n) => (
                   <button
                     key={n}
                     onClick={() => setSelectedNeighborhood(n)}
+                    aria-pressed={selectedNeighborhood === n}
                     disabled={isSearching}
                     className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
                       selectedNeighborhood === n
@@ -3340,6 +3107,7 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+              {!CURRENT_CITY.neighborhoods.some(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())) && <p role="status">No matching neighbourhood. Try another name.</p>}
               <button
                 onClick={onStartMatchingClick}
                 disabled={!selectedNeighborhood || isSearching}
@@ -3357,7 +3125,7 @@ export default function Home() {
                 ) : !selectedNeighborhood ? (
                   'Pick a neighborhood first'
                 ) : (
-                  '🗺️ Reveal a Hidden Gem'
+                  `Explore ${selectedNeighborhood}`
                 )}
               </button>
               {!isSearching && (
@@ -3372,77 +3140,20 @@ export default function Home() {
           )}
 
           {!activeQuest && !isCompleted && !isExplorerMode && (
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative flex items-center justify-center">
-                <div
-                  aria-hidden="true"
-                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.3)_0%,rgba(234,88,12,0)_70%)] pointer-events-none"
-                />
-                {!isSearching && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-2 right-6 text-xl rotate-12 pointer-events-none select-none"
-                  >
-                    ✨
-                  </span>
-                )}
-                <button
-                  onClick={onStartMatchingClick}
-                  disabled={isSearching}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 border-4 border-white shadow-2xl shadow-orange-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
-                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/25 rotate-[-20deg]"
-                  />
-                  {isSearching ? (
-                    <div className="flex flex-col items-center space-y-1">
-                      <span className="text-2xl animate-spin">🌀</span>
-                      <span className="text-xs text-orange-200 font-mono font-normal">
-                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
-                      </span>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                      <span className="font-['Space_Grotesk'] font-medium text-sm text-orange-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-stone-600 font-medium">
-                  {isSearching
-                    ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
-                    : 'Tap to trigger a random real-world micro-mission.'}
-                </p>
-
-                {isSearching && (
-                  <div className="flex flex-col items-center space-y-2 pt-2">
-                    <button
-                      onClick={handleWhatsAppInvite}
-                      className="bg-orange-600 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                    >
-                      <span>📲</span>
-                      <span>Invite Friend via WhatsApp Now</span>
-                    </button>
-                    <button
-                      onClick={cancelSearch}
-                      className="text-[10px] text-stone-500 hover:underline"
-                    >
-                      Cancel Search
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+            <section className="start-card">
+              <div className="start-card-top"><span className="eyebrow">YOUR DAILY DOSE OF DIFFERENT</span><span className="outline-chip"><AppIcon name="bolt" size={14} />REAL-WORLD MISSIONS</span></div>
+              <h2>Same city.<br />New <span>story.</span></h2>
+              <p>Try something you wouldn’t usually do.<br className="desktop-break" /> We’ll give you the nudge. You make it yours.</p>
+              <button className="primary-button start-button" onClick={onStartMatchingClick} disabled={isSearching}>
+                {isSearching ? (mode === 'solo' ? 'Finding your mission…' : 'Finding your company…') : 'Find my next mission'}<AppIcon name={isSearching ? 'refresh' : 'arrow'} size={22} />
+              </button>
+              <div className="start-card-bottom"><span>{mode === 'solo' ? 'Solo adventures. No sign-up needed.' : mode === 'duo' ? 'One mission. Two explorers.' : 'Make a memory with your people.'}</span><span>GO MAKE A MEMORY ↗</span></div>
+              {isSearching && <div className="search-actions"><p role="status">{mode === 'solo' ? 'Picking a little adventure for you…' : squadRoster.length ? `Lobby: ${squadRoster.length}/${squadCapacity} explorers` : `Looking for ${CURRENT_CITY.name} explorers…`}</p>{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
+            </section>
           )}
-
+          {isExplorerMode && isSearching && <div className="search-actions">{mode !== 'solo' && <button onClick={handleWhatsAppInvite}>Invite a friend via WhatsApp</button>}<button onClick={cancelSearch}>Cancel Search</button></div>}
           {activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
+            <div className="active-mission-panel w-full bg-white border border-stone-200 rounded-3xl p-5 space-y-4">
               <div className="flex justify-between items-center">
                 <span className="bg-orange-500/10 text-orange-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
                   {isExplorerMode ? 'Explorer' : mode} Mission Assigned
@@ -3496,18 +3207,8 @@ export default function Home() {
                   credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
                   gem={isExplorerMode ? activeGem : null}
                   onReroll={() => mode === 'solo' ? (isExplorerMode ? handleRevealGem() : pickRandomQuest()) : handleSharedReroll()}
-                  onAcceptMission={() => {
-                    setIsMissionAccepted(true);
-                    // The upload box (and its file input) only mounts once
-                    // isMissionAccepted flips, so defer the click until after
-                    // that render commits.
-                    setTimeout(() => {
-                      const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
-                      if (fileInput) {
-                        fileInput.click();
-                      }
-                    }, 0);
-                  }}
+                  accepted={isMissionAccepted}
+                  onAcceptMission={() => setIsMissionAccepted(true)}
                 />
               </div>
 
@@ -3579,20 +3280,21 @@ export default function Home() {
                   {uploading ? (
                     <div className="py-4 flex flex-col items-center space-y-1">
                       <span className="animate-spin text-xl">☁️</span>
-                      <span className="text-xs text-orange-700 font-semibold">Compressing & Uploading (~50KB)...</span>
+                      <span className="text-xs text-orange-700 font-semibold">Saving your photo…</span>
                     </div>
                   ) : proofImage ? (
                     <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
                   ) : (
                     <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
                       <span className="text-xl">📸</span>
-                      <span className="text-xs text-stone-600 font-semibold"></span>
+                      <span className="text-sm text-stone-700 font-semibold">Done your mission? Add a photo</span><span className="text-xs text-stone-500">Your photo is shared in the community feed.</span>
                       <input
                         type="file"
+                        aria-label="Add mission photo"
                         accept="image/*"
                         capture="environment"
                         onChange={handleImageUpload}
-                        className="hidden"
+                        className="sr-only"
                       />
                     </label>
                   )}
@@ -3622,7 +3324,7 @@ export default function Home() {
           )}
 
           {isCompleted && (
-            <div className="w-full bg-white border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
+            <div className="completion-card w-full bg-white rounded-3xl p-6 text-center space-y-4">
               <div className="text-4xl">🎉</div>
               <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
               <p className="text-xs text-stone-700">
@@ -3631,22 +3333,20 @@ export default function Home() {
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-orange-500/30 shadow-xl bg-stone-50">
-                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
-                  </div>
+                  <img src={cardDataUrl} alt="Story Card" width={1080} height={1920} className="story-preview" />
 
                   <button
                     onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
+                    className="share-story-button"
                   >
-                    <span>📲</span>
-                    <span>Share to Instagram Story / WhatsApp</span>
+                    <AppIcon name="arrow" size={20} />
+                    <span>Share your adventure</span>
                   </button>
                 </div>
               )}
 
               <button
-                onClick={() => setIsCompleted(false)}
+                onClick={() => { setIsCompleted(false); setActiveQuest(null); setActiveGem(null); setProofImage(null); setIsMissionAccepted(false); }}
                 className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
               >
                 Back to Home
@@ -3655,13 +3355,13 @@ export default function Home() {
           )}
         </div>
       ) : (
-        <div className="w-full max-w-md my-auto space-y-4">
+        <div className="feed-workspace space-y-4">
           <div className="flex justify-between items-center border-b border-stone-200 pb-2">
             <h2 className="text-sm font-bold text-stone-700">Community Proof Feed</h2>
             <span className="text-xs text-stone-500">{feedItems.length} Missions Logged</span>
           </div>
 
-          <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+          <div className="community-grid">
             {loadingFeed ? (
               [1, 2, 3].map((i) => (
                 <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3 animate-pulse">
@@ -3680,7 +3380,7 @@ export default function Home() {
               feedItems.map((item) => (
                 <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
                   {item.photo_url && (
-                    <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
+                    <img src={item.photo_url} alt={`Photo from ${item.handle || 'an explorer'}: ${item.quest_text}`} loading="lazy" className="w-full h-48 object-cover rounded-xl" />
                   )}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -3749,118 +3449,26 @@ export default function Home() {
         </div>
       )}
 
-      <footer className="w-full max-w-md bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-stone-900/15">
-        <div className="flex justify-between items-center border-b border-stone-200/60 pb-2">
-          {isEditingHandle ? (
-            <input
-              type="text"
-              defaultValue={handle}
-              onBlur={(e) => saveHandle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
-              autoFocus
-              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-700 font-bold focus:outline-none"
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditingHandle(true)}
-              className="text-xs font-bold text-orange-700 hover:underline flex items-center space-x-1"
-            >
-              <span>@{handle}</span>
-              <span className="text-[10px] text-stone-500 font-medium">· {getRankTitle(totalXp)}</span>
-              <span className="text-[10px] text-stone-500">✏️</span>
-            </button>
-          )}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowFriendsModal(true)}
-              className="text-[10px] text-orange-700 hover:underline font-semibold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
-            >
-              🤝 Squad ({friendsList.length})
-            </button>
-            <button
-              onClick={generateSpotifyWrappedCard}
-              className="text-[10px] text-amber-700 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
-            >
-              🎧 Recap
-            </button>
-            <button
-              onClick={() => {
-                setSuggestQuestMode(mode);
-                setShowSuggestQuestModal(true);
-              }}
-              className="text-[10px] text-orange-700 hover:underline font-bold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
-            >
-              ✍️ Suggest Quest
-            </button>
-            {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
-              <button
-                onClick={handleSignOut}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
-              >
-                Sign Out
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthModalReason('');
-                  setShowAuthModal(true);
-                }}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
-              >
-                Verify
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
-          <span className="text-stone-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
-          {badges.map((b, i) => (
-            <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
-              {b}
-            </span>
-          ))}
-        </div>
-
-        <div className="flex justify-around text-center border-t border-stone-200/60 pt-2">
-          <div>
-            <p className="text-xs text-stone-500">Loop Streak</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-stone-800">{streak} Days 🔥</p>
-          </div>
-          <div className="w-px bg-stone-100" />
-          <div>
-            <p className="text-xs text-stone-500">Total IRL XP</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-orange-700">{savedMins} XP ⚡</p>
-          </div>
-        </div>
-
-        {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center space-y-1.5 border-t border-stone-200/60 pt-2">
-            <button
-              onClick={() => setShowSaveProgressModal(true)}
-              className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
-            >
-              💾 Save My Progress
-            </button>
-            <button
-              onClick={() => setShowRecoverModal(true)}
-              className="text-[10px] text-stone-500 hover:underline"
-            >
-              Already have an account? Sign in
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Link href="/privacy" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
-            Privacy
-          </Link>
-          <span className="text-[10px] text-stone-300">·</span>
-          <Link href="/terms" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
-            Terms
-          </Link>
-        </div>
-      </footer>
+      {tab === 'quest' && !activeQuest && !isCompleted && <>
+        {showWelcomeModal && <div className="how-it-works"><div className="how-title"><h3>Your first adventure, in three steps.</h3><button className="icon-button" onClick={dismissWelcomeModal} aria-label="Dismiss getting started guide"><AppIcon name="close" size={16} /></button></div><ol><li><span>01</span><strong>Pick a mission</strong><p>Let a little surprise in.</p></li><li><span>02</span><strong>Go live it</strong><p>Put the phone away.</p></li><li><span>03</span><strong>Keep the memory</strong><p>Add a photo. Earn XP.</p></li></ol></div>}
+        {!isExplorerMode && <div className="discovery-row"><button className="discovery-card places-card" onClick={() => goToTrack(true)}><span className="discovery-symbol"><AppIcon name="compass" size={28} /></span><span className="eyebrow">TAKE THE SCENIC ROUTE</span><h3>Your city has<br />a few secrets.</h3><p>Find a local spot worth stepping out for.</p><span className="card-link">Explore neighbourhoods <AppIcon name="arrow" size={18} /></span></button><button className="discovery-card community-card" onClick={showFeed}><span className="discovery-symbol"><AppIcon name="camera" size={28} /></span><span className="eyebrow">OUT THERE, DOING THINGS</span><h3>Less content.<br />More connection.</h3><p>See the moments other explorers made.</p><span className="card-link">See the community <AppIcon name="arrow" size={18} /></span></button></div>}
+      </>}
+      </div>
+      <aside className="personal-column" aria-label="Your explorer space">
+        <section className="progress-panel" id="your-progress">
+          <div className="section-label"><AppIcon name="sun" size={18} /><h2>YOUR LIFE, OFFLINE</h2></div>
+          <div className="profile-summary"><span className="large-avatar">{handle.charAt(0).toUpperCase()}</span><div>{isEditingHandle ? <input aria-label="Your handle" type="text" defaultValue={handle} onBlur={e => saveHandle(e.target.value)} onKeyDown={e => e.key === 'Enter' && saveHandle(e.currentTarget.value)} autoFocus /> : <button className="handle-button" onClick={() => setIsEditingHandle(true)}>@{handle} <span>Edit</span></button>}<p>{getRankTitle(totalXp)}</p></div></div>
+          <div className="stat-grid"><div><span className="stat-number">{streak}<small>{streak === 1 ? 'day' : 'days'}</small></span><span>Loop streak</span></div><div><span className="stat-number xp-number">{totalXp}<small>XP</small></span><span>Real-world XP</span></div></div>
+          <div className="rank-track"><div><span>{nextRank ? 'Your next chapter' : 'You made it'}</span><strong>{nextRank?.title ?? getRankTitle(totalXp)}</strong></div><progress aria-label="Progress to next rank" value={totalXp} max={nextRank?.minXp ?? Math.max(totalXp, 1)} /><p>{nextRank ? `${nextRank.minXp - totalXp} XP to your next rank. One adventure at a time.` : 'Keep finding your kind of adventure.'}</p></div>
+          {badges.length > 0 && <div className="badge-list">{badges.map((badge, i) => <span key={i}>{badge}</span>)}</div>}
+          <div className="profile-actions"><button onClick={() => setShowFriendsModal(true)}><AppIcon name="people" size={18} />Squad ({friendsList.length})</button><button onClick={generateRecapCard}><AppIcon name="grid" size={18} />Recap</button></div>
+          {(!userEmail || userEmail === 'guest@breaktheloop.app') ? <div className="save-progress"><button className="secondary-button" onClick={() => setShowSaveProgressModal(true)}>Save My Progress <AppIcon name="arrow" size={17} /></button><button className="signin-link" onClick={() => setShowRecoverModal(true)}>Already have an account? Sign in</button></div> : <button className="signin-link" onClick={handleSignOut}>Sign Out</button>}
+        </section>
+        <SavedPlaces key={currentUserId ?? 'visitor'} userId={currentUserId} activeGem={activeGem} />
+        <div className="contribute-panel"><span className="eyebrow">BUILT BY PEOPLE LIKE YOU</span><h3>Know a good way<br />to break the loop?</h3><button className="text-link" onClick={() => { setSuggestQuestMode(mode); setShowSuggestQuestModal(true); }}>Suggest Quest <AppIcon name="arrow" size={17} /></button>{isGuest && <button className="signin-link" onClick={() => { setAuthModalReason(''); setShowAuthModal(true); }}>Verify</button>}</div>
+      </aside>
+      </div>
+      <footer className="site-footer"><span>BREAK THE LOOP. <span>Go make a memory.</span></span><div><span>Starting in {CURRENT_CITY.name}</span><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div></footer>
     </main>
   );
 }

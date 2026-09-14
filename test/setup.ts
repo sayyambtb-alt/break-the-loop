@@ -31,6 +31,8 @@ const fake2dContext = {
   fillRect: vi.fn(),
   fillText: vi.fn(),
   beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
   arc: vi.fn(),
   fill: vi.fn(),
   stroke: vi.fn(),
@@ -56,6 +58,7 @@ HTMLCanvasElement.prototype.toBlob = vi.fn(function (callback: BlobCallback) {
 vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
 
 beforeEach(() => {
+  vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   vi.spyOn(window, 'alert').mockImplementation(() => {});
   vi.spyOn(window, 'confirm').mockImplementation(() => true);
   vi.spyOn(window, 'prompt').mockImplementation(() => 'Not appropriate for this app');
