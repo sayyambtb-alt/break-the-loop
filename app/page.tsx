@@ -2580,7 +2580,10 @@ export default function Home() {
                 discards the board. */}
             {!hasActiveMission && !isCompleted && (
               <div className="flex items-center gap-2">
-                <span className="eyebrow shrink-0 text-muted">Squad</span>
+                {/* Not "Squad": that is the name of one of the three options
+                    inside this group, so the label and its own child collided
+                    on screen — "SQUAD  Solo | Duo | Squad (2-8)". */}
+                <span className="eyebrow shrink-0 text-muted">Players</span>
                 <div className="flex flex-1 items-center gap-1.5">
                   {(['solo', 'duo', 'squad'] as const).map((m) => (
                     <button
