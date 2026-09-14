@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { initAnalytics, track, identifyUser } from './lib/analytics';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
+import Overlay from "./components/Overlay";
 import { createClient } from '@supabase/supabase-js';
 import confetti from 'canvas-confetti';
 
@@ -35,6 +36,58 @@ const getRankTitle = (totalXp: number): string => {
   }
   return title;
 };
+
+// Drives the rank meter in the profile panel. Returns null at the top tier,
+// where there is nothing left to progress towards.
+const getNextRankTier = (totalXp: number): { title: string; minXp: number } | null => {
+  const next = RANK_TIERS.find((tier) => totalXp < tier.minXp);
+  return next ? { title: next.title, minXp: next.minXp } : null;
+};
+
+const getRankProgress = (totalXp: number): number => {
+  const next = getNextRankTier(totalXp);
+  if (!next) return 100;
+  const floor = [...RANK_TIERS].reverse().find((tier) => totalXp >= tier.minXp)?.minXp ?? 0;
+  const span = next.minXp - floor;
+  if (span <= 0) return 100;
+  return Math.min(100, Math.max(4, Math.round(((totalXp - floor) / span) * 100)));
+};
+
+/* ---------------------------------------------------------------------------
+   Shared class recipes
+   ---------------------------------------------------------------------------
+   The look is built from two ideas: an ink hairline around every surface, and
+   a flat offset shadow instead of a blur (see .sticker / .press in
+   globals.css). Keeping the recipes here means a button's press depth and a
+   card's edge are defined once rather than re-typed across ~25 dialogs.
+
+   Colour rule baked into these: white type only ever sits on ember-deep
+   (5.18:1), never on the brighter ember, which is large-text-only at 3.56:1.
+--------------------------------------------------------------------------- */
+const PANEL = 'relative w-full max-w-sm rounded-3xl sticker bg-white p-5 sm:p-6';
+const PANEL_WIDE = 'relative w-full max-w-md rounded-3xl sticker bg-white p-5 text-left';
+const CARD = 'w-full rounded-3xl sticker bg-white';
+const BTN_PRIMARY =
+  'w-full rounded-2xl sticker press bg-ember-deep px-4 py-3.5 font-display text-sm font-bold text-white';
+const BTN_GOLD =
+  'w-full rounded-2xl sticker press bg-gold px-4 py-3.5 font-display text-sm font-bold text-ink';
+const BTN_QUIET =
+  'w-full rounded-2xl sticker-sm press-sm bg-white px-4 py-3 text-sm font-bold text-ink hover:bg-cream';
+const BTN_MINI =
+  'rounded-xl sticker-sm press-sm bg-white px-2.5 py-1.5 text-[11px] font-bold text-ink hover:bg-cream';
+const BTN_MINI_SOLID =
+  'rounded-xl sticker-sm press-sm bg-ember-deep px-2.5 py-1.5 text-[11px] font-bold text-white';
+const BTN_MINI_DANGER =
+  'rounded-xl sticker-sm press-sm bg-rose px-2.5 py-1.5 text-[11px] font-bold text-white';
+const CLOSE_BTN =
+  'absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full sticker-sm press-sm bg-cream text-sm font-bold text-ink';
+const INPUT =
+  'w-full rounded-2xl sticker-flat bg-cream px-4 py-3 text-sm font-semibold text-ink placeholder:font-medium placeholder:text-muted focus:bg-white';
+const CHIP_EMBER =
+  'inline-flex items-center gap-1 rounded-full border-2 border-ink bg-ember-wash px-2.5 py-0.5 text-[11px] font-bold text-ember-ink';
+const CHIP_GOLD =
+  'inline-flex items-center gap-1 rounded-full border-2 border-ink bg-gold-wash px-2.5 py-0.5 text-[11px] font-bold text-gold-ink';
+const WELL = 'rounded-2xl sticker-flat bg-cream p-3';
 
 interface FeedItem {
   id: string;
@@ -1228,6 +1281,21 @@ export default function Home() {
     setActiveGem(null);
   };
 
+  // The nav now carries Quest / Explore / Feed as three peer destinations
+  // instead of a Quest|Feed tab pair plus a separate track toggle. Switching
+  // tracks still resets the board (handleSelectQuestTrack / handleSelectExplorer
+  // do that), but re-tapping the track you're already on must NOT -- that would
+  // silently throw away a mission in progress.
+  const goToQuestTrack = () => {
+    setTab('quest');
+    if (isExplorerMode) handleSelectQuestTrack();
+  };
+
+  const goToExploreTrack = () => {
+    setTab('quest');
+    if (!isExplorerMode) handleSelectExplorer();
+  };
+
   const handleRevealGem = async () => {
     if (!selectedNeighborhood) return;
     const { data, error } = await supabase.rpc('get_random_hidden_gem', { p_neighborhood: selectedNeighborhood });
@@ -1913,181 +1981,303 @@ export default function Home() {
     }
   };
 
-  const generateShareCard = (newStreak: number, newSavedMins: number) => {
+  /* -------------------------------------------------------------------------
+     Share cards
+     -------------------------------------------------------------------------
+     These are the only part of the product that leaves the app — they get
+     posted to Instagram and WhatsApp, where they are the whole first
+     impression. They were still drawn in the pre-redesign palette (navy
+     #090d16 grounds, rose #f43f5e accents, generic sans-serif), so the most
+     public artifact looked like a different product from the one that made it.
+
+     They are redrawn here in the same language as the app: cream paper, an ink
+     hairline with a flat offset shadow, Space Grotesk, and ember/gold accents.
+
+     They also printed the wrong numbers. The mission card's "IRL XP GAINED"
+     read new_saved_mins — a cumulative minutes total, shown with a "+" as if
+     it were the XP just earned. The recap's headline figure was the same
+     minutes count labelled XP, and its "Highest Rank Unlocked" was whatever
+     badge happened to be last in the array, not the rank the app actually
+     computes from total_xp.
+  --------------------------------------------------------------------------- */
+
+  const CARD_INK = '#1C1410';
+  const CARD_CREAM = '#FFF3E2';
+  const CARD_CREAM_DEEP = '#FBE3C4';
+  const CARD_EMBER = '#C2410C';
+  const CARD_GOLD = '#F5A524';
+  const CARD_MUTED = '#6B5B50';
+  const DISPLAY = '"Space Grotesk", "Inter", sans-serif';
+  const BODY = '"Inter", sans-serif';
+
+  // Ink hairline + flat offset shadow, the .sticker recipe from globals.css
+  // expressed on a canvas.
+  const stickerBox = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    radius: number,
+    fill: string
+  ) => {
+    ctx.fillStyle = CARD_INK;
+    ctx.beginPath();
+    ctx.roundRect(x + 14, y + 14, w, h, radius);
+    ctx.fill();
+
+    ctx.fillStyle = fill;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, radius);
+    ctx.fill();
+
+    ctx.strokeStyle = CARD_INK;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, radius);
+    ctx.stroke();
+  };
+
+  // The printed-paper halftone, matching the .halftone class.
+  const halftone = (ctx: CanvasRenderingContext2D, alpha: number) => {
+    ctx.fillStyle = CARD_INK;
+    ctx.globalAlpha = alpha;
+    for (let y = 0; y < 1920; y += 26) {
+      for (let x = 0; x < 1080; x += 26) {
+        ctx.beginPath();
+        ctx.arc(x, y, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  };
+
+  // The struck-through LOOP from the header, drawn as the wordmark.
+  const wordmark = (ctx: CanvasRenderingContext2D, y: number) => {
+    ctx.textAlign = 'center';
+    ctx.font = `700 54px ${DISPLAY}`;
+    const left = 'BREAK THE ';
+    const right = 'LOOP';
+    const lw = ctx.measureText(left).width;
+    const rw = ctx.measureText(right).width;
+    const startX = 540 - (lw + rw) / 2;
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = CARD_INK;
+    ctx.fillText(left, startX, y);
+    ctx.fillStyle = CARD_EMBER;
+    ctx.fillText(right, startX + lw, y);
+
+    ctx.fillStyle = CARD_EMBER;
+    ctx.fillRect(startX + lw, y - 16, rw, 6);
+    ctx.textAlign = 'center';
+  };
+
+  // Wraps to a fixed width and returns the lines, so callers can lay out
+  // around the real height instead of guessing at it (the old card pinned its
+  // stats to y=1050 regardless, leaving ~350px of dead space on short quests).
+  const wrapLines = (ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] => {
+    const words = text.split(' ');
+    const lines: string[] = [];
+    let line = '';
+    for (const word of words) {
+      const test = line ? `${line} ${word}` : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  };
+
+  const statBlock = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    label: string,
+    value: string,
+    accent: string,
+    fill: string
+  ) => {
+    stickerBox(ctx, x, y, w, 190, 28, fill);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 28px ${DISPLAY}`;
+    ctx.fillText(label, x + w / 2, y + 62);
+    ctx.fillStyle = accent;
+    ctx.font = `700 64px ${DISPLAY}`;
+    ctx.fillText(value, x + w / 2, y + 138);
+  };
+
+  // xpGained is the XP this mission actually paid out; totalXpNow is the
+  // lifetime figure the rank is derived from. They are different numbers and
+  // the card says which is which.
+  const generateShareCard = (newStreak: number, xpGained: number, totalXpNow: number) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 0, 1920);
-    bgGradient.addColorStop(0, '#090d16');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = CARD_CREAM;
     ctx.fillRect(0, 0, 1080, 1920);
+    halftone(ctx, 0.05);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.15)';
-    ctx.beginPath();
-    ctx.arc(540, 400, 350, 0, Math.PI * 2);
-    ctx.fill();
+    wordmark(ctx, 180);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 52px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 220);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText('M U M B A I   ·   R E A L   W O R L D', 540, 236);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('MUMBAI REAL-WORLD RAID', 540, 280);
+    const quoteFont = `700 56px ${DISPLAY}`;
+    ctx.font = quoteFont;
+    const quest = activeQuest || 'Completed a local real-world mission in Mumbai';
+    const lines = wrapLines(ctx, `“${quest}”`, 700);
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
+    // The card is sized to its content and then centred in the band between
+    // the header and the footer, rather than pinned to a fixed frame. The old
+    // card forced its stats to y=1050 and its panel to 1100px tall whatever
+    // the quest said, so a short brief left ~350px of empty card.
+    const quoteTop = 196;
+    const briefH = quoteTop + lines.length * 74 + 40;
+    const statsGap = 70;
+    const statsH = 190;
+    const rankGap = 78;
+    const contentH = briefH + statsGap + statsH + rankGap;
+
+    const bandTop = 300;
+    const bandBottom = 1620;
+    const briefTop = Math.max(bandTop, bandTop + (bandBottom - bandTop - contentH) / 2);
+    stickerBox(ctx, 90, briefTop, 860, briefH, 48, '#FFFFFF');
+
+    // Rarity ribbon across the top of the brief.
+    const ribbonFill =
+      activeQuestRarity === 'legendary' ? CARD_GOLD : activeQuestRarity === 'rare' ? '#FFE4E9' : CARD_CREAM_DEEP;
+    ctx.save();
     ctx.beginPath();
-    ctx.roundRect(100, 360, 880, 1100, 40);
-    ctx.fill();
-    ctx.stroke();
+    ctx.roundRect(90, briefTop, 860, briefH, 48);
+    ctx.clip();
+    ctx.fillStyle = ribbonFill;
+    ctx.fillRect(90, briefTop, 860, 110);
+    ctx.fillStyle = CARD_INK;
+    ctx.fillRect(90, briefTop + 104, 860, 6);
+    ctx.restore();
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.roundRect(140, 420, 800, 80, 20);
-    ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText(
+      `${(isExplorerMode ? 'EXPLORER' : mode).toUpperCase()} MISSION BROKEN`,
+      140,
+      briefTop + 68
+    );
 
-    ctx.fillStyle = '#fda4af';
-    ctx.font = '700 36px sans-serif';
-    ctx.fillText(`MODE: ${(isExplorerMode ? 'explorer' : mode).toUpperCase()} MISSION BROKEN 🔥`, 540, 475);
+    ctx.textAlign = 'right';
+    ctx.font = `700 32px ${DISPLAY}`;
+    ctx.fillText(`+${xpGained} XP`, 900, briefTop + 68);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '600 42px sans-serif';
-    const text = `"${activeQuest || 'Completed a local real-world mission in Mumbai'}"`;
-    const words = text.split(' ');
-    let line = '';
-    let y = 600;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = CARD_INK;
+    ctx.font = quoteFont;
+    lines.forEach((line, i) => {
+      ctx.fillText(line, 540, briefTop + quoteTop + i * 74);
+    });
 
-    for (let i = 0; i < words.length; i++) {
-      const testLine = line + words[i] + ' ';
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > 780 && i > 0) {
-        ctx.fillText(line, 540, y);
-        line = words[i] + ' ';
-        y += 60;
-      } else {
-        line = testLine;
-      }
-    }
-    ctx.fillText(line, 540, y);
+    // Stats sit under the brief wherever it actually ends.
+    const statsY = briefTop + briefH + statsGap;
+    statBlock(ctx, 90, statsY, 410, 'STREAK', `${newStreak} days`, CARD_INK, CARD_CREAM_DEEP);
+    statBlock(ctx, 540, statsY, 410, 'IRL XP', `${totalXpNow}`, CARD_EMBER, '#FFEAD8');
 
-    const statsY = Math.max(y + 100, 1050);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText(getRankTitle(totalXpNow).toUpperCase(), 540, statsY + 268);
 
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('STREAK', 320, statsY);
-    ctx.fillText('IRL XP GAINED', 760, statsY);
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 42px ${DISPLAY}`;
+    ctx.fillText(`@${handle}`, 540, 1740);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${newStreak} Days 🔥`, 320, statsY + 80);
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.fillText(`+${newSavedMins} XP ⚡`, 760, statsY + 80);
-
-    ctx.fillStyle = '#e2e8f0';
-    ctx.font = '700 40px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH 📍`, 540, 1580);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '500 32px sans-serif';
-    ctx.fillText('Join at breaktheloopapp.in', 540, 1650);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `500 30px ${BODY}`;
+    ctx.fillText('breaktheloopapp.in', 540, 1800);
 
     setCardDataUrl(canvas.toDataURL('image/png'));
   };
 
-  const generateSpotifyWrappedCard = () => {
+  // The auto-surfaced Recap fires from a setTimeout inside the completion
+  // handler, where streak/xp/badges in scope are still the pre-completion
+  // values. Taking them as arguments lets that path pass the fresh numbers
+  // instead of showing you a recap of the run before the one you just did.
+  const generateSpotifyWrappedCard = (
+    recapStreak: number = streak,
+    recapTotalXp: number = totalXp,
+    recapBadges: string[] = badges
+  ) => {
     const canvas = document.createElement('canvas');
     canvas.width = 1080;
     canvas.height = 1920;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const bgGradient = ctx.createLinearGradient(0, 0, 1080, 1920);
-    bgGradient.addColorStop(0, '#0f172a');
-    bgGradient.addColorStop(0.3, '#1e1b4b');
-    bgGradient.addColorStop(0.7, '#881337');
-    bgGradient.addColorStop(1, '#020617');
-    ctx.fillStyle = bgGradient;
+    ctx.fillStyle = CARD_CREAM;
     ctx.fillRect(0, 0, 1080, 1920);
+    halftone(ctx, 0.05);
 
-    ctx.fillStyle = 'rgba(244, 63, 94, 0.2)';
-    ctx.beginPath();
-    ctx.arc(200, 300, 250, 0, Math.PI * 2);
-    ctx.fill();
+    wordmark(ctx, 170);
 
-    ctx.fillStyle = 'rgba(168, 85, 247, 0.2)';
-    ctx.beginPath();
-    ctx.arc(880, 1400, 350, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 48px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('BREAK THE LOOP', 540, 200);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 30px ${DISPLAY}`;
+    ctx.fillText('Y O U R   I R L   R E C A P', 540, 226);
 
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '700 32px sans-serif';
-    ctx.fillText('YOUR IRL RECAP 🎧', 540, 260);
+    stickerBox(ctx, 90, 300, 860, 1210, 48, '#FFFFFF');
 
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.strokeStyle = '#f43f5e';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.roundRect(100, 340, 880, 1250, 40);
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 62px ${DISPLAY}`;
+    ctx.fillText('YOU BROKE', 540, 430);
+    ctx.fillText('THE ROUTINE', 540, 500);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '900 56px sans-serif';
-    ctx.fillText('YOU DESTROYED ROUTINE', 540, 460);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `500 30px ${BODY}`;
+    ctx.fillText('Everything you have done outside, so far.', 540, 560);
 
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '500 30px sans-serif';
-    ctx.fillText('Real-world energy reclaimed from screen addiction...', 540, 520);
+    // Lifetime XP, not the minutes counter the old card printed here.
+    statBlock(ctx, 150, 620, 340, 'IRL XP', `${recapTotalXp}`, CARD_EMBER, '#FFEAD8');
+    statBlock(ctx, 560, 620, 340, 'STREAK', `${recapStreak}d`, CARD_INK, CARD_CREAM_DEEP);
 
-    ctx.fillStyle = '#f43f5e';
-    ctx.font = '900 90px sans-serif';
-    ctx.fillText(`${savedMins} XP`, 540, 680);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText(`⚡ Real-World Energy Score`, 540, 740);
+    // The real rank the app computes, rather than the last badge in the array.
+    stickerBox(ctx, 150, 890, 750, 190, 28, CARD_GOLD);
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 28px ${DISPLAY}`;
+    ctx.fillText('RANK', 525, 952);
+    ctx.font = `700 56px ${DISPLAY}`;
+    ctx.fillText(getRankTitle(recapTotalXp).toUpperCase(), 525, 1024);
 
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = '900 80px sans-serif';
-    ctx.fillText(`${streak} DAYS STREAK`, 540, 900);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 32px sans-serif';
-    ctx.fillText('🔥 Active Loop Destroyer', 540, 960);
+    const topBadge = recapBadges[recapBadges.length - 1] || '🌱 First Step';
+    stickerBox(ctx, 150, 1150, 750, 190, 28, '#FFF0CF');
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `700 28px ${DISPLAY}`;
+    ctx.fillText('LATEST BADGE', 525, 1212);
+    ctx.fillStyle = '#7A4B05';
+    ctx.font = `700 48px ${DISPLAY}`;
+    ctx.fillText(topBadge, 525, 1286);
 
-    const topBadge = badges[badges.length - 1] || '🌱 First Step';
-    ctx.fillStyle = '#fbbf24';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(topBadge, 540, 1120);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🏆 Highest Rank Unlocked', 540, 1180);
+    const partners = friendsList.length;
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 40px ${DISPLAY}`;
+    ctx.fillText(`${partners} raid ${partners === 1 ? 'partner' : 'partners'}`, 540, 1430);
 
-    ctx.fillStyle = '#a855f7';
-    ctx.font = '900 64px sans-serif';
-    ctx.fillText(`${friendsList.length} RAID PARTNERS`, 540, 1340);
-    ctx.fillStyle = '#cbd5e1';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('🤝 Connected in Mumbai Squad', 540, 1400);
+    ctx.fillStyle = CARD_INK;
+    ctx.font = `700 42px ${DISPLAY}`;
+    ctx.fillText(`@${handle}`, 540, 1700);
 
-    ctx.fillStyle = '#f8fafc';
-    ctx.font = '800 42px sans-serif';
-    ctx.fillText(`@${handle} • Mumbai, MH`, 540, 1680);
-
-    ctx.fillStyle = '#64748b';
-    ctx.font = '600 30px sans-serif';
-    ctx.fillText('Get your recap at breaktheloopapp.in', 540, 1750);
+    ctx.fillStyle = CARD_MUTED;
+    ctx.font = `500 30px ${BODY}`;
+    ctx.fillText('breaktheloopapp.in', 540, 1760);
 
     const url = canvas.toDataURL('image/png');
     setWrappedCardDataUrl(url);
@@ -2159,17 +2349,27 @@ export default function Home() {
           }
         }
 
+        // The XP this mission paid out and the lifetime total are different
+        // numbers, and the card labels them separately. Fall back to the
+        // pre-completion total plus the reward if the RPC omits the total.
+        const freshStreak = data.new_streak ?? streak;
+        const freshTotalXp = data.new_total_xp ?? totalXp + activeQuestXp;
+        const freshBadges: string[] = Array.isArray(data.badges) ? data.badges : badges;
+
         // Wrap card generation in try/catch and provide fallback 0 values
         try {
-          generateShareCard(data.new_streak || 0, data.new_saved_mins || 0);
+          generateShareCard(freshStreak || 0, activeQuestXp, freshTotalXp);
         } catch {
         }
 
         // Auto-surface the Recap at a genuine peak moment, after the completion
         // animation has had time to play rather than instantly on top of it.
+        // The values are passed in: this closure captured the pre-completion
+        // state, so reading them off the component would recap the run before
+        // the one that just triggered it.
         if (justEarnedNewBadge || wasLegendary) {
           setTimeout(() => {
-            generateSpotifyWrappedCard();
+            generateSpotifyWrappedCard(freshStreak, freshTotalXp, freshBadges);
           }, 2500);
         }
       }
@@ -2204,19 +2404,41 @@ export default function Home() {
     }
   };
 
+
+  const rankTitle = getRankTitle(totalXp);
+  const nextRank = getNextRankTier(totalXp);
+  const rankProgress = getRankProgress(totalXp);
+  const isOnQuestTrack = tab === 'quest' && !isExplorerMode;
+  const isOnExploreTrack = tab === 'quest' && isExplorerMode;
+  const hasActiveMission = Boolean(activeQuest) && !isCompleted;
+
+  const navItems: { key: string; label: string; icon: string; active: boolean; onClick: () => void }[] = [
+    { key: 'quest', label: 'Quest', icon: '🎲', active: isOnQuestTrack, onClick: goToQuestTrack },
+    { key: 'explore', label: 'Explore', icon: '🗺️', active: isOnExploreTrack, onClick: goToExploreTrack },
+    { key: 'feed', label: 'Feed', icon: '🔥', active: tab === 'feed', onClick: () => setTab('feed') },
+  ];
+
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_50%_35%,_#FFFCF8_0%,_#FFF8F0_50%,_#FDE9D0_100%)] text-stone-900 flex flex-col items-center justify-between pt-[max(1.5rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] pr-[max(1.5rem,env(safe-area-inset-right))] font-sans select-none">
+    <main className="relative flex min-h-dvh flex-col overflow-x-hidden bg-cream font-sans text-ink">
+      {/* Printed-paper ground: halftone dots plus two warm light pools. Purely
+          decorative, so it never traps a tap or reaches a screen reader. */}
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 halftone opacity-[0.05]" />
+        <div className="absolute -top-40 left-1/2 h-[34rem] w-[34rem] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(245,165,36,0.38)_0%,rgba(245,165,36,0)_70%)]" />
+        <div className="absolute -bottom-32 -right-24 h-[26rem] w-[26rem] rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.26)_0%,rgba(234,88,12,0)_70%)]" />
+      </div>
+
       {/* Toast Stack */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
+      <div className="pointer-events-none fixed left-1/2 top-3 z-[100] flex w-[min(22rem,92vw)] -translate-x-1/2 flex-col items-center gap-2 pt-[env(safe-area-inset-top)]">
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
+            className={`w-full animate-pop rounded-2xl border-2 px-4 py-3 text-xs font-bold shadow-sticker ${
               t.type === 'error'
-                ? 'bg-orange-950/95 border-orange-500/40 text-orange-200'
+                ? 'border-ink bg-ink text-rose-wash'
                 : t.type === 'success'
-                ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-white border-stone-300 text-stone-800'
+                ? 'border-ink bg-ink text-gold'
+                : 'border-ink bg-white text-ink'
             }`}
           >
             {t.message}
@@ -2224,106 +2446,902 @@ export default function Home() {
         ))}
       </div>
 
-      <header className="w-full max-w-md flex flex-wrap justify-between items-center gap-y-2 py-4 border-b border-stone-200">
-        <h1
-          onMouseDown={handleDevPressStart}
-          onMouseUp={handleDevPressEnd}
-          onTouchStart={handleDevPressStart}
-          onTouchEnd={handleDevPressEnd}
-          className="text-lg sm:text-xl font-black tracking-tight font-['Space_Grotesk'] text-orange-600 drop-shadow-sm cursor-pointer select-none active:scale-95 transition-transform whitespace-nowrap"
-          title={userEmail === ADMIN_EMAIL ? "Hold for 2s for Developer Access" : "Break The Loop"}
-        >
-          BREAK THE LOOP
-        </h1>
-        <div className="flex items-center flex-wrap gap-2">
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchAdminReports}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Admin Moderation Queue"
-            >
-              🚩 Reports
-            </button>
-          )}
-
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingQuests}
-              className="bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Pending Quest Suggestions"
-            >
-              📝 Quests
-            </button>
-          )}
-
-          {userEmail === ADMIN_EMAIL && (
-            <button
-              onClick={fetchPendingGems}
-              className="relative bg-amber-500/10 border border-amber-500/30 text-amber-700 px-2.5 py-1 rounded-xl text-xs font-bold transition-all hover:bg-amber-500/20"
-              title="Manage Hidden Gems"
-            >
-              🗺️ Gems
-              {pendingGemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-orange-600 text-white text-[9px] font-black min-w-[16px] h-4 px-1 rounded-full flex items-center justify-center">
-                  {pendingGemCount}
-                </span>
-              )}
-            </button>
-          )}
-
-          <button
-            onClick={requestNotificationPermission}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold border transition-all ${
-              notificationsEnabled
-                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
-                : 'bg-white border-stone-200 text-stone-600 hover:text-stone-900'
-            }`}
-            title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
+      <header className="sticky top-0 z-40 border-b-2 border-ink bg-cream/92 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-md flex-wrap items-center justify-between gap-y-2 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:max-w-5xl lg:px-8">
+          <h1
+            onMouseDown={handleDevPressStart}
+            onMouseUp={handleDevPressEnd}
+            onTouchStart={handleDevPressStart}
+            onTouchEnd={handleDevPressEnd}
+            className="cursor-pointer select-none whitespace-nowrap font-display text-lg font-bold leading-none tracking-tight active:scale-95 sm:text-xl"
+            title={userEmail === ADMIN_EMAIL ? 'Hold for 2s for Developer Access' : 'Break The Loop'}
           >
-            {notificationsEnabled ? '🔔' : '🔕'}
-          </button>
+            <span className="text-ink">BREAK THE </span>
+            <span className="relative inline-block text-ember-deep">
+              LOOP
+              <span
+                aria-hidden="true"
+                className="absolute left-0 right-0 top-1/2 h-[3px] -rotate-6 rounded bg-ember-deep"
+              />
+            </span>
+          </h1>
 
-          <div className="flex bg-white border border-stone-200 rounded-xl p-1 text-xs">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {userEmail === ADMIN_EMAIL && (
+              <button onClick={fetchAdminReports} className={BTN_MINI} title="Admin Moderation Queue">
+                🚩 Reports
+              </button>
+            )}
+
+            {userEmail === ADMIN_EMAIL && (
+              <button onClick={fetchPendingQuests} className={BTN_MINI} title="Pending Quest Suggestions">
+                📝 Quests
+              </button>
+            )}
+
+            {userEmail === ADMIN_EMAIL && (
+              <button onClick={fetchPendingGems} className={`relative ${BTN_MINI}`} title="Manage Hidden Gems">
+                🗺️ Gems
+                {pendingGemCount > 0 && (
+                  <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-ink bg-rose px-1 font-display text-[10px] font-bold text-white">
+                    {pendingGemCount}
+                  </span>
+                )}
+              </button>
+            )}
+
             <button
-              onClick={() => setTab('quest')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'quest' ? 'bg-orange-600 text-white' : 'text-stone-600'
+              onClick={requestNotificationPermission}
+              aria-label={notificationsEnabled ? 'Notifications are on' : 'Turn on notifications'}
+              className={`flex h-9 w-9 items-center justify-center rounded-xl sticker-sm press-sm text-sm ${
+                notificationsEnabled ? 'bg-gold' : 'bg-white'
               }`}
+              title={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}
             >
-              Quest
+              <span aria-hidden="true">{notificationsEnabled ? '🔔' : '🔕'}</span>
             </button>
-            <button
-              onClick={() => setTab('feed')}
-              className={`px-3 py-1 rounded-lg font-bold transition-all ${
-                tab === 'feed' ? 'bg-orange-600 text-white' : 'text-stone-600'
-              }`}
-            >
-              Feed
-            </button>
+
+            <span className="hidden items-center gap-1 rounded-full border-2 border-ink bg-gold-wash px-2.5 py-0.5 text-[11px] font-bold text-gold-ink sm:flex">
+              <span aria-hidden="true">📍</span> Mumbai
+            </span>
           </div>
         </div>
       </header>
 
-      {/* Incoming Live Raid Invite Banner */}
+      {/* Primary navigation. One element, two shapes: a thumb-reachable bar
+          pinned to the bottom of the screen on phones, and an inline segmented
+          control under the header from lg up. Rendering it once (rather than a
+          mobile copy plus a desktop copy) keeps a single "Feed" control in the
+          accessibility tree. */}
+      <nav
+        aria-label="Main"
+        className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-ink bg-cream/95 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-md lg:static lg:mx-auto lg:mt-6 lg:w-full lg:max-w-5xl lg:border-0 lg:bg-transparent lg:px-8 lg:pb-0 lg:pt-0 lg:backdrop-blur-none"
+      >
+        <div className="mx-auto flex w-full max-w-md items-center gap-2 rounded-2xl lg:max-w-none lg:justify-start lg:gap-3">
+          {navItems.map((item) => (
+            <button
+              key={item.key}
+              onClick={item.onClick}
+              aria-current={item.active ? 'page' : undefined}
+              className={`flex flex-1 flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-2 font-display text-[13px] font-bold press-sm lg:max-w-[11rem] lg:flex-row lg:gap-2 lg:py-2.5 lg:text-sm ${
+                item.active
+                  ? item.key === 'explore'
+                    ? 'sticker-sm bg-gold text-ink'
+                    : 'sticker-sm bg-ember-deep text-white'
+                  : 'sticker-sm bg-white text-ink'
+              }`}
+            >
+              <span aria-hidden="true" className="text-base leading-none">
+                {item.icon}
+              </span>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+
+      {/* The board column takes the leftover width rather than being pinned to
+          36rem and centred. Fixed columns plus lg:justify-center left the pair
+          18px narrower than the container, so the board's left edge and the
+          rail's right edge both sat inside the wordmark and nav above them —
+          three left edges on one page that should agree and didn't. */}
+      <div className="mx-auto grid w-full max-w-md grid-cols-1 gap-4 px-4 pb-28 pt-4 lg:max-w-5xl lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-7 lg:px-8 lg:pb-12 lg:pt-5">
+        {tab === 'quest' ? (
+          <section className="flex flex-col gap-4">
+            {/* Track banner: says which of the two tracks you're on and what it
+                does, so Explore isn't just "the other tab". */}
+            <div
+              className={`relative overflow-hidden rounded-3xl sticker ${
+                isExplorerMode ? 'bg-gold-wash' : 'bg-ember-wash'
+              }`}
+            >
+              <div aria-hidden="true" className="hazard h-2 opacity-70" />
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span
+                  aria-hidden="true"
+                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-ink bg-white text-xl"
+                >
+                  {isExplorerMode ? '🗺️' : '🎲'}
+                </span>
+                <div className="min-w-0">
+                  <p className="eyebrow text-muted">{isExplorerMode ? 'Explore track' : 'Quest track'}</p>
+                  <p className="font-display text-[15px] font-bold leading-tight text-ink">
+                    {isExplorerMode
+                      ? 'Hidden gems, named by locals'
+                      : 'Random real-world micro-missions'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Squad size. Deliberately lighter-weight than the track choice in
+                the nav -- it refines that choice rather than competing with it.
+                Hidden once a mission is live: switching it mid-mission silently
+                discards the board. */}
+            {!hasActiveMission && !isCompleted && (
+              <div className="flex items-center gap-2">
+                {/* Not "Squad": that is the name of one of the three options
+                    inside this group, so the label and its own child collided
+                    on screen — "SQUAD  Solo | Duo | Squad (2-8)". */}
+                <span className="eyebrow shrink-0 text-muted">Players</span>
+                <div className="flex flex-1 items-center gap-1.5">
+                  {(['solo', 'duo', 'squad'] as const).map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => handleSelectMode(m)}
+                      className={`flex-1 rounded-xl px-2 py-2 text-xs font-bold capitalize press-sm ${
+                        mode === m ? 'sticker-sm bg-ink text-cream' : 'sticker-sm bg-white text-ink'
+                      }`}
+                    >
+                      {m === 'squad' ? 'Squad (2-8)' : m}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ---------------- Explore: neighborhood picker ---------------- */}
+            {isExplorerMode && !activeQuest && !isCompleted && (
+              <div className={`${CARD} animate-rise overflow-hidden`}>
+                <div className="border-b-2 border-ink bg-gold px-5 py-3">
+                  <p className="font-display text-base font-bold text-ink">Where are you right now?</p>
+                  <p className="mt-0.5 text-xs font-semibold text-gold-ink">
+                    Pick a neighborhood and we'll hand you a spot a local actually knows about.
+                  </p>
+                </div>
+
+                <div className="p-4 sm:p-5">
+                  <div className="flex flex-wrap gap-2">
+                    {MUMBAI_NEIGHBORHOODS.map((n) => (
+                      <button
+                        key={n}
+                        onClick={() => setSelectedNeighborhood(n)}
+                        disabled={isSearching}
+                        aria-pressed={selectedNeighborhood === n}
+                        className={`rounded-full px-3 py-2 text-xs font-bold press-sm disabled:opacity-40 ${
+                          selectedNeighborhood === n
+                            ? 'sticker-sm bg-gold text-ink'
+                            : 'sticker-sm bg-white text-ink hover:bg-cream'
+                        }`}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-5 space-y-3">
+                    <button
+                      onClick={onStartMatchingClick}
+                      disabled={!selectedNeighborhood || isSearching}
+                      className={`w-full rounded-2xl px-4 py-4 font-display text-base font-bold press ${
+                        !selectedNeighborhood
+                          ? 'cursor-not-allowed border-2 border-dashed border-muted bg-cream-deep text-ink-soft'
+                          : 'sticker bg-gold text-ink'
+                      }`}
+                    >
+                      {isSearching ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <span aria-hidden="true" className="animate-spin">
+                            🌀
+                          </span>
+                          {squadRoster.length > 0
+                            ? `LOBBY (${squadRoster.length}/${squadCapacity})`
+                            : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
+                        </span>
+                      ) : !selectedNeighborhood ? (
+                        'Pick a neighborhood first'
+                      ) : (
+                        '🗺️ Reveal a Hidden Gem'
+                      )}
+                    </button>
+
+                    {!isSearching && (
+                      <button
+                        onClick={() => setShowSuggestGemModal(true)}
+                        className="block w-full rounded-xl py-2 text-center text-xs font-bold text-ink-soft underline decoration-2 underline-offset-2 hover:text-ember-ink"
+                      >
+                        Know a spot? Suggest your own hidden gem
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* ---------------- Quest: the big red button ---------------- */}
+            {!activeQuest && !isCompleted && !isExplorerMode && (
+              <div className={`${CARD} animate-rise overflow-hidden`}>
+                <div className="px-5 pb-6 pt-6 text-center sm:px-7">
+                  <p className="eyebrow text-muted">No mission yet</p>
+                  <h2 className="mx-auto mt-1 max-w-[18rem] font-display text-2xl font-bold leading-tight text-ink sm:text-3xl">
+                    Tap it. Go outside. Come back with proof.
+                  </h2>
+
+                  <div className="relative mx-auto mt-6 flex h-60 w-60 items-center justify-center sm:h-72 sm:w-72">
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-0 rounded-full border-2 border-dashed border-ink/25"
+                    />
+                    {!isSearching && (
+                      <>
+                        <span
+                          aria-hidden="true"
+                          className="absolute h-48 w-48 animate-halo rounded-full bg-ember/25 sm:h-56 sm:w-56"
+                        />
+                        <span
+                          aria-hidden="true"
+                          className="absolute h-48 w-48 animate-halo rounded-full bg-gold/30 [animation-delay:1.3s] sm:h-56 sm:w-56"
+                        />
+                      </>
+                    )}
+
+                    <button
+                      onClick={onStartMatchingClick}
+                      disabled={isSearching}
+                      className={`relative z-10 flex h-44 w-44 flex-col items-center justify-center gap-2 overflow-hidden rounded-full border-[3px] border-ink bg-[radial-gradient(circle_at_30%_22%,#F97316_0%,#EA580C_34%,#9A3412_100%)] shadow-[0_7px_0_0_#1C1410] transition-transform duration-100 active:translate-y-[5px] active:shadow-[0_2px_0_0_#1C1410] sm:h-52 sm:w-52 ${
+                        isSearching ? 'opacity-90' : 'hover:scale-[1.03]'
+                      }`}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className="pointer-events-none absolute -top-8 left-6 h-20 w-28 -rotate-[18deg] rounded-full bg-white/25"
+                      />
+                      {isSearching ? (
+                        <>
+                          <span aria-hidden="true" className="animate-spin text-3xl">
+                            🌀
+                          </span>
+                          <span className="rounded-full bg-ink px-3 py-1 font-display text-[11px] font-bold tracking-wide text-cream">
+                            {squadRoster.length > 0
+                              ? `LOBBY (${squadRoster.length}/${squadCapacity})`
+                              : 'SEARCHING...'}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-display text-[2rem] font-bold leading-none tracking-tight text-white drop-shadow-[0_2px_2px_rgba(28,20,16,0.45)] sm:text-[2.5rem]">
+                            DESTROY
+                          </span>
+                          <span className="rounded-full bg-ink px-3 py-1 font-display text-xs font-bold tracking-wide text-cream line-through decoration-[2.5px]">
+                            BOREDOM
+                          </span>
+                        </>
+                      )}
+                    </button>
+
+                    {!isSearching && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-1 top-2 animate-wiggle rounded-xl border-2 border-ink bg-gold px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-ink shadow-sticker-xs sm:right-2"
+                      >
+                        Random · Real · Now
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="mx-auto mt-5 max-w-[19rem] text-sm font-semibold text-ink-soft">
+                    {isSearching
+                      ? `Searching the live queue for Mumbai ${mode.toUpperCase()} partners...`
+                      : mode === 'solo'
+                      ? 'One tap hands you a random mission near you. 15 minutes, tops.'
+                      : `You'll be matched with other ${mode.toUpperCase()} players in Mumbai.`}
+                  </p>
+
+                  {isSearching && (
+                    <div className="mt-4 flex flex-col items-center gap-2">
+                      <button
+                        onClick={handleWhatsAppInvite}
+                        className="rounded-2xl sticker press bg-ember-deep px-4 py-2.5 text-xs font-bold text-white"
+                      >
+                        <span aria-hidden="true">📲 </span>Invite Friend via WhatsApp Now
+                      </button>
+                      <button
+                        onClick={cancelSearch}
+                        className="text-xs font-bold text-ink-soft underline decoration-2 underline-offset-2"
+                      >
+                        Cancel Search
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Three-step explainer: the loop, stated once, for anyone who
+                    dismissed the welcome screen and forgot what this is. */}
+                <div className="grid grid-cols-3 divide-x-2 divide-ink border-t-2 border-ink bg-cream">
+                  {[
+                    { icon: '🎲', label: 'Get handed one' },
+                    { icon: '🏃', label: 'Actually do it' },
+                    { icon: '📸', label: 'Snap the proof' },
+                  ].map((step) => (
+                    <div key={step.label} className="px-2 py-3 text-center">
+                      <div aria-hidden="true" className="text-lg">
+                        {step.icon}
+                      </div>
+                      <p className="mt-0.5 text-[11px] font-bold leading-tight text-ink-soft">{step.label}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* ---------------- Active mission workspace ---------------- */}
+            {activeQuest && !isCompleted && (
+              <div className={`${CARD} animate-rise p-4 sm:p-5`}>
+                {/* justify-between here dropped the second chip to its own
+                    line and shoved it back to the left as soon as the pair no
+                    longer fit, which is every phone width. They just wrap. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={CHIP_EMBER}>
+                    <span aria-hidden="true">🎯</span>
+                    {isExplorerMode ? 'EXPLORER' : mode.toUpperCase()} MISSION ASSIGNED
+                  </span>
+                  <span className={CHIP_GOLD}>
+                    <span aria-hidden="true" className="h-2 w-2 animate-pulse rounded-full bg-gold-deep" />
+                    Live
+                  </span>
+                </div>
+
+                {squadRoster.length > 0 && (
+                  <div className={`mt-4 ${WELL} text-left`}>
+                    <div className="flex items-center justify-between">
+                      <span className="eyebrow text-muted">
+                        <span aria-hidden="true">👑 </span>Squad roster ({squadRoster.length})
+                      </span>
+                      <span className="eyebrow text-gold-ink">Live lobby</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {squadRoster.map((p, idx) => (
+                        <div
+                          key={idx}
+                          className="flex items-center gap-1.5 rounded-full sticker-flat bg-white py-1 pl-1 pr-2.5"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="flex h-6 w-6 items-center justify-center rounded-full bg-ink font-display text-[11px] font-bold uppercase text-cream"
+                          >
+                            {p.handle?.charAt(0) || '?'}
+                          </span>
+                          <button
+                            onClick={() => inspectProfile(p.handle)}
+                            className="text-xs font-bold text-ember-ink hover:underline"
+                          >
+                            @{p.handle}
+                          </button>
+                          {p.user_id !== currentUserId && (
+                            <button
+                              onClick={() => handleAddFriend(p.user_id)}
+                              className="text-[11px] font-bold text-ink-soft hover:text-ember-ink"
+                              title="Add as Friend"
+                            >
+                              +🤝
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="my-4 flex justify-center">
+                  <SuspenseMissionCard
+                    key={activeQuest}
+                    quest={{
+                      id: "active-quest",
+                      quest_text: activeQuest,
+                      mode: mode,
+                      rarity: activeQuestRarity,
+                      xp_reward: activeQuestXp
+                    }}
+                    credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
+                    gem={isExplorerMode ? activeGem : null}
+                    onReroll={() => mode === 'solo' ? (isExplorerMode ? handleRevealGem() : pickRandomQuest()) : handleSharedReroll()}
+                    onAcceptMission={() => {
+                      setIsMissionAccepted(true);
+                      // The upload box (and its file input) only mounts once
+                      // isMissionAccepted flips, so defer the click until after
+                      // that render commits.
+                      setTimeout(() => {
+                        const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
+                        if (fileInput) {
+                          fileInput.click();
+                        }
+                      }, 0);
+                    }}
+                  />
+                </div>
+
+                {(mode === 'duo' || mode === 'squad') && (
+                  <div className={`${WELL} flex flex-col gap-2 text-left`}>
+                    <div className="flex items-center justify-between border-b-2 border-ink/15 pb-2">
+                      <span className="eyebrow text-ember-ink">
+                        <span aria-hidden="true">💬 </span>Live {mode.toUpperCase()} rally chat
+                      </span>
+                      <button onClick={handleWhatsAppInvite} className={BTN_MINI}>
+                        <span aria-hidden="true">📲 </span>Invite Friend
+                      </button>
+                    </div>
+
+                    <div className="scroll-slim h-32 space-y-2 overflow-y-auto pr-1">
+                      {messages.length === 0 ? (
+                        <p className="py-4 text-center text-[11px] font-semibold text-muted">
+                          No messages yet. Coordinate your squad rally point!
+                        </p>
+                      ) : (
+                        messages.map((m) => (
+                          <div
+                            // Math.random() as a key gave every message a new
+                            // identity on every render, so React tore down and
+                            // rebuilt the whole list each time — losing any
+                            // text selection in it. created_at is stable.
+                            key={m.id || `${m.sender_handle}-${m.created_at}`}
+                            className="flex items-start justify-between gap-2 rounded-xl sticker-flat bg-white px-2.5 py-2"
+                          >
+                            <p className="min-w-0 text-xs text-ink">
+                              <button
+                                onClick={() => inspectProfile(m.sender_handle)}
+                                className="font-bold text-ember-ink hover:underline"
+                              >
+                                @{m.sender_handle}:
+                              </button>{' '}
+                              {m.message}
+                            </p>
+                            {m.sender_handle !== handle && (
+                              <button
+                                onClick={() => handleReport('chat', m.id || m.message)}
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] text-muted hover:bg-cream hover:text-rose-ink"
+                                title="Report message"
+                                aria-label="Report message"
+                              >
+                                <span aria-hidden="true">🚩</span>
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                      <div ref={chatBottomRef} />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        placeholder="Say something (max 300 chars)..."
+                        maxLength={300}
+                        value={newMessage}
+                        onChange={(e) => setNewMessage(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
+                        className="min-w-0 flex-1 rounded-xl sticker-flat bg-white px-3 py-2 text-xs font-medium text-ink placeholder:text-muted"
+                      />
+                      <button onClick={sendMessage} className={BTN_MINI_SOLID}>
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isMissionAccepted && (
+                  <div className="mt-4 rounded-2xl border-2 border-dashed border-ink/40 bg-cream p-3">
+                    {uploading ? (
+                      <div className="flex flex-col items-center gap-1.5 py-5">
+                        <span aria-hidden="true" className="animate-spin text-2xl">
+                          ☁️
+                        </span>
+                        <span className="text-xs font-bold text-ember-ink">
+                          Compressing &amp; Uploading (~50KB)...
+                        </span>
+                      </div>
+                    ) : proofImage ? (
+                      <img
+                        src={proofImage}
+                        alt="Proof"
+                        className="h-40 w-full rounded-xl border-2 border-ink object-cover"
+                      />
+                    ) : (
+                      <label className="flex cursor-pointer flex-col items-center gap-1.5 py-4">
+                        <span aria-hidden="true" className="text-2xl">
+                          📸
+                        </span>
+                        <span className="font-display text-sm font-bold text-ink">Add your photo proof</span>
+                        <span className="text-[11px] font-semibold text-muted">
+                          Opens your camera · stays on your device until you upload
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          capture="environment"
+                          onChange={handleImageUpload}
+                          className="hidden"
+                        />
+                      </label>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-4 flex flex-col gap-2">
+                  <button
+                    onClick={handleCompleteMission}
+                    disabled={uploading || !proofImage}
+                    className={`w-full rounded-2xl px-4 py-4 font-display text-base font-bold press ${
+                      proofImage && !uploading
+                        ? 'sticker bg-ember-deep text-white'
+                        : 'cursor-not-allowed border-2 border-dashed border-muted bg-cream-deep text-ink-soft'
+                    }`}
+                  >
+                    {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
+                  </button>
+                  <button
+                    onClick={handleAbandonMission}
+                    className="mx-auto rounded-xl px-4 py-2.5 text-xs font-bold text-muted underline decoration-2 underline-offset-2 hover:bg-cream hover:text-ink"
+                  >
+                    Abandon Mission
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* ---------------- Completion ---------------- */}
+            {isCompleted && (
+              <div className={`${CARD} animate-pop overflow-hidden text-center`}>
+                <div className="border-b-2 border-ink bg-gold px-5 py-5">
+                  <div aria-hidden="true" className="text-4xl">
+                    🎉
+                  </div>
+                  <h2 className="mt-1 font-display text-3xl font-bold leading-none text-ink">LOOP BROKEN!</h2>
+                  <p className="mt-2 text-xs font-bold text-gold-ink">
+                    You broke routine and gained real-world experience today.
+                  </p>
+                  <span className="mt-3 inline-block rounded-full border-2 border-ink bg-ink px-3 py-1 font-display text-xs font-bold text-gold">
+                    +{activeQuestXp} IRL XP BANKED
+                  </span>
+                </div>
+
+                <div className="space-y-3 p-4 sm:p-5">
+                  {cardDataUrl && (
+                    <>
+                      <div className="overflow-hidden rounded-2xl sticker-flat bg-cream">
+                        <img src={cardDataUrl} alt="Story Card" className="mx-auto h-64 w-full object-contain" />
+                      </div>
+                      <button onClick={() => handleShareCard(cardDataUrl)} className={BTN_PRIMARY}>
+                        <span aria-hidden="true">📲 </span>Share to Instagram Story / WhatsApp
+                      </button>
+                    </>
+                  )}
+
+                  <button onClick={() => setIsCompleted(false)} className={BTN_QUIET}>
+                    Back to Home
+                  </button>
+                </div>
+              </div>
+            )}
+          </section>
+        ) : (
+          /* ---------------- Community feed ---------------- */
+          <section className="flex flex-col gap-4">
+            <div className={`${CARD} overflow-hidden`}>
+              <div className="flex items-center justify-between gap-2 border-b-2 border-ink bg-ember-wash px-4 py-3">
+                <div>
+                  <p className="eyebrow text-muted">Community</p>
+                  <h2 className="font-display text-base font-bold text-ink">Proof feed</h2>
+                </div>
+                <span className={CHIP_EMBER}>{feedItems.length} logged</span>
+              </div>
+
+              <div className="flex flex-col gap-4 p-4">
+                {loadingFeed ? (
+                  [1, 2, 3].map((i) => (
+                    <div key={i} className="animate-pulse rounded-2xl sticker-flat bg-white p-3">
+                      <div className="h-44 w-full rounded-xl bg-cream-deep" />
+                      <div className="mt-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="h-3 w-24 rounded bg-cream-deep" />
+                          <div className="h-3 w-8 rounded bg-cream-deep" />
+                        </div>
+                        <div className="h-3 w-full rounded bg-cream-deep" />
+                        <div className="h-3 w-2/3 rounded bg-cream-deep" />
+                      </div>
+                    </div>
+                  ))
+                ) : feedItems.length > 0 ? (
+                  feedItems.map((item) => (
+                    <article key={item.id} className="rounded-2xl sticker-sm bg-white p-3">
+                      {item.photo_url && (
+                        <img
+                          src={item.photo_url}
+                          alt="Proof"
+                          className="h-48 w-full rounded-xl border-2 border-ink object-cover"
+                        />
+                      )}
+                      <div className="mt-3 space-y-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <span
+                              aria-hidden="true"
+                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink font-display text-[11px] font-bold uppercase text-cream"
+                            >
+                              {(item.handle || 'E').charAt(0)}
+                            </span>
+                            <button
+                              onClick={() => inspectProfile(item.handle)}
+                              className="truncate text-xs font-bold text-ember-ink hover:underline"
+                            >
+                              @{item.handle || 'Explorer'}
+                            </button>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {userEmail === ADMIN_EMAIL && (
+                              <button
+                                onClick={() => handleAdminDeleteFeedPost(item.id)}
+                                className={BTN_MINI_DANGER}
+                                title="Admin: Delete post"
+                              >
+                                🗑️ Delete
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleReport('feed', item.id)}
+                              className="flex h-9 w-9 items-center justify-center rounded-xl text-sm text-muted hover:bg-cream hover:text-rose-ink"
+                              title="Report post"
+                              aria-label="Report post"
+                            >
+                              <span aria-hidden="true">🚩</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="font-display text-sm font-bold leading-snug text-ink">
+                          “{item.quest_text}”
+                        </p>
+
+                        <div className="flex gap-2 border-t-2 border-ink/10 pt-2.5">
+                          <button
+                            onClick={() => handleReact(item.id, 'fire')}
+                            className="flex items-center gap-1.5 rounded-xl sticker-sm press-sm bg-cream px-3 py-1.5 text-xs font-bold text-ink"
+                          >
+                            <span aria-hidden="true">🔥</span>
+                            {item.fire_count || 0}
+                          </button>
+                          <button
+                            onClick={() => handleReact(item.id, 'five')}
+                            className="flex items-center gap-1.5 rounded-xl sticker-sm press-sm bg-cream px-3 py-1.5 text-xs font-bold text-ink"
+                          >
+                            <span aria-hidden="true">✋</span>
+                            {item.five_count || 0}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))
+                ) : (
+                  <div className="py-10 text-center">
+                    <div aria-hidden="true" className="text-4xl">
+                      📭
+                    </div>
+                    <h3 className="mt-2 font-display text-base font-bold text-ink">No missions logged yet</h3>
+                    <p className="mx-auto mt-1 max-w-[15rem] text-xs font-semibold text-muted">
+                      Be the first to complete one and show up here.
+                    </p>
+                    <button
+                      onClick={() => setTab('quest')}
+                      className="mt-4 rounded-2xl sticker press bg-ember-deep px-5 py-2.5 text-xs font-bold text-white"
+                    >
+                      Start a mission
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* ---------------- Player panel ----------------
+            Below the board on phones, a sticky rail from lg up. This is the
+            old footer promoted into a real profile surface: identity, rank
+            progress, stats, badges and every secondary action. */}
+        <aside className="flex flex-col gap-4 lg:sticky lg:top-24">
+          <div className={`${CARD} overflow-hidden`}>
+            <div className="flex items-center gap-3 border-b-2 border-ink bg-cream px-4 py-3.5">
+              <span
+                aria-hidden="true"
+                className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border-2 border-ink bg-ink font-display text-xl font-bold uppercase text-gold"
+              >
+                {handle.charAt(0)}
+              </span>
+              <div className="min-w-0 flex-1">
+                {isEditingHandle ? (
+                  <input
+                    type="text"
+                    defaultValue={handle}
+                    onBlur={(e) => saveHandle(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
+                    autoFocus
+                    aria-label="Your handle"
+                    className="w-full rounded-xl sticker-flat bg-white px-2 py-1 font-display text-sm font-bold text-ink"
+                  />
+                ) : (
+                  <button
+                    onClick={() => setIsEditingHandle(true)}
+                    className="-mx-1 flex max-w-full items-center gap-1.5 rounded-xl px-1 py-1.5 text-left hover:bg-white"
+                  >
+                    <span className="truncate font-display text-base font-bold text-ink">@{handle}</span>
+                    <span aria-hidden="true" className="text-[11px] text-muted">
+                      ✏️
+                    </span>
+                  </button>
+                )}
+                <p className="eyebrow mt-0.5 truncate text-ember-ink">{rankTitle}</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-4">
+              {/* Rank meter: makes the XP number mean something by showing how
+                  far it is to the next title. */}
+              <div>
+                <div className="flex items-baseline justify-between gap-2">
+                  <span className="eyebrow text-muted">Rank progress</span>
+                  <span className="text-[11px] font-bold text-ink-soft">
+                    {nextRank ? `${Math.max(0, nextRank.minXp - totalXp)} XP to ${nextRank.title}` : 'Top rank held'}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-3 w-full overflow-hidden rounded-full sticker-flat bg-cream">
+                  <div
+                    className="h-full rounded-full bg-ember-deep"
+                    style={{ width: `${rankProgress}%` }}
+                    role="progressbar"
+                    aria-valuenow={rankProgress}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-label="Progress to next rank"
+                  />
+                </div>
+              </div>
+
+              {/* The tile under this label used to print time_saved_mins — a
+                  minutes count — while total_xp was what actually drove the
+                  rank meter directly above it. The card contradicted itself:
+                  "90 XP" sitting under "285 XP to Street Legend" at 415 XP.
+                  IRL XP means total_xp; minutes get their own tile. */}
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded-2xl sticker-flat bg-cream px-2 py-2.5 text-center">
+                  <p className="eyebrow text-muted">Streak</p>
+                  <p className="mt-0.5 font-display text-lg font-bold text-ink">{streak}d 🔥</p>
+                </div>
+                <div className="rounded-2xl sticker-flat bg-ember-wash px-2 py-2.5 text-center">
+                  <p className="eyebrow text-muted">IRL XP</p>
+                  <p className="mt-0.5 font-display text-lg font-bold text-ember-ink">{totalXp} ⚡</p>
+                </div>
+                <div className="rounded-2xl sticker-flat bg-gold-wash px-2 py-2.5 text-center">
+                  <p className="eyebrow text-muted">Offline</p>
+                  <p className="mt-0.5 font-display text-lg font-bold text-gold-ink">{savedMins}m 🌤️</p>
+                </div>
+              </div>
+
+              <div>
+                <span className="eyebrow text-muted">Badges</span>
+                <div className="mt-1.5 flex flex-wrap gap-1.5">
+                  {badges.map((b, i) => (
+                    <span
+                      key={i}
+                      className="rounded-full border-2 border-ink bg-gold-wash px-2 py-0.5 text-[11px] font-bold text-gold-ink"
+                    >
+                      {b}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <button onClick={() => setShowFriendsModal(true)} className={BTN_MINI}>
+                  🤝 Squad ({friendsList.length})
+                </button>
+                <button onClick={() => generateSpotifyWrappedCard()} className={BTN_MINI}>
+                  🎧 Recap
+                </button>
+                <button
+                  onClick={() => {
+                    setSuggestQuestMode(mode);
+                    setShowSuggestQuestModal(true);
+                  }}
+                  className={BTN_MINI}
+                >
+                  ✍️ Suggest Quest
+                </button>
+                {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
+                  <button onClick={handleSignOut} className={BTN_MINI}>
+                    Sign Out
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setAuthModalReason('');
+                      setShowAuthModal(true);
+                    }}
+                    className={BTN_MINI}
+                  >
+                    Verify
+                  </button>
+                )}
+              </div>
+
+              {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
+                <div className="space-y-2 border-t-2 border-ink/10 pt-3">
+                  <button
+                    onClick={() => setShowSaveProgressModal(true)}
+                    className="w-full rounded-2xl sticker-sm press-sm bg-gold-wash px-3 py-2.5 text-xs font-bold text-gold-ink"
+                  >
+                    💾 Save My Progress
+                  </button>
+                  <button
+                    onClick={() => setShowRecoverModal(true)}
+                    className="block w-full rounded-xl py-2 text-center text-[11px] font-bold text-muted underline decoration-2 underline-offset-2 hover:text-ink"
+                  >
+                    Already have an account? Sign in
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <footer className="flex items-center justify-center gap-3 pb-1">
+            <Link
+              href="/privacy"
+              className="rounded-lg px-2 py-2 text-[11px] font-bold text-muted underline decoration-2 underline-offset-2 hover:text-ink"
+            >
+              Privacy
+            </Link>
+            <span aria-hidden="true" className="text-[11px] text-muted">
+              ·
+            </span>
+            <Link
+              href="/terms"
+              className="rounded-lg px-2 py-2 text-[11px] font-bold text-muted underline decoration-2 underline-offset-2 hover:text-ink"
+            >
+              Terms
+            </Link>
+          </footer>
+        </aside>
+      </div>
+
+      {/* Incoming Live Raid Invite Banner -- deliberately keeps its own dark
+          card rather than joining the light theme: it interrupts whatever
+          you're doing, so it should not look like part of the page. */}
       {incomingInvite && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 w-11/12 max-w-sm bg-orange-950 border-2 border-orange-500 p-4 rounded-3xl z-50 shadow-[0_0_30px_rgba(249,115,22,0.5)] animate-bounce text-center space-y-2">
-          <div className="text-2xl">⚡</div>
-          <h3 className="font-extrabold text-sm text-stone-100">
+        <div className="fixed left-1/2 top-4 z-50 w-[min(22rem,92vw)] -translate-x-1/2 animate-bounce space-y-2 rounded-3xl border-2 border-gold bg-orange-950 p-4 text-center shadow-[6px_6px_0_0_#1C1410]">
+          <div aria-hidden="true" className="text-2xl">
+            ⚡
+          </div>
+          <h3 className="font-display text-sm font-bold text-cream">
             @{incomingInvite.sender_handle} challenged you to a Duo Raid!
           </h3>
-          <p className="text-[11px] text-orange-200 italic">
-            "{incomingInvite.quest_text}"
-          </p>
-          <div className="flex space-x-2 pt-2">
+          <p className="text-[11px] font-medium italic text-gold">"{incomingInvite.quest_text}"</p>
+          <div className="flex gap-2 pt-1">
             <button
               onClick={declineDirectInvite}
-              className="flex-1 bg-white text-stone-700 py-2 rounded-xl text-xs font-bold"
+              className="flex-1 rounded-xl border-2 border-ink bg-white px-3 py-2 text-xs font-bold text-ink"
             >
               Decline
             </button>
             <button
               onClick={acceptDirectInvite}
-              className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2 rounded-xl text-xs font-bold shadow-lg shadow-orange-600/40"
+              className="flex-1 rounded-xl border-2 border-ink bg-gold px-3 py-2 text-xs font-bold text-ink"
             >
               Accept Raid 🔥
             </button>
@@ -2333,24 +3351,22 @@ export default function Home() {
 
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-5 space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setSelectedProfile(null)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
+        <Overlay label="Explorer profile" onClose={() => setSelectedProfile(null)} className="z-[60]">
+          <div className={`${PANEL} my-auto space-y-4`}>
+            <button onClick={() => setSelectedProfile(null)} className={CLOSE_BTN} aria-label="Close">
               ✕
             </button>
 
-            <div className="text-center space-y-1">
-              <div className="text-3xl">👤</div>
-              <h2 className="text-base font-extrabold text-orange-700">
-                @{selectedProfile.handle}{' '}
-                <span className="text-stone-500 font-medium">· {getRankTitle(selectedProfile.total_xp || 0)}</span>
-              </h2>
-              <p className="text-[10px] text-stone-500">
-                Explorer • Active Mumbai Loop Destroyer
-              </p>
+            <div className="space-y-1 text-center">
+              <span
+                aria-hidden="true"
+                className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-ink bg-ink font-display text-2xl font-bold uppercase text-gold"
+              >
+                {selectedProfile.handle?.charAt(0) || '?'}
+              </span>
+              <h2 className="pt-1 font-display text-lg font-bold text-ink">@{selectedProfile.handle}</h2>
+              <p className="eyebrow text-ember-ink">{getRankTitle(selectedProfile.total_xp || 0)}</p>
+              <p className="text-[11px] font-semibold text-muted">Active Mumbai loop destroyer</p>
             </div>
 
             {selectedProfile.handle !== handle && (
@@ -2365,29 +3381,35 @@ export default function Home() {
                     showToast('Could not block this user.', 'error');
                   }
                 }}
-                className="w-full bg-stone-50 hover:bg-stone-100 text-stone-600 hover:text-orange-700 text-[10px] font-bold py-2 rounded-lg border border-stone-200 transition-all"
+                className="w-full rounded-xl sticker-sm press-sm bg-rose-wash px-3 py-2 text-[11px] font-bold text-rose-ink"
               >
                 🚫 Block this Explorer
               </button>
             )}
 
-            <div className="flex justify-around bg-stone-50 p-3 rounded-2xl border border-stone-200 text-center">
-              <div>
-                <p className="text-[10px] text-stone-500 font-semibold">STREAK</p>
-                <p className="text-sm font-black text-stone-800">{selectedProfile.streak} Days 🔥</p>
+            <div className="grid grid-cols-2 gap-2.5">
+              <div className="rounded-2xl sticker-flat bg-cream px-3 py-2.5 text-center">
+                <p className="eyebrow text-muted">Streak</p>
+                <p className="mt-0.5 font-display text-base font-bold text-ink">{selectedProfile.streak} Days 🔥</p>
               </div>
-              <div className="w-px bg-stone-100" />
-              <div>
-                <p className="text-[10px] text-stone-500 font-semibold">IRL XP</p>
-                <p className="text-sm font-black text-orange-700">{selectedProfile.time_saved_mins} ⚡</p>
+              {/* Same fix as the player panel: the rank title rendered above
+                  reads total_xp, so the XP stat has to read it too. */}
+              <div className="rounded-2xl sticker-flat bg-ember-wash px-3 py-2.5 text-center">
+                <p className="eyebrow text-muted">IRL XP</p>
+                <p className="mt-0.5 font-display text-base font-bold text-ember-ink">
+                  {selectedProfile.total_xp ?? 0} ⚡
+                </p>
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <span className="text-[10px] font-bold text-stone-600 uppercase">Unlocked Badges</span>
-              <div className="flex flex-wrap gap-1">
+              <span className="eyebrow text-muted">Unlocked badges</span>
+              <div className="flex flex-wrap gap-1.5">
                 {selectedProfile.badges?.map((b, i) => (
-                  <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-medium">
+                  <span
+                    key={i}
+                    className="rounded-full border-2 border-ink bg-gold-wash px-2 py-0.5 text-[11px] font-bold text-gold-ink"
+                  >
                     {b}
                   </span>
                 ))}
@@ -2395,82 +3417,85 @@ export default function Home() {
             </div>
 
             <div className="space-y-2">
-              <span className="text-[10px] font-bold text-stone-600 uppercase">Recent Missions Conquered</span>
-              <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+              <span className="eyebrow text-muted">Recent missions conquered</span>
+              <div className="scroll-slim max-h-40 space-y-2 overflow-y-auto pr-1">
                 {selectedProfile.history && selectedProfile.history.length > 0 ? (
                   selectedProfile.history.map((h) => (
-                    <div key={h.id} className="bg-stone-50 p-2 rounded-xl border border-stone-200 flex space-x-2 items-center">
+                    <div key={h.id} className="flex items-center gap-2 rounded-xl sticker-flat bg-cream p-2">
                       {h.photo_url && (
-                        <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
+                        <img
+                          src={h.photo_url}
+                          alt="Proof"
+                          className="h-11 w-11 shrink-0 rounded-lg border-2 border-ink object-cover"
+                        />
                       )}
-                      <div className="text-left overflow-hidden">
-                        <p className="text-[10px] text-stone-700 truncate font-medium">"{h.quest_text}"</p>
-                        <span className="text-[9px] text-orange-700/80 uppercase font-mono font-bold">{h.mode} Mission</span>
+                      <div className="min-w-0 text-left">
+                        <p className="truncate text-[11px] font-semibold text-ink">"{h.quest_text}"</p>
+                        <span className="eyebrow text-ember-ink">{h.mode} mission</span>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <p className="text-[10px] text-stone-400 text-center py-2">No public missions logged yet.</p>
+                  <p className="py-2 text-center text-[11px] font-semibold text-muted">
+                    No public missions logged yet.
+                  </p>
                 )}
               </div>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Admin Moderation Queue Modal */}
       {showReportsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🛡️ Moderation Reports Queue ({adminReports.length})
-              </h2>
-              <button
-                onClick={() => setShowReportsModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
+        <Overlay label="Moderation queue" onClose={() => setShowReportsModal(false)}>
+          <div className={`${PANEL_WIDE} my-auto space-y-4`}>
+            <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
+              <h2 className="eyebrow text-ink">🛡️ Moderation Reports Queue ({adminReports.length})</h2>
+              <button onClick={() => setShowReportsModal(false)} className={BTN_MINI} aria-label="Close">
                 ✕
               </button>
             </div>
 
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+            <div className="scroll-slim max-h-[60vh] space-y-2 overflow-y-auto pr-1">
               {adminReports.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">Queue clear! Zero reported content.</p>
+                <p className="py-8 text-center text-xs font-bold text-muted">Queue clear! Zero reported content.</p>
               ) : (
                 adminReports.map((r) => (
-                  <div key={r.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="text-orange-700 font-bold">Flagged {r.reported_type.toUpperCase()}</span>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
+                  <div key={r.id} className="space-y-2 rounded-2xl sticker-flat bg-cream p-3 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className={CHIP_EMBER}>Flagged {r.reported_type.toUpperCase()}</span>
+                      <span className="font-mono text-[10px] font-bold text-muted">
+                        {new Date(r.created_at).toLocaleTimeString()}
+                      </span>
                     </div>
-                    <p className="text-stone-700 text-[11px]">
+                    <p className="text-[11px] text-ink-soft">
                       <strong>Reason:</strong> "{r.reason}"
                     </p>
                     {r.content_text && (
-                      <p className="text-stone-800 text-[11px] bg-white border border-stone-200 rounded-lg p-2">
-                        <strong className="text-amber-700">Reported content:</strong> "{r.content_text}"
+                      <p className="rounded-lg sticker-flat bg-white p-2 text-[11px] text-ink">
+                        <strong className="text-ember-ink">Reported content:</strong> "{r.content_text}"
                       </p>
                     )}
                     {r.content_photo_url && (
                       <img
                         src={r.content_photo_url}
                         alt="Reported proof photo"
-                        className="w-full max-h-40 object-cover rounded-lg border border-stone-200"
+                        className="max-h-40 w-full rounded-lg border-2 border-ink object-cover"
                       />
                     )}
-                    <p className="text-stone-500 text-[10px]">
+                    <p className="text-[11px] font-semibold text-muted">
                       Reported by @{r.reporter_handle}
                       {r.offender_handle ? ` • Posted by @${r.offender_handle}` : ''}
                     </p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
+                    <div className="flex flex-wrap gap-2 border-t-2 border-ink/10 pt-2">
                       {r.reported_type === 'feed' && (
                         <button
                           onClick={() => {
                             handleAdminDeleteFeedPost(r.target_id);
                             handleResolveReport(r.id);
                           }}
-                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                          className={BTN_MINI_DANGER}
                         >
                           Delete Post
                         </button>
@@ -2481,7 +3506,7 @@ export default function Home() {
                             handleAdminDeleteChatMessage(r.target_id);
                             handleResolveReport(r.id);
                           }}
-                          className="bg-red-600 hover:bg-red-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
+                          className={BTN_MINI_DANGER}
                         >
                           Delete Message
                         </button>
@@ -2497,15 +3522,12 @@ export default function Home() {
                               showToast('Failed to ban user.', 'error');
                             }
                           }}
-                          className="bg-red-950 hover:bg-red-900 text-red-300 text-[10px] px-3 py-1 rounded-lg font-bold border border-red-500/40 transition-all"
+                          className="rounded-xl border-2 border-ink bg-ink px-2.5 py-1.5 text-[11px] font-bold text-rose-wash press-sm"
                         >
                           Ban User
                         </button>
                       )}
-                      <button
-                        onClick={() => handleResolveReport(r.id)}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                      >
+                      <button onClick={() => handleResolveReport(r.id)} className={BTN_MINI}>
                         Dismiss Flag
                       </button>
                     </div>
@@ -2514,61 +3536,46 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Admin Pending Quest Suggestions Modal */}
       {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                📝 Pending Quest Suggestions ({pendingQuests.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={fetchPendingQuests}
-                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
-                  title="Refresh"
-                >
+        <Overlay label="Pending quest suggestions" onClose={() => setShowPendingQuestsModal(false)}>
+          <div className={`${PANEL_WIDE} my-auto space-y-4`}>
+            <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
+              <h2 className="eyebrow text-ink">📝 Pending Quest Suggestions ({pendingQuests.length})</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={fetchPendingQuests} className={BTN_MINI} title="Refresh" aria-label="Refresh">
                   🔄
                 </button>
-                <button
-                  onClick={() => setShowPendingQuestsModal(false)}
-                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-                >
+                <button onClick={() => setShowPendingQuestsModal(false)} className={BTN_MINI} aria-label="Close">
                   ✕
                 </button>
               </div>
             </div>
 
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+            <div className="scroll-slim max-h-[60vh] space-y-2 overflow-y-auto pr-1">
               {loadingPendingQuests ? (
-                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
+                <p className="py-8 text-center text-xs font-bold text-muted">Loading...</p>
               ) : pendingQuests.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">No quests awaiting review.</p>
+                <p className="py-8 text-center text-xs font-bold text-muted">No quests awaiting review.</p>
               ) : (
                 pendingQuests.map((q) => (
-                  <div key={q.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start">
-                      <span className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase">
-                        {q.mode}
+                  <div key={q.id} className="space-y-2 rounded-2xl sticker-flat bg-cream p-3 text-xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className={CHIP_EMBER}>{q.mode.toUpperCase()}</span>
+                      <span className="font-mono text-[10px] font-bold text-muted">
+                        {new Date(q.created_at).toLocaleTimeString()}
                       </span>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-stone-700 text-[11px]">"{q.quest_text}"</p>
-                    <p className="text-stone-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
-                      <button
-                        onClick={() => handleApproveQuest(q.id)}
-                        className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                      >
+                    <p className="text-[11px] text-ink">"{q.quest_text}"</p>
+                    <p className="text-[11px] font-semibold text-muted">Suggested by @{q.submitted_by_handle}</p>
+                    <div className="flex gap-2 border-t-2 border-ink/10 pt-2">
+                      <button onClick={() => handleApproveQuest(q.id)} className={BTN_MINI_SOLID}>
                         Approve
                       </button>
-                      <button
-                        onClick={() => handleRejectQuest(q.id)}
-                        className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                      >
+                      <button onClick={() => handleRejectQuest(q.id)} className={BTN_MINI}>
                         Reject
                       </button>
                     </div>
@@ -2577,98 +3584,90 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🗺️ Manage Hidden Gems ({pendingGems.length})
-              </h2>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={fetchPendingGems}
-                  className="text-stone-500 hover:text-stone-900 text-[10px] font-bold"
-                  title="Refresh"
-                >
+        <Overlay label="Manage hidden gems" onClose={() => setShowPendingGemsModal(false)}>
+          <div className={`${PANEL_WIDE} my-auto space-y-4`}>
+            <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
+              <h2 className="eyebrow text-ink">🗺️ Manage Hidden Gems ({pendingGems.length})</h2>
+              <div className="flex items-center gap-2">
+                <button onClick={fetchPendingGems} className={BTN_MINI} title="Refresh" aria-label="Refresh">
                   🔄
                 </button>
-                <button
-                  onClick={() => setShowPendingGemsModal(false)}
-                  className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-                >
+                <button onClick={() => setShowPendingGemsModal(false)} className={BTN_MINI} aria-label="Close">
                   ✕
                 </button>
               </div>
             </div>
 
-            <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+            <div className="scroll-slim max-h-[60vh] space-y-2 overflow-y-auto pr-1">
               {loadingPendingGems ? (
-                <p className="text-xs text-stone-500 text-center py-8">Loading...</p>
+                <p className="py-8 text-center text-xs font-bold text-muted">Loading...</p>
               ) : pendingGems.length === 0 ? (
-                <p className="text-xs text-stone-500 text-center py-8">No spots awaiting review.</p>
+                <p className="py-8 text-center text-xs font-bold text-muted">No spots awaiting review.</p>
               ) : (
                 pendingGems.map((g) => (
-                  <div key={g.id} className="bg-stone-50 p-3 rounded-2xl border border-stone-200 space-y-2 text-xs">
-                    <div className="flex justify-between items-start gap-2">
-                      <div className="flex items-center gap-1.5">
+                  <div key={g.id} className="space-y-2 rounded-2xl sticker-flat bg-cream p-3 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
                         <select
                           value={g.neighborhood}
                           onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, neighborhood: e.target.value } : item)); }}
-                          className="bg-amber-500/10 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border border-amber-500/20 focus:outline-none"
+                          aria-label="Neighborhood"
+                          className="rounded-lg border-2 border-ink bg-white px-2 py-1 text-[11px] font-bold text-ink"
                         >
                           {MUMBAI_NEIGHBORHOODS.map((n) => (
-                            <option key={n} value={n} className="bg-white text-stone-900 normal-case">{n}</option>
+                            <option key={n} value={n}>{n}</option>
                           ))}
                         </select>
-                        <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase ${
-                          g.status === 'pending' ? 'bg-stone-100 text-stone-600' : 'bg-orange-500/10 text-orange-700'
-                        }`}>
+                        <span
+                          className={`rounded-full border-2 border-ink px-2 py-0.5 text-[10px] font-bold uppercase ${
+                            g.status === 'pending' ? 'bg-white text-ink' : 'bg-ember-wash text-ember-ink'
+                          }`}
+                        >
                           {g.status === 'pending' ? 'Pending' : 'Live'}
                         </span>
                         {dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-amber-100 text-amber-800">
+                          <span className="rounded-full border-2 border-ink bg-gold px-2 py-0.5 text-[10px] font-bold uppercase text-ink">
                             Unsaved
                           </span>
                         )}
                         {savedGemIds.includes(g.id) && !dirtyGemIds.includes(g.id) && (
-                          <span className="text-[9px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-100 text-emerald-800">
+                          <span className="rounded-full border-2 border-ink bg-ink px-2 py-0.5 text-[10px] font-bold uppercase text-gold">
                             ✓ Saved
                           </span>
                         )}
                       </div>
-                      <span className="text-[9px] text-stone-500 font-mono">{new Date(g.created_at).toLocaleTimeString()}</span>
+                      <span className="font-mono text-[10px] font-bold text-muted">
+                        {new Date(g.created_at).toLocaleTimeString()}
+                      </span>
                     </div>
                     <input
                       type="text"
                       value={g.name}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, name: e.target.value } : item)); }}
                       maxLength={100}
-                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-800 text-[11px] font-bold focus:outline-none focus:border-amber-500"
+                      aria-label="Place name"
+                      className="w-full rounded-lg border-2 border-ink bg-white px-2.5 py-2 text-[11px] font-bold text-ink"
                     />
                     <textarea
                       value={g.description}
                       onChange={(e) => { markGemDirty(g.id); setPendingGems((prev) => prev.map((item) => item.id === g.id ? { ...item, description: e.target.value } : item)); }}
                       maxLength={300}
                       rows={3}
-                      className="w-full bg-white border border-stone-200 rounded-lg px-2 py-1.5 text-stone-700 text-[11px] resize-none focus:outline-none focus:border-amber-500"
+                      aria-label="Description"
+                      className="w-full resize-none rounded-lg border-2 border-ink bg-white px-2.5 py-2 text-[11px] text-ink"
                     />
-                    <p className="text-stone-500 text-[10px]">Suggested by @{g.submitted_by_handle}</p>
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200">
+                    <p className="text-[11px] font-semibold text-muted">Suggested by @{g.submitted_by_handle}</p>
+                    <div className="flex gap-2 border-t-2 border-ink/10 pt-2">
                       {g.status === 'pending' ? (
                         <>
-                          <button
-                            onClick={() => handleApproveGem(g)}
-                            className="bg-orange-600 hover:bg-orange-500 text-white text-[10px] px-3 py-1 rounded-lg font-bold transition-all"
-                          >
+                          <button onClick={() => handleApproveGem(g)} className={BTN_MINI_SOLID}>
                             Approve
                           </button>
-                          <button
-                            onClick={() => handleRejectGem(g.id)}
-                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
-                          >
+                          <button onClick={() => handleRejectGem(g.id)} className={BTN_MINI}>
                             Reject
                           </button>
                         </>
@@ -2677,11 +3676,11 @@ export default function Home() {
                           <button
                             onClick={() => handleUpdateGem(g)}
                             disabled={!dirtyGemIds.includes(g.id)}
-                            className={`text-[10px] px-3 py-1 rounded-lg font-bold transition-all ${
+                            className={
                               dirtyGemIds.includes(g.id)
-                                ? 'bg-amber-500 hover:bg-amber-400 text-stone-950'
-                                : 'bg-stone-100 text-stone-500 cursor-not-allowed'
-                            }`}
+                                ? 'rounded-xl sticker-sm press-sm bg-gold px-2.5 py-1.5 text-[11px] font-bold text-ink'
+                                : 'cursor-not-allowed rounded-xl border-2 border-dashed border-muted bg-cream-deep px-2.5 py-1.5 text-[11px] font-bold text-ink-soft'
+                            }
                           >
                             {dirtyGemIds.includes(g.id) ? 'Save Changes' : 'No Changes'}
                           </button>
@@ -2691,7 +3690,7 @@ export default function Home() {
                                 handleRejectGem(g.id);
                               }
                             }}
-                            className="bg-stone-100 hover:bg-stone-200 text-stone-700 text-[10px] px-3 py-1 rounded-lg font-semibold transition-all"
+                            className={BTN_MINI}
                           >
                             Delete
                           </button>
@@ -2703,30 +3702,25 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
-                🛠️ Developer Tools ({userEmail})
-              </h2>
-              <button
-                onClick={() => setShowDevModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
+        <Overlay label="Developer access" onClose={() => setShowDevModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-left`}>
+            <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
+              <h2 className="eyebrow text-ink">🛠️ Developer Tools</h2>
+              <button onClick={() => setShowDevModal(false)} className={BTN_MINI} aria-label="Close">
                 ✕
               </button>
             </div>
 
-            <div className="text-[10px] font-mono bg-stone-50 p-2.5 rounded-xl border border-stone-200 text-stone-600 space-y-1">
-              <p><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
-              <p><strong>Session:</strong> {userEmail}</p>
-              <p><strong>Room:</strong> {roomId || 'None'}</p>
-              <p><strong>Queue Ref:</strong> {myQueueEntryIdRef.current || 'None'}</p>
+            <div className="space-y-1 rounded-2xl sticker-flat bg-cream p-3 font-mono text-[11px] font-medium text-ink-soft">
+              <p className="break-all"><strong>Auth UID:</strong> {currentUserId || 'None'}</p>
+              <p className="break-all"><strong>Session:</strong> {userEmail}</p>
+              <p className="break-all"><strong>Room:</strong> {roomId || 'None'}</p>
+              <p className="break-all"><strong>Queue Ref:</strong> {myQueueEntryIdRef.current || 'None'}</p>
             </div>
 
             <div className="space-y-2">
@@ -2741,7 +3735,7 @@ export default function Home() {
                     showToast('Queue locks released.', 'success');
                   }
                 }}
-                className="w-full bg-orange-100 hover:bg-orange-200 text-orange-700 py-2 rounded-xl text-xs font-mono font-bold border border-orange-300"
+                className={BTN_QUIET}
               >
                 Force Clear Queue Locks
               </button>
@@ -2752,67 +3746,64 @@ export default function Home() {
                   sessionStorage.clear();
                   window.location.reload();
                 }}
-                className="w-full bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-xs font-mono font-bold border border-red-300"
+                className="w-full rounded-2xl sticker press bg-rose px-4 py-3 text-sm font-bold text-white"
               >
-                Hard Reset Local Storage & Reload
+                Hard Reset Local Storage &amp; Reload
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Handle Setup Modal */}
       {showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-3xl">🏷️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
-            <p className="text-xs text-stone-600">
+        <Overlay label="Choose your explorer tag">
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <div aria-hidden="true" className="text-3xl">🏷️</div>
+            <h2 className="font-display text-xl font-bold text-ink">CHOOSE YOUR EXPLORER TAG</h2>
+            <p className="text-xs font-semibold text-ink-soft">
               Pick a unique handle so other Mumbai explorers can recognize and add you to their squad!
             </p>
             <div className="relative">
-              <span className="absolute left-4 top-3 text-orange-700 font-bold text-sm">@</span>
+              <span aria-hidden="true" className="absolute left-4 top-3 font-display text-sm font-bold text-ember-ink">
+                @
+              </span>
               <input
                 type="text"
                 placeholder="ExplorerTag"
                 value={newHandleInput}
                 onChange={(e) => setNewHandleInput(e.target.value)}
                 maxLength={20}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl pl-8 pr-4 py-2.5 text-sm text-stone-900 font-bold focus:outline-none focus:border-orange-500"
+                aria-label="Your handle"
+                className={`${INPUT} pl-8 text-center`}
               />
             </div>
-            <button
-              onClick={() => saveHandleDirect(newHandleInput || handle)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-            >
-              Claim Tag & Start
+            <button onClick={() => saveHandleDirect(newHandleInput || handle)} className={BTN_PRIMARY}>
+              Claim Tag &amp; Start
             </button>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Auth Modal */}
       {(!isLoggedIn || showAuthModal) && !showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
+        <Overlay label="Verify your email" onClose={isLoggedIn ? () => setShowAuthModal(false) : undefined}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
             {isLoggedIn && (
-              <button
-                onClick={() => setShowAuthModal(false)}
-                className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
+              <button onClick={() => setShowAuthModal(false)} className={CLOSE_BTN} aria-label="Close">
                 ✕
               </button>
             )}
-            <div className="text-4xl">✉️</div>
-            <h2 className="text-xl font-extrabold text-stone-900">
+            <div aria-hidden="true" className="text-4xl">✉️</div>
+            <h2 className="font-display text-xl font-bold text-ink">
               {showAuthModal ? 'EMAIL VERIFICATION' : 'JOIN BREAK THE LOOP'}
             </h2>
-            <p className="text-xs text-stone-600">
+            <p className="text-xs font-semibold text-ink-soft">
               {authModalReason || 'Enter your email to match with squad partners or continue as a guest for solo missions.'}
             </p>
 
             {authError && (
-              <p className="text-xs text-orange-700 bg-orange-500/10 p-2 rounded-xl font-medium">{authError}</p>
+              <p className="rounded-xl sticker-flat bg-rose-wash p-2 text-xs font-bold text-rose-ink">{authError}</p>
             )}
 
             {!isOtpSent ? (
@@ -2822,24 +3813,23 @@ export default function Home() {
                   placeholder="yourname@gmail.com"
                   value={emailInput}
                   onChange={(e) => setEmailInput(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                  aria-label="Email address"
+                  className={`${INPUT} text-center`}
                 />
-                <button
-                  onClick={handleSendEmailOtp}
-                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                >
+                <button onClick={handleSendEmailOtp} className={BTN_PRIMARY}>
                   Send 6-Digit Code
                 </button>
 
                 <div className="relative py-1">
-                  <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-stone-200"></div></div>
-                  <div className="relative flex justify-center text-[10px] uppercase"><span className="bg-white px-2 text-stone-500">Or</span></div>
+                  <div aria-hidden="true" className="absolute inset-0 flex items-center">
+                    <div className="h-0.5 w-full bg-ink/15" />
+                  </div>
+                  <div className="relative flex justify-center">
+                    <span className="eyebrow bg-white px-2 text-muted">Or</span>
+                  </div>
                 </div>
 
-                <button
-                  onClick={handleGuestLogin}
-                  className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
-                >
+                <button onClick={handleGuestLogin} className={BTN_QUIET}>
                   ⚡ Continue as Guest (Solo Mode Only)
                 </button>
               </div>
@@ -2850,39 +3840,34 @@ export default function Home() {
                   placeholder="Enter 6-digit Email Code"
                   value={otpInput}
                   onChange={(e) => setOtpInput(e.target.value)}
-                  className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
+                  aria-label="6-digit code"
+                  className={`${INPUT} text-center font-mono tracking-[0.3em]`}
                 />
-                <button
-                  onClick={handleVerifyEmailOtp}
-                  className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                >
-                  Verify & Continue
+                <button onClick={handleVerifyEmailOtp} className={BTN_PRIMARY}>
+                  Verify &amp; Continue
                 </button>
                 <button
                   onClick={() => setIsOtpSent(false)}
-                  className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
+                  className="mx-auto block pt-1 text-xs font-bold text-muted underline decoration-2 underline-offset-2"
                 >
                   Change Email
                 </button>
               </div>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Save My Progress Modal */}
       {showSaveProgressModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowSaveProgressModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
+        <Overlay label="Save your progress" onClose={() => setShowSaveProgressModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <button onClick={() => setShowSaveProgressModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
             </button>
-            <div className="text-3xl">💾</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SAVE MY PROGRESS</h2>
-            <p className="text-xs text-stone-600">
+            <div aria-hidden="true" className="text-3xl">💾</div>
+            <h2 className="font-display text-xl font-bold text-ink">SAVE MY PROGRESS</h2>
+            <p className="text-xs font-semibold text-ink-soft">
               Link an email so your streak, XP, and badges are safe if you switch devices or clear your browser. Fully optional — your progress keeps working without it.
             </p>
             <div className="space-y-3">
@@ -2892,44 +3877,37 @@ export default function Home() {
                 value={saveProgressEmail}
                 onChange={(e) => setSaveProgressEmail(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                aria-label="Email address"
+                className={`${INPUT} text-center`}
               />
-              <button
-                onClick={() => handleSaveProgress(saveProgressEmail.trim())}
-                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-              >
+              <button onClick={() => handleSaveProgress(saveProgressEmail.trim())} className={BTN_PRIMARY}>
                 Send Confirmation Link
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Suggest a Quest Modal */}
       {showSuggestQuestModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowSuggestQuestModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
+        <Overlay label="Suggest a quest" onClose={() => setShowSuggestQuestModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <button onClick={() => setShowSuggestQuestModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
             </button>
-            <div className="text-3xl">✍️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A QUEST</h2>
-            <p className="text-xs text-stone-600">
+            <div aria-hidden="true" className="text-3xl">✍️</div>
+            <h2 className="font-display text-xl font-bold text-ink">SUGGEST A QUEST</h2>
+            <p className="text-xs font-semibold text-ink-soft">
               Got a great real-world mission idea? Submit it for review — approved quests go live for everyone.
             </p>
             <div className="space-y-3">
-              <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
+              <div className="flex gap-1.5">
                 {(['solo', 'duo', 'squad'] as const).map((m) => (
                   <button
                     key={m}
                     onClick={() => setSuggestQuestMode(m)}
-                    className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                      suggestQuestMode === m
-                        ? 'bg-orange-600 text-white'
-                        : 'text-stone-600 hover:text-stone-900'
+                    className={`flex-1 rounded-xl px-2 py-2 text-xs font-bold capitalize press-sm ${
+                      suggestQuestMode === m ? 'sticker-sm bg-ink text-cream' : 'sticker-sm bg-white text-ink'
                     }`}
                   >
                     {m}
@@ -2942,31 +3920,26 @@ export default function Home() {
                 onChange={(e) => setSuggestQuestText(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-orange-500 resize-none"
+                aria-label="Mission description"
+                className={`${INPUT} resize-none text-left`}
               />
-              <button
-                onClick={handleSubmitQuestSuggestion}
-                className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-              >
+              <button onClick={handleSubmitQuestSuggestion} className={BTN_PRIMARY}>
                 Submit for Review
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {showSuggestGemModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowSuggestGemModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
+        <Overlay label="Suggest a hidden gem" onClose={() => setShowSuggestGemModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <button onClick={() => setShowSuggestGemModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
             </button>
-            <div className="text-3xl">🗺️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SUGGEST A HIDDEN GEM</h2>
-            <p className="text-xs text-stone-600">
+            <div aria-hidden="true" className="text-3xl">🗺️</div>
+            <h2 className="font-display text-xl font-bold text-ink">SUGGEST A HIDDEN GEM</h2>
+            <p className="text-xs font-semibold text-ink-soft">
               A real place only you and a few people actually know about — a shop, a stall, a spot with no reviews anywhere. Approved spots go live for everyone to discover.
             </p>
             <div className="space-y-3">
@@ -2976,17 +3949,19 @@ export default function Home() {
                 value={suggestGemName}
                 onChange={(e) => setSuggestGemName(e.target.value)}
                 maxLength={100}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500"
+                aria-label="Place name"
+                className={INPUT}
               />
-              <div className="flex flex-wrap gap-2 justify-center">
+              <div className="flex flex-wrap justify-center gap-1.5">
                 {MUMBAI_NEIGHBORHOODS.map((n) => (
                   <button
                     key={n}
                     onClick={() => setSuggestGemNeighborhood(n)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-all ${
+                    aria-pressed={suggestGemNeighborhood === n}
+                    className={`rounded-full px-2.5 py-1.5 text-[11px] font-bold press-sm ${
                       suggestGemNeighborhood === n
-                        ? 'bg-amber-500 text-stone-950 border-amber-500'
-                        : 'bg-stone-50 text-stone-600 border-stone-200'
+                        ? 'sticker-sm bg-gold text-ink'
+                        : 'sticker-sm bg-white text-ink'
                     }`}
                   >
                     {n}
@@ -2999,56 +3974,55 @@ export default function Home() {
                 onChange={(e) => setSuggestGemDescription(e.target.value)}
                 maxLength={300}
                 rows={4}
-                className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 focus:outline-none focus:border-amber-500 resize-none"
+                aria-label="Why it is special"
+                className={`${INPUT} resize-none text-left`}
               />
-              <button
-                onClick={handleSubmitGemSuggestion}
-                className="w-full bg-amber-500 hover:bg-amber-400 text-stone-950 py-3 rounded-xl font-bold text-sm shadow-lg shadow-amber-500/30 transition-all active:scale-95"
-              >
+              <button onClick={handleSubmitGemSuggestion} className={BTN_GOLD}>
                 Submit for Review
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
+      )}
+
+      {/* First-visit Welcome */}
+      {showWelcomeModal && (
+        <Overlay label="Welcome to Break The Loop" onClose={dismissWelcomeModal}>
+          <div className="relative my-auto w-full max-w-sm overflow-hidden rounded-3xl sticker bg-white text-center">
+            <div className="border-b-2 border-ink bg-gold px-5 py-5">
+              <div aria-hidden="true" className="text-4xl">👋</div>
+              <h2 className="mt-1 font-display text-2xl font-bold leading-tight text-ink">
+                Welcome to Break The Loop
+              </h2>
+            </div>
+            <div className="space-y-4 px-5 pb-5">
+              <p className="text-sm font-semibold leading-relaxed text-ink-soft">
+                Tap the big button. Get handed a real, random micro-mission near you.
+                Do it, snap a photo, earn XP. That's the whole game.
+              </p>
+              <p className="text-xs font-semibold text-muted">
+                Bring friends into it later — for now, let's get your first one done.
+              </p>
+              <button onClick={dismissWelcomeModal} className={BTN_PRIMARY}>
+                I'm in →
+              </button>
+            </div>
+          </div>
+        </Overlay>
       )}
 
       {/* Sign In / Recover Account Modal */}
-      {showWelcomeModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-gradient-to-b from-white to-stone-50 border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <div className="text-4xl">👋</div>
-            <h2 className="text-xl font-black text-stone-900">Welcome to Break The Loop</h2>
-            <p className="text-sm text-stone-600 leading-relaxed">
-              Tap the big button. Get handed a real, random micro-mission near you.
-              Do it, snap a photo, earn XP. That's the whole game.
-            </p>
-            <p className="text-xs text-stone-500">
-              Bring friends into it later — for now, let's get your first one done.
-            </p>
-            <button
-              onClick={dismissWelcomeModal}
-              className="w-full bg-orange-600 text-white font-black py-3 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
-            >
-              I'm in →
-            </button>
-          </div>
-        </div>
-      )}
-
       {showRecoverModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
-            <button
-              onClick={() => setShowRecoverModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
+        <Overlay label="Sign in to an existing account" onClose={() => setShowRecoverModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <button onClick={() => setShowRecoverModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
             </button>
-            <div className="text-3xl">🔑</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SIGN IN ON THIS DEVICE</h2>
+            <div aria-hidden="true" className="text-3xl">🔑</div>
+            <h2 className="font-display text-xl font-bold text-ink">SIGN IN ON THIS DEVICE</h2>
             {!isRecoverOtpSent ? (
               <>
-                <p className="text-xs text-stone-600">
+                <p className="text-xs font-semibold text-ink-soft">
                   Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
                 </p>
                 <div className="space-y-3">
@@ -3058,19 +4032,17 @@ export default function Home() {
                     value={recoverEmail}
                     onChange={(e) => setRecoverEmail(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 text-center focus:outline-none focus:border-orange-500"
+                    aria-label="Email address"
+                    className={`${INPUT} text-center`}
                   />
-                  <button
-                    onClick={() => handleRecoverAccount(recoverEmail.trim())}
-                    className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-bold text-sm border border-stone-300 transition-all active:scale-95"
-                  >
+                  <button onClick={() => handleRecoverAccount(recoverEmail.trim())} className={BTN_QUIET}>
                     Send Sign-In Code
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <p className="text-xs text-stone-600">
+                <p className="text-xs font-semibold text-ink-soft">
                   Enter the 6-digit code we emailed to {recoverEmail}.
                 </p>
                 <div className="space-y-3">
@@ -3080,17 +4052,15 @@ export default function Home() {
                     value={recoverOtpInput}
                     onChange={(e) => setRecoverOtpInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleVerifyRecoverOtp()}
-                    className="w-full bg-stone-50 border border-stone-200 rounded-xl px-4 py-3 text-sm text-stone-900 font-mono text-center focus:outline-none focus:border-orange-500"
+                    aria-label="6-digit code"
+                    className={`${INPUT} text-center font-mono tracking-[0.3em]`}
                   />
-                  <button
-                    onClick={handleVerifyRecoverOtp}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                  >
-                    Verify & Sign In
+                  <button onClick={handleVerifyRecoverOtp} className={BTN_PRIMARY}>
+                    Verify &amp; Sign In
                   </button>
                   <button
                     onClick={() => setIsRecoverOtpSent(false)}
-                    className="text-xs text-stone-500 hover:underline pt-2 block mx-auto"
+                    className="mx-auto block pt-1 text-xs font-bold text-muted underline decoration-2 underline-offset-2"
                   >
                     Change Email
                   </button>
@@ -3098,61 +4068,53 @@ export default function Home() {
               </>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Safety Modal */}
       {showSafetyModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-            <div className="text-3xl">🛡️</div>
-            <h2 className="text-lg font-extrabold text-stone-900">SAFETY FIRST</h2>
-            <div className="text-xs text-stone-700 text-left space-y-2 bg-stone-50 p-3 rounded-xl border border-stone-200">
-              <p>• <strong>Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
-              <p>• <strong>Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
-              <p>• <strong>Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
+        <Overlay label="Safety guidelines" onClose={() => setShowSafetyModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <div aria-hidden="true" className="text-3xl">🛡️</div>
+            <h2 className="font-display text-xl font-bold text-ink">SAFETY FIRST</h2>
+            <div className="space-y-2 rounded-2xl sticker-flat bg-cream p-3 text-left text-xs text-ink-soft">
+              <p>• <strong className="text-ink">Meet in Public:</strong> Coordinate only at visible, public landmarks.</p>
+              <p>• <strong className="text-ink">Trust Your Instincts:</strong> Leave or cancel the mission immediately if you feel uncomfortable.</p>
+              <p>• <strong className="text-ink">Never Share Private Data:</strong> Do not disclose banking, OTPs, or exact home addresses.</p>
             </div>
-            <div className="flex space-x-2 pt-2">
-              <button
-                onClick={() => setShowSafetyModal(false)}
-                className="flex-1 bg-stone-100 hover:bg-stone-200 text-stone-700 py-2.5 rounded-xl font-bold text-xs"
-              >
+            <div className="flex gap-2">
+              <button onClick={() => setShowSafetyModal(false)} className={BTN_QUIET}>
                 Cancel
               </button>
               <button
                 onClick={() => isExplorerMode ? handleExploreMatchmaking() : executeMatchmaking()}
-                className="flex-1 bg-orange-600 hover:bg-orange-500 text-white py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-orange-600/30"
+                className={BTN_PRIMARY}
               >
-                I Agree & Search
+                I Agree &amp; Search
               </button>
             </div>
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Friends List Modal */}
       {showFriendsModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 space-y-4 shadow-2xl relative">
-            <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-              <h2 className="text-sm font-bold text-stone-800">🤝 Raid Squad ({friendsList.length})</h2>
-              <button
-                onClick={() => setShowFriendsModal(false)}
-                className="text-stone-500 hover:text-stone-900 text-sm font-bold"
-              >
+        <Overlay label="Raid squad" onClose={() => setShowFriendsModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4`}>
+            <div className="flex items-center justify-between gap-2 border-b-2 border-ink pb-2">
+              <h2 className="font-display text-sm font-bold text-ink">🤝 Raid Squad ({friendsList.length})</h2>
+              <button onClick={() => setShowFriendsModal(false)} className={BTN_MINI} aria-label="Close">
                 ✕
               </button>
             </div>
 
-            <div className="flex bg-stone-50 p-1 rounded-xl border border-stone-200 w-full justify-between">
+            <div className="flex gap-1.5">
               {(['squad', 'leaderboard'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setLeaderboardTab(t)}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg capitalize transition-all ${
-                    leaderboardTab === t
-                      ? 'bg-orange-600 text-white'
-                      : 'text-stone-600 hover:text-stone-900'
+                  className={`flex-1 rounded-xl px-2 py-2 text-xs font-bold press-sm ${
+                    leaderboardTab === t ? 'sticker-sm bg-ink text-cream' : 'sticker-sm bg-white text-ink'
                   }`}
                 >
                   {t === 'squad' ? 'Squad' : 'Leaderboard'}
@@ -3161,41 +4123,43 @@ export default function Home() {
             </div>
 
             {leaderboardTab === 'leaderboard' ? (
-              <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+              <div className="scroll-slim max-h-60 space-y-2 overflow-y-auto pr-1">
                 {leaderboard.map((entry, i) => (
                   <div
                     key={entry.handle}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between text-xs ${
+                    className={`flex items-center justify-between gap-2 rounded-xl border-2 p-2.5 text-xs ${
                       entry.is_self
-                        ? 'bg-orange-500/10 border-orange-500/40'
-                        : 'bg-stone-50 border-stone-200'
+                        ? 'border-orange-500/40 bg-ember-wash shadow-sticker'
+                        : 'border-ink bg-white shadow-sticker-xs'
                     }`}
                   >
-                    <div className="flex items-center space-x-2">
-                      <span className="text-stone-500 font-bold w-4 text-center">{i + 1}</span>
-                      <div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="w-5 shrink-0 text-center font-display text-sm font-bold text-muted">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0">
                         <button
                           onClick={() => inspectProfile(entry.handle)}
-                          className="font-bold text-orange-700 hover:underline"
+                          className="block max-w-full truncate font-bold text-ember-ink hover:underline"
                         >
                           @{entry.handle}
                         </button>
-                        <span className="block text-[9px] text-stone-500">{getRankTitle(entry.total_xp)}</span>
+                        <span className="eyebrow block text-muted">{getRankTitle(entry.total_xp)}</span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="font-bold text-stone-800">{entry.total_xp} XP</p>
-                      <p className="text-[9px] text-stone-500">{entry.streak} Days 🔥</p>
+                    <div className="shrink-0 text-right">
+                      <p className="font-display text-sm font-bold text-ink">{entry.total_xp} XP</p>
+                      <p className="text-[10px] font-bold text-muted">{entry.streak} Days 🔥</p>
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
+            <div className="scroll-slim max-h-60 space-y-2 overflow-y-auto pr-1">
               {friendsList.length === 0 ? (
-                <div className="text-center py-8 space-y-2">
-                  <div className="text-3xl">🤝</div>
-                  <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
+                <div className="py-8 text-center">
+                  <div aria-hidden="true" className="text-3xl">🤝</div>
+                  <p className="mx-auto mt-2 max-w-[15rem] text-xs font-semibold text-muted">
                     No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!
                   </p>
                 </div>
@@ -3203,39 +4167,44 @@ export default function Home() {
                 friendsList.map((f, i) => {
                   const isOnline = onlineUserIds.has(f.friend_user_id);
                   return (
-                    <div key={i} className="bg-stone-50 p-2.5 rounded-xl border border-stone-200 flex justify-between items-center text-xs">
-                      <div>
-                        <div className="flex items-center space-x-1.5">
-                          <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-amber-400 shadow-[0_0_8px_#fbbf24]' : 'bg-stone-300'}`} />
+                    <div
+                      key={i}
+                      className="flex items-center justify-between gap-2 rounded-xl sticker-flat bg-cream p-2.5 text-xs"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            aria-hidden="true"
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full border border-ink ${
+                              isOnline ? 'bg-gold' : 'bg-white'
+                            }`}
+                          />
                           <button
                             onClick={() => inspectProfile(f.handle)}
-                            className="font-bold text-orange-700 hover:underline"
+                            className="truncate font-bold text-ember-ink hover:underline"
                           >
                             @{f.handle}
                           </button>
                         </div>
-                        <span className="block text-[9px] text-stone-500 pl-3.5">
+                        <span className="block pl-4 text-[10px] font-bold text-muted">
                           {isOnline ? 'Online in App' : 'Offline'}
                         </span>
                       </div>
-                      <div className="flex space-x-1.5">
-                        <button
-                          onClick={() => inspectProfile(f.handle)}
-                          className="bg-white hover:bg-stone-100 text-stone-700 text-[10px] px-2 py-1 rounded-lg border border-stone-200 font-bold"
-                        >
+                      <div className="flex shrink-0 gap-1.5">
+                        <button onClick={() => inspectProfile(f.handle)} className={BTN_MINI}>
                           Profile
                         </button>
                         <button
                           onClick={() => sendDirectRaidInvite(f)}
                           disabled={!isOnline || sendingInviteTo === f.handle}
-                          className={`px-2.5 py-1 rounded-lg font-bold text-[10px] flex items-center space-x-1 transition-all ${
+                          className={
                             isOnline
-                              ? 'bg-orange-600 text-white shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]'
-                              : 'bg-white text-stone-400 border border-stone-200 cursor-not-allowed'
-                          }`}
+                              ? BTN_MINI_SOLID
+                              : 'cursor-not-allowed rounded-xl border-2 border-dashed border-muted bg-cream-deep px-2.5 py-1.5 text-[11px] font-bold text-ink-soft'
+                          }
                         >
-                          <span>⚡</span>
-                          <span>{sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Raid' : 'Offline'}</span>
+                          <span aria-hidden="true">⚡ </span>
+                          {sendingInviteTo === f.handle ? 'Sending...' : isOnline ? 'Raid' : 'Offline'}
                         </button>
                       </div>
                     </div>
@@ -3245,621 +4214,28 @@ export default function Home() {
             </div>
             )}
           </div>
-        </div>
+        </Overlay>
       )}
 
       {/* Journey Recap Modal */}
       {showWrappedModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-5 space-y-4 shadow-2xl text-center relative">
-            <button
-              onClick={() => setShowWrappedModal(false)}
-              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900 text-sm font-bold"
-            >
+        <Overlay label="Your IRL recap" onClose={() => setShowWrappedModal(false)}>
+          <div className={`${PANEL} my-auto space-y-4 text-center`}>
+            <button onClick={() => setShowWrappedModal(false)} className={CLOSE_BTN} aria-label="Close">
               ✕
             </button>
-            <h2 className="text-sm font-black text-orange-700 uppercase tracking-wider">🎧 Your IRL Recap</h2>
+            <h2 className="eyebrow pt-1 text-ember-ink">🎧 Your IRL Recap</h2>
             {wrappedCardDataUrl && (
-              <div className="rounded-2xl overflow-hidden border border-stone-200 bg-stone-50">
-                <img src={wrappedCardDataUrl} alt="Recap" className="w-full h-80 object-contain mx-auto" />
+              <div className="overflow-hidden rounded-2xl sticker-flat bg-cream">
+                <img src={wrappedCardDataUrl} alt="Recap" className="mx-auto h-80 w-full object-contain" />
               </div>
             )}
-            <button
-              onClick={() => handleShareCard(wrappedCardDataUrl)}
-              className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-xs shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
-            >
-              <span>📲</span>
-              <span>Share Recap to Story / WhatsApp</span>
+            <button onClick={() => handleShareCard(wrappedCardDataUrl)} className={BTN_PRIMARY}>
+              <span aria-hidden="true">📲 </span>Share Recap to Story / WhatsApp
             </button>
           </div>
-        </div>
+        </Overlay>
       )}
-
-      {tab === 'quest' ? (
-        <div className="w-full max-w-md flex flex-col items-center justify-center my-auto space-y-4">
-          <div className="flex bg-gradient-to-b from-white to-stone-50 p-1.5 rounded-2xl border border-stone-200 w-full justify-between shadow-xl shadow-stone-900/10">
-            <button
-              onClick={handleSelectQuestTrack}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
-                !isExplorerMode
-                  ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Quest
-            </button>
-            <button
-              onClick={handleSelectExplorer}
-              className={`flex-1 py-2.5 text-base font-extrabold rounded-xl transition-all active:scale-95 ${
-                isExplorerMode
-                  ? 'bg-amber-500 text-stone-950 shadow-lg shadow-amber-500/30'
-                  : 'text-stone-600 hover:text-stone-900'
-              }`}
-            >
-              Explore
-            </button>
-          </div>
-
-          {/* Deliberately lighter-weight than the Quest/Explore choice above --
-              this is a refinement of that choice, not a second equal decision. */}
-          <div className="flex items-center justify-center gap-1">
-            {(['solo', 'duo', 'squad'] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => handleSelectMode(m)}
-                className={`px-4 py-1.5 text-xs font-bold rounded-full capitalize transition-all active:scale-95 ${
-                  mode === m
-                    ? 'bg-stone-800 text-white'
-                    : 'text-stone-500 hover:text-stone-900'
-                }`}
-              >
-                {m === 'squad' ? 'Squad (2-8)' : m}
-              </button>
-            ))}
-          </div>
-
-          {isExplorerMode && !activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <p className="text-sm text-stone-700 font-semibold">
-                Pick a neighborhood to discover a hidden gem someone local actually knows about.
-              </p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {MUMBAI_NEIGHBORHOODS.map((n) => (
-                  <button
-                    key={n}
-                    onClick={() => setSelectedNeighborhood(n)}
-                    disabled={isSearching}
-                    className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
-                      selectedNeighborhood === n
-                        ? 'bg-amber-500 text-stone-950 border-amber-500'
-                        : 'bg-stone-50 text-stone-600 border-stone-200 hover:text-stone-900'
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={onStartMatchingClick}
-                disabled={!selectedNeighborhood || isSearching}
-                className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 ${
-                  !selectedNeighborhood
-                    ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                    : 'bg-amber-500 hover:bg-amber-400 text-stone-950'
-                }`}
-              >
-                {isSearching ? (
-                  <span className="flex items-center justify-center gap-2">
-                    <span className="animate-spin">🌀</span>
-                    {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : `SEARCHING ${selectedNeighborhood?.toUpperCase()}...`}
-                  </span>
-                ) : !selectedNeighborhood ? (
-                  'Pick a neighborhood first'
-                ) : (
-                  '🗺️ Reveal a Hidden Gem'
-                )}
-              </button>
-              {!isSearching && (
-                <button
-                  onClick={() => setShowSuggestGemModal(true)}
-                  className="text-xs text-stone-500 hover:text-stone-900 font-semibold underline"
-                >
-                  Know a spot? Suggest your own hidden gem
-                </button>
-              )}
-            </div>
-          )}
-
-          {!activeQuest && !isCompleted && !isExplorerMode && (
-            <div className="flex flex-col items-center space-y-4">
-              <div className="relative flex items-center justify-center">
-                <div
-                  aria-hidden="true"
-                  className="absolute w-80 h-80 rounded-full bg-[radial-gradient(circle,rgba(234,88,12,0.3)_0%,rgba(234,88,12,0)_70%)] pointer-events-none"
-                />
-                {!isSearching && (
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-2 right-6 text-xl rotate-12 pointer-events-none select-none"
-                  >
-                    ✨
-                  </span>
-                )}
-                <button
-                  onClick={onStartMatchingClick}
-                  disabled={isSearching}
-                  className={`relative w-56 h-56 rounded-full bg-gradient-to-b from-orange-500 to-orange-700 border-4 border-white shadow-2xl shadow-orange-600/50 flex flex-col items-center justify-center text-white font-black text-2xl tracking-wide overflow-hidden active:scale-90 transition-transform duration-100 touch-manipulation ${
-                    isSearching ? 'animate-pulse opacity-80' : 'hover:scale-105'
-                  }`}
-                >
-                  <span
-                    aria-hidden="true"
-                    className="absolute -top-6 left-8 w-24 h-14 rounded-full bg-white/25 rotate-[-20deg]"
-                  />
-                  {isSearching ? (
-                    <div className="flex flex-col items-center space-y-1">
-                      <span className="text-2xl animate-spin">🌀</span>
-                      <span className="text-xs text-orange-200 font-mono font-normal">
-                        {squadRoster.length > 0 ? `LOBBY (${squadRoster.length}/${squadCapacity})` : 'SEARCHING...'}
-                      </span>
-                    </div>
-                  ) : (
-                    <>
-                      <span className="font-['Space_Grotesk'] font-bold text-2xl tracking-tight drop-shadow-[0_2px_3px_rgba(0,0,0,0.3)]">DESTROY</span>
-                      <span className="font-['Space_Grotesk'] font-medium text-sm text-orange-200 mt-1 tracking-wide line-through decoration-2">BOREDOM</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="text-center space-y-2 max-w-xs">
-                <p className="text-xs text-stone-600 font-medium">
-                  {isSearching
-                    ? `Searching live queue for Mumbai ${mode.toUpperCase()} partners...`
-                    : 'Tap to trigger a random real-world micro-mission.'}
-                </p>
-
-                {isSearching && (
-                  <div className="flex flex-col items-center space-y-2 pt-2">
-                    <button
-                      onClick={handleWhatsAppInvite}
-                      className="bg-orange-600 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center space-x-1 shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px]"
-                    >
-                      <span>📲</span>
-                      <span>Invite Friend via WhatsApp Now</span>
-                    </button>
-                    <button
-                      onClick={cancelSearch}
-                      className="text-[10px] text-stone-500 hover:underline"
-                    >
-                      Cancel Search
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {activeQuest && !isCompleted && (
-            <div className="w-full bg-white border border-stone-200 rounded-3xl p-5 text-center space-y-4 shadow-2xl">
-              <div className="flex justify-between items-center">
-                <span className="bg-orange-500/10 text-orange-700 text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                  {isExplorerMode ? 'Explorer' : mode} Mission Assigned
-                </span>
-                <span className="text-xs text-amber-700 font-mono bg-amber-500/10 px-2.5 py-1 rounded-lg border border-amber-500/20 font-bold flex items-center space-x-1">
-                  <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                  <span>Active Mission</span>
-                </span>
-              </div>
-
-              {squadRoster.length > 0 && (
-                <div className="bg-stone-50 border border-stone-200 p-2.5 rounded-xl text-left space-y-1.5">
-                  <div className="flex justify-between items-center text-[10px] text-stone-600 font-bold uppercase">
-                    <span>👑 Active Squad Roster ({squadRoster.length})</span>
-                    <span className="text-amber-700 font-mono">Live Lobby</span>
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {squadRoster.map((p, idx) => (
-                      <div key={idx} className="flex items-center space-x-1 bg-white border border-stone-200 px-2 py-1 rounded-lg text-xs">
-                        <button
-                          onClick={() => inspectProfile(p.handle)}
-                          className="text-orange-700 font-bold hover:underline"
-                        >
-                          @{p.handle}
-                        </button>
-                        {p.user_id !== currentUserId && (
-                          <button
-                            onClick={() => handleAddFriend(p.user_id)}
-                            className="text-[10px] text-stone-600 hover:text-orange-700 pl-1"
-                            title="Add as Friend"
-                          >
-                            +🤝
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              <div className="my-4 flex justify-center">
-                <SuspenseMissionCard
-                  key={activeQuest}
-                  quest={{
-                    id: "active-quest",
-                    quest_text: activeQuest,
-                    mode: mode,
-                    rarity: activeQuestRarity,
-                    xp_reward: activeQuestXp
-                  }}
-                  credit={isExplorerMode ? hiddenGemSubmittedBy : activeQuestCredit}
-                  gem={isExplorerMode ? activeGem : null}
-                  onReroll={() => mode === 'solo' ? (isExplorerMode ? handleRevealGem() : pickRandomQuest()) : handleSharedReroll()}
-                  onAcceptMission={() => {
-                    setIsMissionAccepted(true);
-                    // The upload box (and its file input) only mounts once
-                    // isMissionAccepted flips, so defer the click until after
-                    // that render commits.
-                    setTimeout(() => {
-                      const fileInput = document.querySelector("input[type='file']") as HTMLInputElement | null;
-                      if (fileInput) {
-                        fileInput.click();
-                      }
-                    }, 0);
-                  }}
-                />
-              </div>
-
-              {(mode === 'duo' || mode === 'squad') && (
-                <div className="bg-stone-50 border border-stone-200 rounded-2xl p-3 flex flex-col space-y-2 text-left">
-                  <div className="flex justify-between items-center border-b border-stone-200 pb-1">
-                    <span className="text-[10px] font-bold text-orange-700 uppercase">💬 Live {mode.toUpperCase()} Rally Chat</span>
-                    <button
-                      onClick={handleWhatsAppInvite}
-                      className="text-[10px] bg-orange-600/20 hover:bg-orange-600/30 text-orange-700 border border-orange-500/30 px-2.5 py-1 rounded-lg font-bold transition-all flex items-center space-x-1"
-                    >
-                      <span>📲</span>
-                      <span>Invite Friend</span>
-                    </button>
-                  </div>
-                  <div className="h-28 overflow-y-auto space-y-2 pr-1 text-xs">
-                    {messages.length === 0 ? (
-                      <p className="text-[10px] text-stone-400 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
-                    ) : (
-                      messages.map((m) => (
-                        <div key={m.id || Math.random()} className="bg-white p-2 rounded-xl border border-stone-200/80 flex justify-between items-start">
-                          <div>
-                            <button
-                              onClick={() => inspectProfile(m.sender_handle)}
-                              className="text-[10px] font-bold text-orange-700 hover:underline"
-                            >
-                              @{m.sender_handle}: 
-                            </button>
-                            <span className="text-stone-700 ml-1">
-                              {m.message}
-                            </span>
-                          </div>
-                          {m.sender_handle !== handle && (
-                            <button
-                              onClick={() => handleReport('chat', m.id || m.message)}
-                              className="text-[9px] text-stone-400 hover:text-orange-700 pl-2"
-                              title="Report message"
-                            >
-                              🚩
-                            </button>
-                          )}
-                        </div>
-                      ))
-                    )}
-                    <div ref={chatBottomRef} />
-                  </div>
-                  <div className="flex space-x-2 pt-1">
-                    <input
-                      type="text"
-                      placeholder="Say something (max 300 chars)..."
-                      maxLength={300}
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && sendMessage()}
-                      className="flex-1 bg-stone-50 border border-stone-200 rounded-xl px-3 py-1.5 text-xs text-stone-900 focus:outline-none focus:border-orange-500"
-                    />
-                    <button
-                      onClick={sendMessage}
-                      className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
-                    >
-                      Send
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {isMissionAccepted && (
-                <div className="border-2 border-dashed border-stone-200 rounded-2xl p-3 flex flex-col items-center justify-center bg-stone-50/50 space-y-1">
-                  {uploading ? (
-                    <div className="py-4 flex flex-col items-center space-y-1">
-                      <span className="animate-spin text-xl">☁️</span>
-                      <span className="text-xs text-orange-700 font-semibold">Compressing & Uploading (~50KB)...</span>
-                    </div>
-                  ) : proofImage ? (
-                    <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
-                  ) : (
-                    <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
-                      <span className="text-xl">📸</span>
-                      <span className="text-xs text-stone-600 font-semibold"></span>
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={handleImageUpload}
-                        className="hidden"
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
-
-              <div className="flex flex-col space-y-2 pt-1">
-                <button
-                  onClick={handleCompleteMission}
-                  disabled={uploading || !proofImage}
-                  className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
-                    proofImage && !uploading
-                      ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/30 cursor-pointer'
-                      : 'bg-stone-100 text-stone-500 cursor-not-allowed border border-stone-300'
-                  }`}
-                >
-                  {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
-                </button>
-                <button
-                  onClick={handleAbandonMission}
-                  className="text-xs text-stone-500 hover:text-stone-800 py-1 transition-colors"
-                >
-                  Abandon Mission
-                </button>
-              </div>
-            </div>
-          )}
-
-          {isCompleted && (
-            <div className="w-full bg-white border border-amber-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-              <div className="text-4xl">🎉</div>
-              <h2 className="text-xl font-extrabold text-amber-700">LOOP BROKEN!</h2>
-              <p className="text-xs text-stone-700">
-                You broke routine and gained real-world experience today.
-              </p>
-
-              {cardDataUrl && (
-                <div className="space-y-3 pt-2">
-                  <div className="relative rounded-2xl overflow-hidden border border-orange-500/30 shadow-xl bg-stone-50">
-                    <img src={cardDataUrl} alt="Story Card" className="w-full h-64 object-contain mx-auto" />
-                  </div>
-
-                  <button
-                    onClick={() => handleShareCard(cardDataUrl)}
-                    className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold text-sm shadow-[0_4px_0_0_#9A3412] transition-all active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] flex items-center justify-center space-x-2"
-                  >
-                    <span>📲</span>
-                    <span>Share to Instagram Story / WhatsApp</span>
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={() => setIsCompleted(false)}
-                className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
-              >
-                Back to Home
-              </button>
-            </div>
-          )}
-        </div>
-      ) : (
-        <div className="w-full max-w-md my-auto space-y-4">
-          <div className="flex justify-between items-center border-b border-stone-200 pb-2">
-            <h2 className="text-sm font-bold text-stone-700">Community Proof Feed</h2>
-            <span className="text-xs text-stone-500">{feedItems.length} Missions Logged</span>
-          </div>
-
-          <div className="flex flex-col space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-            {loadingFeed ? (
-              [1, 2, 3].map((i) => (
-                <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3 animate-pulse">
-                  <div className="w-full h-48 bg-stone-100 rounded-xl" />
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <div className="h-3 w-20 bg-stone-100 rounded" />
-                      <div className="h-3 w-6 bg-stone-100 rounded" />
-                    </div>
-                    <div className="h-3 w-full bg-stone-100 rounded" />
-                    <div className="h-3 w-2/3 bg-stone-100 rounded" />
-                  </div>
-                </div>
-              ))
-            ) : feedItems.length > 0 ? (
-              feedItems.map((item) => (
-                <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
-                  {item.photo_url && (
-                    <img src={item.photo_url} alt="Proof" className="w-full h-48 object-cover rounded-xl" />
-                  )}
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <button
-                        onClick={() => inspectProfile(item.handle)}
-                        className="text-xs font-bold text-orange-700 hover:underline"
-                      >
-                        @{item.handle || 'Explorer'}
-                      </button>
-                      <div className="flex items-center space-x-2">
-                        {userEmail === ADMIN_EMAIL && (
-                          <button
-                            onClick={() => handleAdminDeleteFeedPost(item.id)}
-                            className="text-[10px] bg-red-950/80 border border-red-500/40 text-red-300 px-2 py-0.5 rounded-lg font-bold hover:bg-red-900"
-                            title="Admin: Delete post"
-                          >
-                            🗑️ Delete
-                          </button>
-                        )}
-                        <button
-                          onClick={() => handleReport('feed', item.id)}
-                          className="text-[10px] text-stone-400 hover:text-orange-700"
-                          title="Report post"
-                        >
-                          🚩
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-xs text-stone-800 italic font-medium">"{item.quest_text}"</p>
-
-                    <div className="flex space-x-2 pt-1 border-t border-stone-200/80">
-                      <button
-                        onClick={() => handleReact(item.id, 'fire')}
-                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
-                      >
-                        <span>🔥</span>
-                        <span>{item.fire_count || 0}</span>
-                      </button>
-                      <button
-                        onClick={() => handleReact(item.id, 'five')}
-                        className="flex items-center space-x-1 bg-stone-50 hover:bg-stone-100 border border-stone-200 px-2.5 py-1 rounded-xl text-xs font-semibold text-stone-700 transition-all active:scale-95"
-                      >
-                        <span>✋</span>
-                        <span>{item.five_count || 0}</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center py-10 space-y-3">
-                <div className="text-4xl">📭</div>
-                <h3 className="text-sm font-bold text-stone-800">No missions logged yet</h3>
-                <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
-                  Be the first to complete one and show up here.
-                </p>
-                <button
-                  onClick={() => setTab('quest')}
-                  className="bg-orange-600 text-white text-xs font-bold px-5 py-2.5 rounded-xl shadow-[0_4px_0_0_#9A3412] active:shadow-[0_1px_0_0_#9A3412] active:translate-y-[3px] transition-all"
-                >
-                  Start a mission
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      <footer className="w-full max-w-md bg-gradient-to-b from-white to-stone-50 border border-stone-200/80 rounded-2xl p-4 flex flex-col space-y-3 mt-auto shadow-xl shadow-stone-900/15">
-        <div className="flex justify-between items-center border-b border-stone-200/60 pb-2">
-          {isEditingHandle ? (
-            <input
-              type="text"
-              defaultValue={handle}
-              onBlur={(e) => saveHandle(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && saveHandle(e.currentTarget.value)}
-              autoFocus
-              className="bg-stone-50 border border-orange-500/50 rounded-lg px-2 py-1 text-xs text-orange-700 font-bold focus:outline-none"
-            />
-          ) : (
-            <button
-              onClick={() => setIsEditingHandle(true)}
-              className="text-xs font-bold text-orange-700 hover:underline flex items-center space-x-1"
-            >
-              <span>@{handle}</span>
-              <span className="text-[10px] text-stone-500 font-medium">· {getRankTitle(totalXp)}</span>
-              <span className="text-[10px] text-stone-500">✏️</span>
-            </button>
-          )}
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setShowFriendsModal(true)}
-              className="text-[10px] text-orange-700 hover:underline font-semibold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
-            >
-              🤝 Squad ({friendsList.length})
-            </button>
-            <button
-              onClick={generateSpotifyWrappedCard}
-              className="text-[10px] text-amber-700 hover:underline font-bold bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-lg"
-            >
-              🎧 Recap
-            </button>
-            <button
-              onClick={() => {
-                setSuggestQuestMode(mode);
-                setShowSuggestQuestModal(true);
-              }}
-              className="text-[10px] text-orange-700 hover:underline font-bold bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-lg"
-            >
-              ✍️ Suggest Quest
-            </button>
-            {userEmail && userEmail !== 'guest@breaktheloop.app' ? (
-              <button
-                onClick={handleSignOut}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
-              >
-                Sign Out
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthModalReason('');
-                  setShowAuthModal(true);
-                }}
-                className="text-[10px] text-orange-700 hover:underline font-semibold"
-              >
-                Verify
-              </button>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 text-[10px]">
-          <span className="text-stone-500 text-[9px] font-semibold uppercase pr-1">Badges:</span>
-          {badges.map((b, i) => (
-            <span key={i} className="bg-orange-500/10 border border-orange-500/20 text-orange-700 px-2 py-0.5 rounded-full whitespace-nowrap font-medium">
-              {b}
-            </span>
-          ))}
-        </div>
-
-        <div className="flex justify-around text-center border-t border-stone-200/60 pt-2">
-          <div>
-            <p className="text-xs text-stone-500">Loop Streak</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-stone-800">{streak} Days 🔥</p>
-          </div>
-          <div className="w-px bg-stone-100" />
-          <div>
-            <p className="text-xs text-stone-500">Total IRL XP</p>
-            <p className="text-xl font-bold font-['Space_Grotesk'] text-orange-700">{savedMins} XP ⚡</p>
-          </div>
-        </div>
-
-        {(!userEmail || userEmail === 'guest@breaktheloop.app') && (
-          <div className="flex flex-col items-center space-y-1.5 border-t border-stone-200/60 pt-2">
-            <button
-              onClick={() => setShowSaveProgressModal(true)}
-              className="w-full bg-orange-500/10 hover:bg-orange-500/20 border border-orange-500/20 text-orange-700 py-2 rounded-xl text-xs font-bold transition-all active:scale-95"
-            >
-              💾 Save My Progress
-            </button>
-            <button
-              onClick={() => setShowRecoverModal(true)}
-              className="text-[10px] text-stone-500 hover:underline"
-            >
-              Already have an account? Sign in
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center justify-center gap-3 pt-2">
-          <Link href="/privacy" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
-            Privacy
-          </Link>
-          <span className="text-[10px] text-stone-300">·</span>
-          <Link href="/terms" className="text-[10px] text-stone-400 hover:text-stone-600 hover:underline">
-            Terms
-          </Link>
-        </div>
-      </footer>
     </main>
   );
 }
