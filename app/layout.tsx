@@ -6,6 +6,11 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import "./globals.css";
+import "./premium-ui.css";
+import "./premium-ui-refinement.css";
+import "./premium-ui-final.css";
+import "./premium-ui-contrast.css";
+import "./premium-ui-cleanup.css";
 
 export const metadata: Metadata = {
   title: "Break The Loop",

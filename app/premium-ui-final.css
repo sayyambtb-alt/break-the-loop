@@ -1,0 +1,91 @@
+/* Final screenshot-driven polish for PR #46.
+   Presentation only: no product logic or data behavior. */
+
+/* Owner-only tools should be available without reading like public navigation. */
+.admin-toolbar {
+  opacity:.34;
+  transform:scale(.93);
+  transform-origin:top right;
+  transition:opacity .18s ease, transform .18s ease;
+}
+.admin-toolbar:hover,
+.admin-toolbar:focus-within {
+  opacity:1;
+  transform:scale(1);
+}
+.admin-toolbar button { background:rgba(255,253,249,.72); }
+
+/* Make the assigned-mission artwork feel like an intentional city/map texture,
+   rather than a large empty gradient placeholder. */
+.mission-ticket { position:relative; }
+.mission-ticket::before {
+  height:96px;
+  margin-bottom:20px;
+  background:
+    linear-gradient(90deg,rgba(77,35,25,.34),transparent 39%),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.13) 0 1px,transparent 1px 58px),
+    repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 37px),
+    radial-gradient(circle at 73% 38%,rgba(255,238,196,.96) 0 5%,rgba(255,185,119,.24) 18%,transparent 33%),
+    linear-gradient(145deg,#a74d34 0%,#db7249 48%,#f2ab72 78%,#f6ca94 100%);
+}
+.mission-ticket::after {
+  content:"STEP OUT · LOOK CLOSER";
+  position:absolute;
+  top:42px;
+  left:24px;
+  z-index:2;
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:1.8px;
+  color:rgba(255,250,245,.88);
+  text-shadow:0 1px 10px rgba(55,25,16,.22);
+  pointer-events:none;
+}
+
+/* The Feed is a memory gallery first; controls are secondary. */
+.community-grid { gap:18px; }
+.community-grid > div {
+  padding:8px !important;
+  border-radius:24px !important;
+  background:rgba(255,253,249,.94) !important;
+  box-shadow:0 14px 42px rgba(68,43,27,.055) !important;
+}
+.community-grid > div img {
+  height:232px !important;
+  border-radius:18px !important;
+}
+.community-grid > div > .space-y-2 {
+  padding:2px 7px 7px;
+}
+.community-grid [title="Admin: Delete post"] {
+  opacity:.3;
+  filter:grayscale(.75) saturate(.45);
+  transform:scale(.94);
+  transition:opacity .18s ease,filter .18s ease,transform .18s ease;
+}
+.community-grid > div:hover [title="Admin: Delete post"],
+.community-grid [title="Admin: Delete post"]:focus-visible {
+  opacity:1;
+  filter:none;
+  transform:scale(1);
+}
+
+@media(max-width:820px) {
+  .community-grid > div img { height:220px !important; }
+}
+
+@media(max-width:600px) {
+  .mission-ticket::before {
+    height:82px;
+    margin-bottom:17px;
+  }
+  .mission-ticket::after {
+    top:32px;
+    left:18px;
+    font-size:9px;
+    letter-spacing:1.35px;
+  }
+  .community-grid > div { padding:7px !important; }
+  .community-grid > div img { height:210px !important; }
+  .community-grid [title="Admin: Delete post"] { opacity:.8; filter:none; transform:none; }
+}
