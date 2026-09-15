@@ -10,7 +10,7 @@ vi.mock('@supabase/supabase-js', () => ({
 async function renderApp() {
   const { default: Home } = await import('../app/page');
   render(<Home />);
-  await waitFor(() => expect(screen.queryByText('JOIN BREAK THE LOOP')).not.toBeInTheDocument());
+  await screen.findByRole('button', { name: 'Today' });
 }
 
 beforeEach(() => {
@@ -42,12 +42,12 @@ describe('report flow (non-admin)', () => {
 
     await waitFor(() => expect(window.prompt).toHaveBeenCalled());
 
-    const reportInsert = mockState.calls.find((c) => c.table === 'reports' && c.method === 'insert');
+    const reportInsert = mockState.calls.find((c) => c.method === 'report_content');
     expect(reportInsert).toBeTruthy();
-    expect(reportInsert?.args[0][0]).toMatchObject({
-      reported_type: 'feed',
-      target_id: 'log-1',
-      reason: 'Not appropriate for this app'
+    expect(reportInsert?.args[0]).toMatchObject({
+      p_type: 'feed',
+      p_target_id: 'log-1',
+      p_reason: 'Not appropriate for this app'
     });
     await screen.findByText(/Report submitted/);
   });

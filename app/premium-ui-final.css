@@ -15,6 +15,30 @@
 }
 .admin-toolbar button { background:rgba(255,253,249,.72); }
 
+/* Screenshot polish after security integration: keep utility copy quiet,
+   prevent generated guest handles from breaking the rail, and remove the
+   decorative city watermark where it competes with the Explore label. */
+.profile-summary > div { min-width:0; }
+.handle-button {
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.contribute-panel > .signin-link { display:none; }
+.explore-panel::after { content:none; }
+
+/* Native-dialog overlays also contain an always-mounted ToastStack. Keep that
+   utility layer transparent when there is no toast instead of styling it like
+   a modal card. */
+.app-dialog > .toast-stack {
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:0 !important;
+}
+
 /* Make the assigned-mission artwork feel like an intentional city/map texture,
    rather than a large empty gradient placeholder. */
 .mission-ticket { position:relative; }

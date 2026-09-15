@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:db": "node test/database/security.mjs"
   },
   "dependencies": {
+    "@fontsource/inter": "^5.3.0",
     "@fontsource/space-grotesk": "^5.3.0",
     "@supabase/supabase-js": "^2.112.2",
     "@types/canvas-confetti": "^1.9.0",
@@ -18,10 +20,10 @@
     "next": "16.3.4",
     "posthog-js": "^1.429.3",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "@fontsource/inter": "^5.3.0"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",

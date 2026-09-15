@@ -1,4 +1,12 @@
 import { vi } from 'vitest';
+import type { MissionAssignment } from '../../app/lib/missions';
+
+export const defaultAssignment: MissionAssignment = {
+  id: 'assignment-1', mode: 'solo', track: 'quest', city: 'mumbai', room_id: null,
+  quest_text: 'Take a photo of the nearest tree', rarity: 'common', xp_reward: 15,
+  gem: null, credit: null, accepted_at: null, proof_path: null,
+};
+let currentAssignment: MissionAssignment | null = null;
 
 export type MockResponse = { data: any; error: any };
 export type ResponseResolver = MockResponse | ((builder: MockQueryBuilder) => MockResponse);
@@ -40,6 +48,7 @@ export class MockQueryBuilder {
   in(col: string, vals: any) { this.filters.push([col, vals]); return this; }
   order(...args: any[]) { return this; }
   limit(...args: any[]) { return this; }
+  maybeSingle() { return this.single(); }
   single() { this.method = this.method ? `${this.method}.single` : 'select.single'; return this; }
 
   then(onResolve: any, onReject?: any) {
@@ -64,7 +73,7 @@ export interface MockChannelEntry {
 export interface MockState {
   session: any;
   responses: Record<string, ResponseResolver>;
-  rpcResponses: Record<string, MockResponse | ((params: any) => MockResponse)>;
+  rpcResponses: Record<string, MockResponse | ((params: any) => MockResponse | Promise<MockResponse>)>;
   calls: MockCall[];
   channels: MockChannelEntry[];
   storageUploadError: any;
@@ -86,6 +95,7 @@ export function createMockState(): MockState {
 export const mockState: MockState = createMockState();
 
 export function resetMockState() {
+  currentAssignment = null;
   mockState.session = null;
   mockState.responses = {};
   mockState.rpcResponses = {};
@@ -122,9 +132,14 @@ export function buildSupabaseClient() {
           user: { id: 'anon-user-id', email: undefined },
           access_token: 'fake-anon-token'
         };
+        mockState.authStateCallback?.('SIGNED_IN', mockState.session);
         return { data: { session: mockState.session }, error: null };
       }),
-      signOut: vi.fn(async () => ({ error: null })),
+      signOut: vi.fn(async () => {
+        mockState.session = null;
+        mockState.authStateCallback?.('SIGNED_OUT', null);
+        return { error: null };
+      }),
       signInWithOtp: vi.fn(async (params: any) => {
         mockState.calls.push({ type: 'rpc', method: 'signInWithOtp', args: [params] });
         const resolver = mockState.rpcResponses['signInWithOtp'];
@@ -152,7 +167,29 @@ export function buildSupabaseClient() {
     rpc: vi.fn(async (name: string, params?: any) => {
       mockState.calls.push({ type: 'rpc', method: name, args: [params] });
       const resolver = mockState.rpcResponses[name];
-      if (!resolver) return { data: null, error: null };
+      if (!resolver) {
+        if (name === 'ensure_profile') {
+          const builder = new MockQueryBuilder('profiles', mockState);
+          builder.method = 'select.single';
+          const response = mockState.responses.profiles;
+          return typeof response === 'function' ? response(builder) : { data: { handle: 'Tester', total_xp: 0, streak: 0, badges: [] }, error: null };
+        }
+        if (name === 'start_solo_mission') {
+          currentAssignment = { ...defaultAssignment };
+          return { data: currentAssignment, error: null };
+        }
+        if (name === 'accept_assignment') {
+          const assigned = mockState.rpcResponses.start_solo_mission;
+          if (assigned && typeof assigned !== 'function') currentAssignment = assigned.data;
+          currentAssignment = { ...(currentAssignment || defaultAssignment), accepted_at: new Date().toISOString() };
+          return { data: currentAssignment, error: null };
+        }
+        if (name === 'attach_mission_proof') {
+          currentAssignment = { ...(currentAssignment || defaultAssignment), proof_path: params.p_photo_path };
+          return { data: currentAssignment, error: null };
+        }
+        return { data: null, error: null };
+      }
       return typeof resolver === 'function' ? resolver(params) : resolver;
     }),
     channel: vi.fn((name: string) => {
@@ -168,6 +205,8 @@ export function buildSupabaseClient() {
           if (mockState.storageUploadError) return { data: null, error: mockState.storageUploadError };
           return { data: { path }, error: null };
         }),
+        createSignedUrl: vi.fn(async (path: string) => ({ data: { signedUrl: `https://example.test/signed/${path}` }, error: null })),
+        remove: vi.fn(async () => ({ data: [], error: null })),
         getPublicUrl: vi.fn((path: string) => ({
           data: { publicUrl: `https://vopavevysovvucmhkvkr.supabase.co/storage/v1/object/public/${bucket}/${path}` }
         }))
