@@ -15,6 +15,8 @@ export function initAnalytics() {
     api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
     person_profiles: "identified_only",
     capture_pageview: true,
+    autocapture: false,
+    disable_session_recording: true,
   });
   initialized = true;
 }
@@ -24,11 +26,12 @@ export function track(event: string, properties?: Record<string, unknown>) {
   posthog.capture(event, properties);
 }
 
-// Links future events to the user's public handle -- not their email, so
-// this stays consistent with the privacy policy's "no PII shared with
-// third parties beyond Supabase" stance. A handle is already visible to
-// every other user in-app, so it isn't new exposure.
-export function identifyUser(handle: string) {
-  if (!initialized || !handle) return;
-  posthog.identify(handle);
+// Use the stable account ID, never an editable handle or email address.
+export function identifyUser(userId: string) {
+  if (!initialized || !userId) return;
+  posthog.identify(userId);
+}
+
+export function resetAnalytics() {
+  if (initialized) posthog.reset();
 }

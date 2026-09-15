@@ -10,7 +10,7 @@ vi.mock('@supabase/supabase-js', () => ({
 async function renderApp() {
   const { default: Home } = await import('../app/page');
   render(<Home />);
-  await waitFor(() => expect(screen.queryByText('JOIN BREAK THE LOOP')).not.toBeInTheDocument());
+  await screen.findByRole('button', { name: 'Today' });
 }
 
 beforeEach(() => {
@@ -34,6 +34,7 @@ describe('duo/squad shared reroll', () => {
     const user = userEvent.setup();
     mockState.rpcResponses['find_or_create_match'] = {
       data: {
+        mode: 'duo',
         matched: true,
         queue_id: 'queue-1',
         room_id: 'room-1',
@@ -74,6 +75,8 @@ describe('duo/squad shared reroll', () => {
     await handler!.callback({
       old: { status: 'matched' },
       new: {
+        revealed_at: new Date().toISOString(),
+        current_players: 2,
         status: 'matched',
         room_id: 'room-1',
         quest_text: 'Rerolled shared quest',

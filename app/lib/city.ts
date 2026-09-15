@@ -15,8 +15,8 @@ export const LAUNCH_CITY: City = {
   ],
 };
 
-// Only one city is live. Before enabling a city selector, scope Explore gems,
-// queues, invites and Feed to a city on the server through committed migrations.
+// Only one city is live. The server scopes gems, queues, invites and Feed by
+// city. Add approved content and a cities row before enabling another city here.
 export const CURRENT_CITY = LAUNCH_CITY;
 
 interface PlaceLocation {

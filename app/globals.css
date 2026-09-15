@@ -227,3 +227,25 @@ h1,h2,h3,h4 { font-family:"Space Grotesk",sans-serif; }
 @media(display-mode:standalone) { html,body { overscroll-behavior:none; } }
 
 @media(max-width:600px) { .mode-selector small { display:none; }.mode-selector strong { font-size:12px; }.mode-selector button { min-height:82px; }.start-card h2 { font-size:58px; }.outline-chip { display:none; } }
+
+/* Native dialog fills the viewport; the existing card remains centered. */
+.app-dialog {
+  margin: 0;
+  border: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  color: var(--ink, #292923);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.app-dialog::backdrop { background: transparent; }
+.app-dialog > div { max-height: calc(100dvh - 3rem); overflow-y: auto; }
+.btl-app button, .app-dialog button { min-height: 44px; }
+.btl-app button[title], .app-dialog button[title], .btl-app .icon-button { min-width: 44px; }
+@media (max-width: 380px) {
+  .discovery-row { grid-template-columns: 1fr; }
+}
+
+.surface-card { background: white; border: 1px solid var(--line); border-radius: 20px; }
