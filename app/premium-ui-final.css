@@ -29,6 +29,16 @@
 .contribute-panel > .signin-link { display:none; }
 .explore-panel::after { content:none; }
 
+/* Native-dialog overlays also contain an always-mounted ToastStack. Keep that
+   utility layer transparent when there is no toast instead of styling it like
+   a modal card. */
+.app-dialog > .toast-stack {
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:0 !important;
+}
+
 /* Make the assigned-mission artwork feel like an intentional city/map texture,
    rather than a large empty gradient placeholder. */
 .mission-ticket { position:relative; }
