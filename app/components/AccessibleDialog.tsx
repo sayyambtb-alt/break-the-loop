@@ -21,6 +21,19 @@ export default function AccessibleDialog({ label, onClose, className, children, 
       if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus();
     };
   }, []);
+  // Two onboarding dialogs historically shared the same fallback label. When a
+  // visible heading is available, use it so assistive tech announces the actual
+  // dialog the user is seeing rather than the stale fallback copy.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    if (label === 'Choose your handle') {
+      const heading = dialog.querySelector('h2')?.textContent?.trim();
+      dialog.setAttribute('aria-label', heading || label);
+    } else {
+      dialog.setAttribute('aria-label', label);
+    }
+  });
   return <dialog ref={dialogRef} aria-label={label} className={`app-dialog ${className || ''}`}
     onCancel={event => { event.preventDefault(); closeRef.current(); }}
     onClick={event => { if (event.target === event.currentTarget) closeRef.current(); }}>
