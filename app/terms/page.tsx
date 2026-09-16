@@ -34,9 +34,9 @@ export default function TermsOfService() {
 
           <H2>1. What Break The Loop is</H2>
           <P>
-            Break The Loop ("the App") gives you random real-world missions to complete alone, with one other
-            person ("Duo"), or with a group ("Squad") — including, at your choice, people you've never met
-            before. It also has an "Explore" mode that surfaces hyper-local spots submitted by other users.
+            Break The Loop (&quot;the App&quot;) gives you random real-world missions to complete alone, with one other
+            person (&quot;Duo&quot;), or with a group (&quot;Squad&quot;) — including, at your choice, people you&apos;ve never met
+            before. It also has an &quot;Explore&quot; mode that surfaces hyper-local spots submitted by other users.
           </P>
           <P>
             <strong className="text-stone-800">
@@ -51,7 +51,7 @@ export default function TermsOfService() {
             <li>You must be at least 13 years old to create an account.</li>
             <li>
               You must be at least <strong className="text-stone-800">18 years old</strong> to use Duo or Squad
-              matching with people you don't already know (i.e., random/stranger matchmaking, as opposed to
+              matching with people you don&apos;t already know (i.e., random/stranger matchmaking, as opposed to
               inviting a specific friend via a direct link).
             </li>
             <li>
@@ -73,7 +73,7 @@ export default function TermsOfService() {
                   Break The Loop does not conduct background checks, identity verification, or any vetting of
                   users
                 </strong>{" "}
-                beyond what's described elsewhere in these Terms (e.g., our reporting and banning system, which
+                beyond what&apos;s described elsewhere in these Terms (e.g., our reporting and banning system, which
                 is reactive, not preventive).
               </li>
               <li>
@@ -81,9 +81,9 @@ export default function TermsOfService() {
                 meeting anyone through the App. We strongly recommend you:
                 <ul className="list-disc pl-6 mt-1 space-y-1">
                   <li>Only ever meet in a public place.</li>
-                  <li>Tell a friend or family member where you're going, who you're meeting, and when you expect to be back.</li>
+                  <li>Tell a friend or family member where you&apos;re going, who you&apos;re meeting, and when you expect to be back.</li>
                   <li>Trust your instincts — if something feels wrong, leave.</li>
-                  <li>Never share financial information, home address, or other sensitive personal details with someone you've just matched with.</li>
+                  <li>Never share financial information, home address, or other sensitive personal details with someone you&apos;ve just matched with.</li>
                   <li>Do not feel obligated to complete a mission or stay in a match if you feel unsafe.</li>
                 </ul>
               </li>
@@ -108,7 +108,7 @@ export default function TermsOfService() {
             <li>Harass, threaten, stalk, or endanger any other user.</li>
             <li>Impersonate another person or misrepresent your identity, age, or intentions.</li>
             <li>Use the App to solicit money, sell goods or services, or run scams.</li>
-            <li>Post content that is illegal, sexually explicit involving minors (which we will report to relevant authorities), hateful, or that violates someone else's rights.</li>
+            <li>Post content that is illegal, sexually explicit involving minors (which we will report to relevant authorities), hateful, or that violates someone else&apos;s rights.</li>
             <li>Attempt to circumvent a ban or a block placed by another user.</li>
             <li>Use bots, scripts, or automated means to interact with the App.</li>
           </ul>
@@ -120,10 +120,10 @@ export default function TermsOfService() {
           <H2>5. Content you submit</H2>
           <P>When you submit a mission suggestion, a hidden gem, a chat message, or a photo:</P>
           <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
-            <li>You confirm you have the right to submit it (e.g., it's your own photo, your own words).</li>
+            <li>You confirm you have the right to submit it (e.g., it&apos;s your own photo, your own words).</li>
             <li>You grant Break The Loop a non-exclusive, royalty-free license to display it within the App (e.g., on the feed, or to other users completing the same hidden gem).</li>
-            <li>You're responsible for what you post. We moderate reactively (via user reports and admin review) but do not pre-screen every submission before it appears.</li>
-            <li>We may edit or remove your submission at our discretion — for example, to fix a factual error in a hidden gem's location, or because it violates these Terms.</li>
+            <li>You&apos;re responsible for what you post. We moderate reactively (via user reports and admin review) but do not pre-screen every submission before it appears.</li>
+            <li>We may edit or remove your submission at our discretion — for example, to fix a factual error in a hidden gem&apos;s location, or because it violates these Terms.</li>
           </ul>
 
           <H2>6. Reporting, blocking, and bans</H2>
@@ -137,16 +137,16 @@ export default function TermsOfService() {
           <ul className="list-disc pl-6 text-stone-700 space-y-1 mb-3">
             <li>You can use much of the App as a guest, without an account.</li>
             <li>Verifying your email unlocks Duo/Squad matching with people outside your direct invite links.</li>
-            <li>You're responsible for keeping your own account/session secure.</li>
+            <li>You&apos;re responsible for keeping your own account/session secure.</li>
             <li>We may suspend or terminate your account at any time for violating these Terms.</li>
           </ul>
 
           <H2>8. No warranty</H2>
           <P>
-            The App is provided "as is." We do not guarantee it will be available at all times, free of bugs,
+            The App is provided &quot;as is.&quot; We do not guarantee it will be available at all times, free of bugs,
             or that any mission, hidden gem, or match will be accurate, safe, or as described. Hidden gems are
             submitted by users and reflect their personal knowledge — we do not independently verify every
-            submission's accuracy or that the location still exists as described.
+            submission&apos;s accuracy or that the location still exists as described.
           </P>
 
           <H2>9. Limitation of liability</H2>

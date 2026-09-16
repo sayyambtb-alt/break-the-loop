@@ -15,6 +15,48 @@
 }
 .admin-toolbar button { background:rgba(255,253,249,.72); }
 
+/* Screenshot polish after security integration: keep utility copy quiet,
+   prevent generated guest handles from breaking the rail, and remove the
+   decorative city watermark where it competes with the Explore label. */
+.profile-summary > div { min-width:0; }
+.handle-button {
+  display:block;
+  max-width:100%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.contribute-panel > .signin-link { display:none; }
+.explore-panel::after { content:none; }
+
+/* Native-dialog overlays also contain an always-mounted ToastStack. Keep that
+   utility layer transparent when there is no toast instead of styling it like
+   a modal card. */
+.app-dialog > .toast-stack {
+  background:transparent !important;
+  border:0 !important;
+  box-shadow:none !important;
+  padding:0 !important;
+}
+
+/* Before a mission is accepted, keep proof/privacy/completion controls out of
+   sight and avoid calling the assignment active. Keep a quiet escape action so
+   a user can switch company without having to accept the assigned mission. */
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > label,
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > button:first-of-type,
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.justify-between.items-center > span:last-child {
+  display:none;
+}
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > button:last-of-type {
+  align-self:center;
+  font-size:0;
+  margin-top:2px;
+}
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > button:last-of-type::after {
+  content:"Change mode";
+  font-size:12px;
+}
+
 /* Make the assigned-mission artwork feel like an intentional city/map texture,
    rather than a large empty gradient placeholder. */
 .mission-ticket { position:relative; }

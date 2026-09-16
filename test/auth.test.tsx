@@ -10,7 +10,7 @@ vi.mock('@supabase/supabase-js', () => ({
 async function renderApp() {
   const { default: Home } = await import('../app/page');
   render(<Home />);
-  await waitFor(() => expect(screen.queryByText('JOIN BREAK THE LOOP')).not.toBeInTheDocument());
+  await screen.findByRole('button', { name: 'Today' });
 }
 
 beforeEach(() => {
@@ -35,7 +35,7 @@ describe('email OTP sign-in (main Auth Modal)', () => {
 
     await renderApp();
 
-    await user.click(screen.getByRole('button', { name: 'Verify' }));
+    await user.click(await screen.findByRole('button', { name: 'Verify' }));
     expect(screen.getByText('EMAIL VERIFICATION')).toBeInTheDocument();
 
     await user.type(screen.getAllByPlaceholderText('yourname@gmail.com')[0], 'player@example.com');

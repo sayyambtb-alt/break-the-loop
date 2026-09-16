@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { mockState, resetMockState, buildSupabaseClient } from './mocks/supabase';
+import { mockState, resetMockState, buildSupabaseClient, defaultAssignment } from './mocks/supabase';
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => buildSupabaseClient()
@@ -10,7 +10,7 @@ vi.mock('@supabase/supabase-js', () => ({
 async function renderApp() {
   const { default: Home } = await import('../app/page');
   render(<Home />);
-  await waitFor(() => expect(screen.queryByText('JOIN BREAK THE LOOP')).not.toBeInTheDocument());
+  await screen.findByRole('button', { name: 'Today' });
 }
 
 beforeEach(() => {
@@ -28,7 +28,7 @@ beforeEach(() => {
 describe('mission completion end-to-end', () => {
   it('lets a solo player pick a quest, upload proof, and complete the mission', async () => {
     const user = userEvent.setup();
-    mockState.rpcResponses['complete_mission'] = {
+    mockState.rpcResponses['complete_assigned_mission'] = {
       data: {
         success: true,
         new_streak: 2,
@@ -64,16 +64,16 @@ describe('mission completion end-to-end', () => {
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
     const uploadCall = mockState.calls.find((c) => c.type === 'storage-upload');
-    expect(uploadCall?.args[0]).toBe('Proofs');
+    expect(uploadCall?.args[0]).toBe('MissionProofs');
 
-    const completeButton = screen.getByText('Complete & Log Proof 🔥');
+    const completeButton = screen.getByText('Complete mission');
     await user.click(completeButton);
 
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
-    const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_mission');
+    const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_assigned_mission');
     expect(rpcCall).toBeTruthy();
-    expect(rpcCall?.args[0]).toMatchObject({ p_mode: 'solo' });
+    expect(rpcCall?.args[0]).toMatchObject({ p_assignment_id: 'assignment-1', p_is_public: false });
 
     expect(screen.getByText('Loop streak').parentElement).toHaveTextContent('2days');
     expect(screen.getByText('Real-world XP').parentElement).toHaveTextContent('30XP');
@@ -84,7 +84,7 @@ describe('mission completion end-to-end', () => {
 
   it('auto-surfaces the Recap with the updated XP, streak and actual rank when a new badge is earned', async () => {
     const user = userEvent.setup();
-    mockState.rpcResponses['complete_mission'] = {
+    mockState.rpcResponses['complete_assigned_mission'] = {
       data: {
         success: true,
         new_streak: 3,
@@ -109,7 +109,7 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete mission'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
     await waitFor(
@@ -151,10 +151,9 @@ describe('mission completion end-to-end', () => {
 
   it('pays out the XP that matches the rarity shown on the card', async () => {
     const user = userEvent.setup();
-    // Force rollRarity() (and the quest-index pick, harmlessly, since only
-    // one quest is mocked) to roll a legendary result: Math.random() * 100 = 90 > 85.
-    vi.spyOn(Math, 'random').mockReturnValue(0.9);
-    mockState.rpcResponses['complete_mission'] = {
+    // The server assigns the reward; the browser only displays it.
+    mockState.rpcResponses.start_solo_mission = { data: { ...defaultAssignment, rarity: 'legendary', xp_reward: 75 }, error: null };
+    mockState.rpcResponses['complete_assigned_mission'] = {
       data: { success: true, new_streak: 1, new_saved_mins: 90, badges: [] },
       error: null
     };
@@ -174,11 +173,12 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete mission'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
-    const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_mission');
-    expect(rpcCall?.args[0]).toMatchObject({ p_xp_earned: 75 });
+    const rpcCall = mockState.calls.find((c) => c.type === 'rpc' && c.method === 'complete_assigned_mission');
+    expect(rpcCall?.args[0]).not.toHaveProperty('p_xp_earned');
+    expect(rpcCall?.args[0]).toHaveProperty('p_assignment_id', 'assignment-1');
   });
 
   it('shows a rank-up toast when completing a mission crosses a rank threshold', async () => {
@@ -186,7 +186,7 @@ describe('mission completion end-to-end', () => {
     // Keep the rolled rarity common (no legendary/Recap interference) so this
     // test only exercises the rank-up path.
     vi.spyOn(Math, 'random').mockReturnValue(0.1);
-    mockState.rpcResponses['complete_mission'] = {
+    mockState.rpcResponses['complete_assigned_mission'] = {
       data: { success: true, new_streak: 2, new_saved_mins: 30, new_total_xp: 150, badges: ['🌱 First Step'] },
       error: null
     };
@@ -204,7 +204,7 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete mission'));
     await waitFor(() => expect(screen.getByText('LOOP BROKEN!')).toBeInTheDocument());
 
     await screen.findByText(/Rank up! You're now a Chaos Local/);
@@ -212,7 +212,7 @@ describe('mission completion end-to-end', () => {
 
   it('shows an error and does not mark the mission complete when the RPC fails', async () => {
     const user = userEvent.setup();
-    mockState.rpcResponses['complete_mission'] = {
+    mockState.rpcResponses['complete_assigned_mission'] = {
       data: null,
       error: { message: 'Unauthorized: a valid session is required to complete a mission' }
     };
@@ -230,7 +230,7 @@ describe('mission completion end-to-end', () => {
     fireEvent.change(fileInput, { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
     await waitFor(() => expect(screen.getByAltText('Proof')).toBeInTheDocument());
 
-    await user.click(screen.getByText('Complete & Log Proof 🔥'));
+    await user.click(screen.getByText('Complete mission'));
 
     await screen.findByText(/Unauthorized/);
     expect(screen.queryByText('LOOP BROKEN!')).not.toBeInTheDocument();

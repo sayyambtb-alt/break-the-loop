@@ -1,14 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useEffectEvent } from 'react';
 import Link from 'next/link';
+import NextImage from 'next/image';
+import ToastStack from './components/ToastStack';
 import AppIcon from './components/AppIcon';
+import AccessibleDialog from './components/AccessibleDialog';
 import SavedPlaces from './components/SavedPlaces';
-import { initAnalytics, track, identifyUser } from './lib/analytics';
+import { initAnalytics, track, identifyUser, resetAnalytics } from './lib/analytics';
 import { createStoryCard, type StoryCardData } from './lib/story-cards';
 import { CURRENT_CITY } from './lib/city';
 import SuspenseMissionCard, { GemDetails } from "./components/SuspenseMissionCard";
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type RealtimeChannel, type User } from '@supabase/supabase-js';
+import { errorMessage, proofUrl, flushProofCleanup, safeStorage, type MissionAssignment, type MissionRoom } from './lib/missions';
 import confetti from 'canvas-confetti';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://vopavevysovvucmhkvkr.supabase.co';
@@ -32,13 +36,13 @@ const RANK_TIERS: { minXp: number; title: string }[] = [
   { minXp: 1500, title: 'Loop Breaker' },
 ];
 
-const getRankTitle = (totalXp: number): string => {
+function getRankTitle(totalXp: number): string {
   let title = RANK_TIERS[0].title;
   for (const tier of RANK_TIERS) {
     if (totalXp >= tier.minXp) title = tier.title;
   }
   return title;
-};
+}
 
 interface FeedItem {
   id: string;
@@ -131,17 +135,53 @@ interface ToastItem {
   type: 'success' | 'error' | 'info';
 }
 
+// Remount all account-owned UI when the authenticated identity changes. Late
+// requests from the previous account can only update an unmounted component.
 export default function Home() {
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  const [sessionError, setSessionError] = useState('');
+  useEffect(() => {
+    let mounted = true;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) setSessionUserId(session?.user.id || null);
+    });
+    void (async () => {
+      try {
+        const { data, error } = await supabase.auth.getSession();
+        if (error) throw error;
+        let session = data.session;
+        if (!session) {
+          const result = await supabase.auth.signInAnonymously();
+          if (result.error) throw result.error;
+          session = result.data.session;
+        }
+        if (!session) throw new Error('Could not start your session. Please try again.');
+        if (mounted) setSessionUserId(session.user.id);
+      } catch (error) {
+        if (mounted) setSessionError(errorMessage(error, 'Could not connect. Please try again.'));
+      }
+    })();
+    return () => { mounted = false; subscription.unsubscribe(); };
+  }, []);
+  if (!sessionUserId) return <main className="btl-app"><div className="surface-card p-6" role="status">
+    <h1 className="text-2xl font-bold">Break The Loop.</h1>
+    <p>{sessionError || 'Getting your next adventure ready…'}</p>
+    {sessionError && <button className="primary-button" onClick={() => window.location.reload()}>Try again</button>}
+  </div></main>;
+  return <HomeSession key={sessionUserId} sessionUserId={sessionUserId} />;
+}
+
+function HomeSession({ sessionUserId }: { sessionUserId: string }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const toastIdRef = useRef(0);
 
-  const showToast = (message: string, type: ToastItem['type'] = 'info') => {
+  function showToast(message: string, type: ToastItem['type'] = 'info') {
     const id = ++toastIdRef.current;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
-  };
+  }
 
   const [tab, setTab] = useState<'quest' | 'feed'>('quest');
   const [mode, setMode] = useState<'solo' | 'duo' | 'squad'>('solo');
@@ -162,14 +202,23 @@ export default function Home() {
   const [loadingPendingGems, setLoadingPendingGems] = useState(false);
 
   const [isSearching, setIsSearching] = useState(false);
+  const [isReady, setIsReady] = useState(false);
   const [activeQuest, setActiveQuest] = useState<string | null>(null);
   const [activeQuestRarity, setActiveQuestRarity] = useState<'common' | 'rare' | 'legendary'>('common');
   const [activeQuestXp, setActiveQuestXp] = useState(15);
   const [activeQuestCredit, setActiveQuestCredit] = useState<string | null>(null);
   const [isMissionAccepted, setIsMissionAccepted] = useState(false);
   const [roomId, setRoomId] = useState<string>('');
-  const [pendingInviteRoomId, setPendingInviteRoomId] = useState<string | null>(null);
+  const [pendingInviteRoomId, setPendingInviteRoomId] = useState<string | null>(() => new URLSearchParams(window.location.search).get('room'));
   const [isInviteSession, setIsInviteSession] = useState<boolean>(false);
+  const [assignment, setAssignment] = useState<MissionAssignment | null>(null);
+  const [proofPath, setProofPath] = useState<string | null>(null);
+  const [shareToFeed, setShareToFeed] = useState(false);
+  const [isCompleting, setIsCompleting] = useState(false);
+  const completionPendingRef = useRef(false);
+  const missionOperationRef = useRef(0);
+  const aliveRef = useRef(true);
+  const [savedSelected, setSavedSelected] = useState(false);
   const [proofImage, setProofImage] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [streak, setStreak] = useState(0);
@@ -182,8 +231,8 @@ export default function Home() {
 
   // Auth State
   const [userEmail, setUserEmail] = useState<string | null>(null);
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(sessionUserId);
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(true);
   const [isGuest, setIsGuest] = useState<boolean>(false);
   const [showAuthModal, setShowAuthModal] = useState<boolean>(false);
   const [authModalReason, setAuthModalReason] = useState<string>('');
@@ -194,7 +243,7 @@ export default function Home() {
   const [showSaveProgressModal, setShowSaveProgressModal] = useState(false);
   const [saveProgressEmail, setSaveProgressEmail] = useState('');
   const [showRecoverModal, setShowRecoverModal] = useState(false);
-  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(() => !safeStorage.get('btl_has_seen_welcome'));
   const [recoverEmail, setRecoverEmail] = useState('');
   const [recoverOtpInput, setRecoverOtpInput] = useState('');
   const [isRecoverOtpSent, setIsRecoverOtpSent] = useState(false);
@@ -222,6 +271,7 @@ export default function Home() {
   // Explorer Profile Modal
   const [selectedProfile, setSelectedProfile] = useState<PublicProfileData | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const profileRequestRef = useRef(0);
 
   // Squad Roster State
   const [squadRoster, setSquadRoster] = useState<SquadParticipant[]>([]);
@@ -241,223 +291,100 @@ export default function Home() {
   const [sendingInviteTo, setSendingInviteTo] = useState<string | null>(null);
 
   // Notifications & Feed
-  const [notificationsEnabled, setNotificationsEnabled] = useState(false);
+  const [feedError, setFeedError] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [loadingFeed, setLoadingFeed] = useState(false);
 
   // Chat State
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [lastMessageSentTime, setLastMessageSentTime] = useState<number>(0);
   const chatBottomRef = useRef<HTMLDivElement>(null);
 
   // Channel Cleanup Refs
-  const queueSubscriptionRef = useRef<any>(null);
-  const participantsSubRef = useRef<any>(null);
-  const presenceChannelRef = useRef<any>(null);
-  const invitesChannelRef = useRef<any>(null);
+  const queueSubscriptionRef = useRef<RealtimeChannel | null>(null);
+  const participantsSubRef = useRef<RealtimeChannel | null>(null);
+  const presenceChannelRef = useRef<RealtimeChannel | null>(null);
+  const invitesChannelRef = useRef<RealtimeChannel | null>(null);
   const myQueueEntryIdRef = useRef<string | null>(null);
   const inviteLinkJoinedRef = useRef<boolean>(false);
-  const currentUserIdRef = useRef<string | null>(null);
-  const isQueueCreatorRef = useRef<boolean>(false);
-  const accessTokenRef = useRef<string | null>(null);
 
   // Fires once on mount; no-ops entirely until a PostHog key is configured.
   useEffect(() => {
     initAnalytics();
   }, []);
 
-  // A brand-new visitor has never seen this before -- show it once, then
-  // never again. Deliberately client-side/localStorage-based rather than
-  // tied to the account, so it works identically for guests.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!localStorage.getItem('btl_has_seen_welcome')) {
-      setShowWelcomeModal(true);
-    }
-  }, []);
-
-  const dismissWelcomeModal = () => {
+  function dismissWelcomeModal() {
     if (typeof window !== 'undefined') {
-      localStorage.setItem('btl_has_seen_welcome', 'true');
+      safeStorage.set('btl_has_seen_welcome', 'true');
     }
     setShowWelcomeModal(false);
     track('welcome_dismissed');
-  };
-
-  // Re-identifies whenever the handle actually changes, rather than needing
-  // a call at every one of the several places handle gets set.
-  useEffect(() => {
-    if (handle && handle !== 'Explorer') identifyUser(handle);
-  }, [handle]);
+  }
 
   useEffect(() => {
-    currentUserIdRef.current = currentUserId;
-  }, [currentUserId]);
+    identifyUser(sessionUserId);
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, [sessionUserId]);
 
+  const onSessionReady = useEffectEvent(async (activeUser: User | undefined) => {
+    if (activeUser?.id !== sessionUserId || !aliveRef.current) return;
+    const uid = activeUser.id;
+    const email = activeUser.email;
+    setCurrentUserId(uid);
+    setUserEmail(email || 'guest@breaktheloop.app');
+    setIsGuest(!email || email === 'guest@breaktheloop.app');
+    setIsLoggedIn(true);
+    setupUserChannels(uid);
+    await loadOrCreateProfile(uid, email || 'guest@breaktheloop.app');
+    await restoreMission();
+    if (!aliveRef.current) return;
+    setIsReady(true);
+    void flushProofCleanup(supabase).catch(() => {});
+    void fetchFriends(uid);
+  });
   useEffect(() => {
-    isQueueCreatorRef.current = isQueueCreator;
-  }, [isQueueCreator]);
+    let cancelled = false;
+    void supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) throw error;
+      if (!cancelled) return onSessionReady(session?.user);
+    }).catch(error => { if (!cancelled) showToast(errorMessage(error, 'Could not load your account.'), 'error'); });
+    return () => { cancelled = true; cleanupAllChannels(); };
+  }, [sessionUserId]);
 
+  const inviteNeedsAuth = Boolean(isReady && pendingInviteRoomId && (isGuest || userEmail === 'guest@breaktheloop.app'));
+  function dismissAuthPrompt() {
+    setShowAuthModal(false);
+    setPendingInviteRoomId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url);
+  }
+  const onInviteResolved = useEffectEvent((room: MissionRoom | null, error: { message: string } | null) => {
+    if (!aliveRef.current) return;
+    if (error || !room) {
+      showToast(error?.message || 'This invite is no longer available.', 'error');
+    } else applyRoom(room);
+    setPendingInviteRoomId(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('room');
+    window.history.replaceState(null, '', url);
+  });
+  // URL values select a room; only the server can authorize joining it.
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      accessTokenRef.current = session?.access_token || null;
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  // Best-effort cleanup so a closed tab / dropped connection doesn't leave an
-  // orphaned matchmaking_queue row behind — React's unmount cleanup never
-  // runs on a real tab close, only pagehide does.
-  useEffect(() => {
-    const releaseQueueOnUnload = () => {
-      const queueId = myQueueEntryIdRef.current;
-      const userId = currentUserIdRef.current;
-      const token = accessTokenRef.current;
-      if (!queueId || !userId || !token) return;
-
-      fetch(`${supabaseUrl}/rest/v1/rpc/leave_match_queue`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          apikey: supabaseAnonKey,
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          p_queue_id: queueId,
-          p_user_id: userId,
-          p_is_creator: isQueueCreatorRef.current
-        }),
-        keepalive: true
-      }).catch(() => {});
-    };
-
-    window.addEventListener('pagehide', releaseQueueOnUnload);
-    return () => {
-      window.removeEventListener('pagehide', releaseQueueOnUnload);
-      releaseQueueOnUnload();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const cachedHandle = localStorage.getItem('btl_user_handle');
-      if (cachedHandle) setHandle(cachedHandle);
-
-      const params = new URLSearchParams(window.location.search);
-      const urlRoom = params.get('room');
-
-      // Don't set match state directly from URL params -- the room may
-      // have filled up, expired, or moved on since the link was shared.
-      // join_room_by_id is the source of truth once auth resolves below.
-      if (urlRoom) {
-        setPendingInviteRoomId(urlRoom);
-      }
-
-      supabase.auth.getSession().then(async ({ data: { session } }) => {
-        let activeUser = session?.user;
-        if (!activeUser) {
-          const { data: anonData } = await supabase.auth.signInAnonymously();
-          activeUser = anonData?.session?.user;
-        }
-
-        if (activeUser) {
-          const uid = activeUser.id;
-          setCurrentUserId(uid);
-          const email = activeUser.email;
-          if (email && email !== 'guest@breaktheloop.app') {
-            setUserEmail(email);
-            setIsGuest(false);
-          } else {
-            setIsGuest(true);
-            setUserEmail('guest@breaktheloop.app');
-          }
-          setIsLoggedIn(true);
-          loadOrCreateProfile(uid, email || 'guest@breaktheloop.app');
-          fetchFriends(uid);
-          setupUserChannels(uid);
-        }
-      });
-    }
-
-    return () => {
-      cleanupAllChannels();
-    };
-  }, []);
-
-  // Resolve a shared invite link once we actually have an authenticated
-  // user and handle -- never trust the URL's own claims about mode/quest,
-  // since the room may have moved on since the link was shared.
-  useEffect(() => {
-    if (!pendingInviteRoomId || !currentUserId || !handle || inviteLinkJoinedRef.current) return;
+    if (!isReady || !pendingInviteRoomId || !currentUserId || !handle || !userEmail || inviteLinkJoinedRef.current) return;
+    if (isGuest || userEmail === 'guest@breaktheloop.app') return;
     inviteLinkJoinedRef.current = true;
-
-    (async () => {
-      const { data: joinResult, error } = await supabase.rpc('join_room_by_id', {
-        p_room_id: pendingInviteRoomId,
-        p_user_id: currentUserId,
-        p_handle: handle
+    let cancelled = false;
+    void supabase.rpc('join_room_by_id', { p_room_id: pendingInviteRoomId, p_user_id: currentUserId, p_handle: handle })
+      .then(({ data, error }) => { if (!cancelled) onInviteResolved(data, error); }, error => {
+        if (!cancelled) onInviteResolved(null, { message: errorMessage(error, 'Could not open this invite. Please try the link again.') });
       });
+    return () => { cancelled = true; };
+  }, [pendingInviteRoomId, currentUserId, handle, isGuest, userEmail, isReady]);
 
-      if (error || !joinResult || joinResult.error) {
-        if (joinResult?.error === 'banned') {
-          showToast('Your account has been suspended from multiplayer missions.', 'error');
-        } else if (joinResult?.error === 'blocked') {
-          showToast("Couldn't join that mission.", 'error');
-        } else {
-          showToast("That invite link has expired or the room is full — try starting your own mission instead!", 'error');
-        }
-        setPendingInviteRoomId(null);
-        return;
-      }
-
-      setMode(joinResult.mode);
-      setRoomId(joinResult.room_id);
-      setSquadCapacity(joinResult.max_players || 2);
-      setIsQueueCreator(false);
-      if (joinResult.roster) setSquadRoster(joinResult.roster);
-
-      // An invite link to an Explore room needs to land the joiner on the
-      // Explore track with the right neighborhood selected, not silently
-      // treated as a regular Quest match.
-      if (joinResult.neighborhood) {
-        setIsExplorerMode(true);
-        setSelectedNeighborhood(joinResult.neighborhood);
-      }
-
-      if (joinResult.queue_id) {
-        myQueueEntryIdRef.current = joinResult.queue_id;
-      }
-
-      if (joinResult.matched) {
-        setActiveQuest(joinResult.quest_text);
-        setActiveQuestRarity(joinResult.neighborhood ? 'common' : joinResult.rarity);
-        setActiveQuestXp(joinResult.xp_reward);
-        setActiveQuestCredit(null);
-        setIsMissionAccepted(false);
-        setIsSearching(false);
-        if (joinResult.neighborhood) {
-          setActiveGem({
-            name: joinResult.gem_name,
-            neighborhood: joinResult.neighborhood,
-            description: joinResult.gem_description,
-            city: CURRENT_CITY.name
-          });
-          setHiddenGemSubmittedBy(joinResult.gem_submitted_by || null);
-        }
-        if (joinResult.queue_id) {
-          subscribeToQueueUpdates(joinResult.queue_id);
-        }
-      } else if (joinResult.queue_id) {
-        setIsSearching(true);
-        subscribeToQueueUpdates(joinResult.queue_id);
-      }
-
-      setPendingInviteRoomId(null);
-    })();
-  }, [pendingInviteRoomId, currentUserId, handle]);
-
-  const cleanupAllChannels = () => {
+  function cleanupAllChannels() {
     if (presenceChannelRef.current) {
       supabase.removeChannel(presenceChannelRef.current);
       presenceChannelRef.current = null;
@@ -474,9 +401,9 @@ export default function Home() {
       supabase.removeChannel(participantsSubRef.current);
       participantsSubRef.current = null;
     }
-  };
+  }
 
-  const setupUserChannels = (userId: string) => {
+  function setupUserChannels(userId: string) {
     cleanupAllChannels();
 
     const presenceChannel = supabase.channel('global_presence', {
@@ -516,7 +443,7 @@ export default function Home() {
           table: 'raid_invites',
           filter: `receiver_user_id=eq.${userId}`
         },
-        (payload: any) => {
+        (payload) => {
           if (payload.new && payload.new.status === 'pending') {
             setIncomingInvite({
               id: payload.new.id,
@@ -530,9 +457,9 @@ export default function Home() {
       .subscribe();
 
     invitesChannelRef.current = invitesChannel;
-  };
+  }
 
-  const handleDevPressStart = () => {
+  function handleDevPressStart() {
     if (userEmail !== ADMIN_EMAIL) return;
 
     devTimerRef.current = setTimeout(() => {
@@ -541,28 +468,31 @@ export default function Home() {
         navigator.vibrate(100);
       }
     }, 2000);
-  };
+  }
 
-  const handleDevPressEnd = () => {
+  function handleDevPressEnd() {
     if (devTimerRef.current) {
       clearTimeout(devTimerRef.current);
       devTimerRef.current = null;
     }
-  };
+  }
 
-  const inspectProfile = async (targetHandle: string) => {
+  async function inspectProfile(targetHandle: string) {
     const cleanHandle = targetHandle.replace('@', '').trim();
     if (!cleanHandle) return;
     setLoadingProfile(true);
+    const request = ++profileRequestRef.current;
     try {
       const { data, error } = await supabase.rpc('get_explorer_public_profile', {
         p_handle: cleanHandle
       });
+      if (request !== profileRequestRef.current || !aliveRef.current) return;
       if (error) {
         console.error('Profile lookup error:', error);
         showToast('Could not load that profile right now — try again.', 'error');
       } else if (data && data.found) {
-        setSelectedProfile(data);
+        const history = await Promise.all((data.history || []).map(async (item: { proof_path?: string; photo_url?: string }) => ({ ...item, photo_url: await proofUrl(supabase, item) })));
+        if (request === profileRequestRef.current && aliveRef.current) setSelectedProfile({ ...data, history });
       } else {
         showToast(`Could not find an active profile for @${cleanHandle}`, 'error');
       }
@@ -572,33 +502,39 @@ export default function Home() {
     } finally {
       setLoadingProfile(false);
     }
-  };
+  }
 
-  const fetchAdminReports = async () => {
+  async function fetchAdminReports() {
     if (userEmail !== ADMIN_EMAIL) return;
     setLoadingReports(true);
     try {
       const { data, error } = await supabase.rpc('admin_get_reports');
+      if (error) throw error;
       if (data) {
-        setAdminReports(data);
+        const reports = await Promise.all(data.map(async (report: ReportItem) => {
+          if (report.reported_type !== 'feed' || report.content_photo_url) return report;
+          const { data: log, error: logError } = await supabase.from('mission_logs').select('proof_path,photo_url').eq('id', report.target_id).maybeSingle();
+          if (logError) throw logError;
+          return { ...report, content_photo_url: log ? await proofUrl(supabase, log) : null };
+        }));
+        setAdminReports(reports);
         setShowReportsModal(true);
       }
-    } catch {
-    } finally {
+    } catch (error) { showToast(errorMessage(error, 'This action could not be completed. Please try again.'), 'error'); } finally {
       setLoadingReports(false);
     }
-  };
+  }
 
-  const handleResolveReport = async (reportId: string) => {
+  async function handleResolveReport(reportId: string) {
     const { error } = await supabase.rpc('admin_resolve_report', { p_report_id: reportId });
     if (error) {
       showToast(`Couldn't resolve report: ${error.message}`, 'error');
       return;
     }
     setAdminReports((prev) => prev.filter((r) => r.id !== reportId));
-  };
+  }
 
-  const handleSubmitQuestSuggestion = async () => {
+  async function handleSubmitQuestSuggestion() {
     const trimmed = suggestQuestText.trim();
     if (trimmed.length < 15 || trimmed.length > 300) {
       showToast('Quest text must be between 15 and 300 characters', 'error');
@@ -619,48 +555,49 @@ export default function Home() {
     setSuggestQuestText('');
     track('quest_suggested', { mode: suggestQuestMode });
     showToast('Thanks! Your quest is awaiting review.', 'success');
-  };
+  }
 
-  const fetchPendingQuests = async () => {
+  async function fetchPendingQuests() {
     if (userEmail !== ADMIN_EMAIL) return;
     setLoadingPendingQuests(true);
     try {
       const { data, error } = await supabase.rpc('admin_get_pending_quests');
+      if (error) throw error;
       if (data) {
         setPendingQuests(data);
         setShowPendingQuestsModal(true);
       }
-    } catch {
-    } finally {
+    } catch (error) { showToast(errorMessage(error, 'This action could not be completed. Please try again.'), 'error'); } finally {
       setLoadingPendingQuests(false);
     }
-  };
+  }
 
-  const handleApproveQuest = async (questId: string) => {
+  async function handleApproveQuest(questId: string) {
     const { error } = await supabase.rpc('admin_approve_quest', { p_quest_id: questId });
     if (error) {
       showToast(`Couldn't approve quest: ${error.message}`, 'error');
       return;
     }
     setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
-  };
+  }
 
-  const handleRejectQuest = async (questId: string) => {
+  async function handleRejectQuest(questId: string) {
     const { error } = await supabase.rpc('admin_reject_quest', { p_quest_id: questId });
     if (error) {
       showToast(`Couldn't reject quest: ${error.message}`, 'error');
       return;
     }
     setPendingQuests((prev) => prev.filter((q) => q.id !== questId));
-  };
+  }
 
   // Despite the name, this now fetches every gem regardless of status --
   // approved ones need to stay editable/removable too, not just pending ones.
-  const fetchPendingGems = async () => {
+  async function fetchPendingGems() {
     if (userEmail !== ADMIN_EMAIL) return;
     setLoadingPendingGems(true);
     try {
-      const { data } = await supabase.rpc('admin_get_all_gems');
+      const { data, error } = await supabase.rpc('admin_get_all_gems');
+      if (error) throw error;
       if (data) {
         setPendingGems(data);
         // Any in-progress edits are discarded by a refetch, so clear the
@@ -670,16 +607,15 @@ export default function Home() {
         setPendingGemCount(data.filter((g: PendingGem) => g.status === 'pending').length);
         setShowPendingGemsModal(true);
       }
-    } catch {
-    } finally {
+    } catch (error) { showToast(errorMessage(error, 'This action could not be completed. Please try again.'), 'error'); } finally {
       setLoadingPendingGems(false);
     }
-  };
+  }
 
-  const markGemDirty = (gemId: string) => {
+  function markGemDirty(gemId: string) {
     setDirtyGemIds((prev) => prev.includes(gemId) ? prev : [...prev, gemId]);
     setSavedGemIds((prev) => prev.filter((id) => id !== gemId));
-  };
+  }
 
   // Surfaces the pending-submission count on the header badge without
   // needing to open the panel first.
@@ -691,7 +627,7 @@ export default function Home() {
     })();
   }, [userEmail]);
 
-  const handleApproveGem = async (gem: PendingGem) => {
+  async function handleApproveGem(gem: PendingGem) {
     const { error } = await supabase.rpc('admin_approve_gem', {
       p_gem_id: gem.id,
       p_name: gem.name,
@@ -708,9 +644,9 @@ export default function Home() {
     setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
     setPendingGemCount((prev) => Math.max(0, prev - 1));
     showToast(`"${gem.name}" is now live in ${gem.neighborhood}.`, 'success');
-  };
+  }
 
-  const handleRejectGem = async (gemId: string) => {
+  async function handleRejectGem(gemId: string) {
     const wasPending = pendingGems.find((g) => g.id === gemId)?.status === 'pending';
     const { error } = await supabase.rpc('admin_reject_gem', { p_gem_id: gemId });
     if (error) {
@@ -721,10 +657,10 @@ export default function Home() {
     setDirtyGemIds((prev) => prev.filter((id) => id !== gemId));
     if (wasPending) setPendingGemCount((prev) => Math.max(0, prev - 1));
     showToast('Spot removed.', 'success');
-  };
+  }
 
   // Edits an already-approved gem in place, without re-triggering approval.
-  const handleUpdateGem = async (gem: PendingGem) => {
+  async function handleUpdateGem(gem: PendingGem) {
     const { error } = await supabase.rpc('admin_update_gem', {
       p_gem_id: gem.id,
       p_name: gem.name,
@@ -738,9 +674,9 @@ export default function Home() {
     setDirtyGemIds((prev) => prev.filter((id) => id !== gem.id));
     setSavedGemIds((prev) => prev.includes(gem.id) ? prev : [...prev, gem.id]);
     showToast(`Saved — "${gem.name}" now lives in ${gem.neighborhood}.`, 'success');
-  };
+  }
 
-  const handleSubmitGemSuggestion = async () => {
+  async function handleSubmitGemSuggestion() {
     const cleanName = suggestGemName.trim();
     const cleanDesc = suggestGemDescription.trim();
 
@@ -774,9 +710,9 @@ export default function Home() {
     setSuggestGemDescription('');
     track('gem_submitted', { neighborhood: suggestGemNeighborhood });
     showToast('Thanks! Your spot is awaiting review.', 'success');
-  };
+  }
 
-  const handleAdminDeleteFeedPost = async (logId: string) => {
+  async function handleAdminDeleteFeedPost(logId: string) {
     if (!window.confirm('ADMIN: Are you sure you want to permanently remove this post from the community feed?')) {
       return;
     }
@@ -785,15 +721,19 @@ export default function Home() {
       const { error } = await supabase.rpc('admin_delete_feed_post', { p_log_id: logId });
       if (!error) {
         setFeedItems((prev) => prev.filter((item) => item.id !== logId));
-        showToast('Post removed successfully.', 'success');
+        try {
+          await flushProofCleanup(supabase);
+          showToast('Post and photo removed.', 'success');
+        } catch {
+          showToast('Post removed. Photo deletion is queued for retry; please reopen the app when connected.', 'info');
+        }
       } else {
         showToast(`Failed to delete post: ${error.message}`, 'error');
       }
-    } catch {
-    }
-  };
+    } catch (error) { showToast(errorMessage(error, 'This action could not be completed. Please try again.'), 'error'); }
+  }
 
-  const handleAdminDeleteChatMessage = async (messageId: string) => {
+  async function handleAdminDeleteChatMessage(messageId: string) {
     if (!window.confirm('ADMIN: Are you sure you want to permanently remove this chat message?')) {
       return;
     }
@@ -805,104 +745,48 @@ export default function Home() {
       } else {
         showToast(`Failed to delete message: ${error.message}`, 'error');
       }
-    } catch {
-    }
-  };
+    } catch (error) { showToast(errorMessage(error, 'This action could not be completed. Please try again.'), 'error'); }
+  }
 
-  const acceptDirectInvite = async () => {
+  async function acceptDirectInvite() {
     if (!incomingInvite) return;
     try {
-      const { error } = await supabase
-        .from('raid_invites')
-        .update({ status: 'accepted' })
-        .eq('id', incomingInvite.id);
-
-      if (error) return;
-
-      setRoomId(incomingInvite.room_id);
-      setActiveQuest(incomingInvite.quest_text);
-      setSquadRoster([{ user_id: currentUserId || '', handle }]);
-      setMode('duo');
-      setIsInviteSession(true);
-      setIsSearching(false);
+      const { data, error } = await supabase.rpc('respond_to_raid_invite', { p_invite_id: incomingInvite.id, p_accept: true });
+      if (error) throw error;
+      if (!aliveRef.current) return;
+      applyRoom(data);
       setIncomingInvite(null);
       setShowFriendsModal(false);
-      setMessages([]);
-    } catch {
-    }
-  };
+    } catch (error) { showToast(errorMessage(error, 'Could not join this invite.'), 'error'); }
+  }
 
-  const declineDirectInvite = async () => {
+  async function declineDirectInvite() {
     if (!incomingInvite) return;
-    try {
-      await supabase
-        .from('raid_invites')
-        .update({ status: 'declined' })
-        .eq('id', incomingInvite.id);
-      setIncomingInvite(null);
-    } catch {
-    }
-  };
+    const { error } = await supabase.rpc('respond_to_raid_invite', { p_invite_id: incomingInvite.id, p_accept: false });
+    if (error) { showToast(error.message, 'error'); return; }
+    setIncomingInvite(null);
+  }
 
-  const sendDirectRaidInvite = async (friend: FriendProfile) => {
-    if (!currentUserId) return;
+  async function sendDirectRaidInvite(friend: FriendProfile) {
+    if (!currentUserId || sendingInviteTo) return;
     setSendingInviteTo(friend.handle);
-
     try {
-      const { data: quests } = await supabase
-        .from('quests')
-        .select('quest_text')
-        .eq('mode', 'duo')
-        .eq('is_active', true);
-
-      const chosenQuest =
-        quests && quests.length > 0
-          ? quests[Math.floor(Math.random() * quests.length)].quest_text
-          : 'Head to the nearest landmark or cafe together and complete a photo challenge!';
-
-      const newRoomId = `room_${Math.random().toString(36).substring(2, 9)}`;
-
-      await supabase.from('raid_invites').insert([
-        {
-          sender_user_id: currentUserId,
-          sender_handle: handle,
-          receiver_user_id: friend.friend_user_id,
-          room_id: newRoomId,
-          quest_text: chosenQuest,
-          status: 'pending'
-        }
-      ]);
-
-      setRoomId(newRoomId);
-      setActiveQuest(chosenQuest);
-      setSquadRoster([{ user_id: currentUserId, handle }]);
-      setMode('duo');
-      setIsInviteSession(true);
-      setIsSearching(false);
-      setShowFriendsModal(false);
-      setMessages([]);
-      showToast(`Raid challenge sent to @${friend.handle}! Waiting for them to accept in-app.`, 'success');
-    } catch {
-      showToast('Could not send raid invite. Please try again.', 'error');
-    } finally {
-      setSendingInviteTo(null);
-    }
-  };
-
-  const requestNotificationPermission = async () => {
-    if (typeof window === 'undefined' || !('Notification' in window)) return;
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      setNotificationsEnabled(true);
-      new Notification('Break The Loop 🔥', {
-        body: 'In-app notifications are active!',
-        icon: '/icon.png'
+      const { data, error } = await supabase.rpc('send_raid_invite', {
+        p_friend_user_id: friend.friend_user_id, p_city: CURRENT_CITY.slug,
+        p_neighborhood: isExplorerMode ? selectedNeighborhood : null,
       });
-    }
-  };
+      if (error) throw error;
+      if (!aliveRef.current) return;
+      applyRoom(data);
+      setShowFriendsModal(false);
+      showToast(`Invite sent to @${friend.handle}. Waiting for them to join.`, 'success');
+    } catch (error) { showToast(errorMessage(error, 'Could not send this invite.'), 'error'); }
+    finally { setSendingInviteTo(null); }
+  }
 
-  const handleGuestLogin = async (e: React.MouseEvent) => {
+  async function handleGuestLogin(e: React.MouseEvent) {
     e.preventDefault();
+    dismissAuthPrompt();
     setAuthError('');
     cleanupAllChannels();
     await supabase.auth.signOut();
@@ -920,9 +804,9 @@ export default function Home() {
       fetchFriends(uid);
       setupUserChannels(uid);
     }
-  };
+  }
 
-  const handleSendEmailOtp = async (e: React.MouseEvent) => {
+  async function handleSendEmailOtp(e: React.MouseEvent) {
     e.preventDefault();
     setAuthError('');
     if (!emailInput.includes('@')) return setAuthError('Please enter a valid email address');
@@ -932,9 +816,9 @@ export default function Home() {
     });
     if (error) setAuthError(error.message);
     else setIsOtpSent(true);
-  };
+  }
 
-  const handleVerifyEmailOtp = async (e: React.MouseEvent) => {
+  async function handleVerifyEmailOtp(e: React.MouseEvent) {
     e.preventDefault();
     setAuthError('');
     if (!otpInput.trim()) return setAuthError('Please enter the 6-digit code');
@@ -957,9 +841,9 @@ export default function Home() {
       fetchFriends(uid);
       setupUserChannels(uid);
     }
-  };
+  }
 
-  const handleSaveProgress = async (email: string) => {
+  async function handleSaveProgress(email: string) {
     if (!email.includes('@')) {
       showToast('Please enter a valid email address', 'error');
       return;
@@ -972,9 +856,9 @@ export default function Home() {
     setShowSaveProgressModal(false);
     setSaveProgressEmail('');
     showToast('Check your email and click the confirmation link to save your progress!', 'success');
-  };
+  }
 
-  const handleRecoverAccount = async (email: string) => {
+  async function handleRecoverAccount(email: string) {
     if (!email.includes('@')) {
       showToast('Please enter a valid email address', 'error');
       return;
@@ -989,9 +873,9 @@ export default function Home() {
     }
     setIsRecoverOtpSent(true);
     showToast('Check your email for a 6-digit code!', 'success');
-  };
+  }
 
-  const handleVerifyRecoverOtp = async () => {
+  async function handleVerifyRecoverOtp() {
     const { data, error } = await supabase.auth.verifyOtp({
       email: recoverEmail,
       token: recoverOtpInput.trim(),
@@ -1016,114 +900,88 @@ export default function Home() {
       fetchFriends(uid);
       setupUserChannels(uid);
     }
-  };
+  }
 
-  const handleSignOut = async () => {
+  async function handleSignOut() {
     cleanupAllChannels();
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('btl_user_handle');
-    }
-    await supabase.auth.signOut();
-    const { data } = await supabase.auth.signInAnonymously();
-    const uid = data.session?.user.id || null;
-    setCurrentUserId(uid);
-    setUserEmail('guest@breaktheloop.app');
-    setIsGuest(true);
-    setIsLoggedIn(true);
-    setIsOtpSent(false);
-    setOtpInput('');
-    setEmailInput('');
-    setHandle('Explorer');
-    setStreak(0);
-    setTotalXp(0);
-    setBadges(['🌱 First Step']);
-    setFriendsList([]);
-    if (uid) {
-      loadOrCreateProfile(uid, 'guest@breaktheloop.app');
-      fetchFriends(uid);
-      setupUserChannels(uid);
-    }
-  };
+    missionOperationRef.current++;
+    safeStorage.remove('btl_user_handle');
+    resetAnalytics();
+    const { error } = await supabase.auth.signOut();
+    if (error) { showToast(error.message, 'error'); return; }
+    // The account boundary remounts on the auth events, clearing proof/chat/UI.
+    const result = await supabase.auth.signInAnonymously();
+    if (result.error) window.location.reload();
+  }
 
-  const loadOrCreateProfile = async (userId: string, email: string) => {
-    try {
-      const { data } = await supabase.from('profiles').select('*').eq('device_id', userId).single();
-      if (data) {
-        if (data.handle && data.handle !== 'Explorer') {
-          setHandle(data.handle);
-          if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', data.handle);
-        }
-        setStreak(data.streak ?? 0);
-        setTotalXp(data.total_xp || 0);
-        if (data.badges) setBadges(data.badges);
-        if ((!data.handle || data.handle === 'Explorer') && email !== 'guest@breaktheloop.app') {
-          setShowHandleModal(true);
-        }
-      } else {
-        const defaultHandle = email.split('@')[0] || 'Explorer';
-        await supabase.from('profiles').insert([
-          { device_id: userId, handle: defaultHandle, streak: 1, time_saved_mins: 15, badges: ['🌱 First Step'] }
-        ]);
-        setHandle(defaultHandle);
-        if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', defaultHandle);
-        if (email !== 'guest@breaktheloop.app') {
-          setNewHandleInput(defaultHandle);
-          setShowHandleModal(true);
-        }
-      }
-    } catch {
+  async function loadOrCreateProfile(_userId: string, email: string) {
+    const { data, error } = await supabase.rpc('ensure_profile');
+    if (!aliveRef.current) return;
+    if (error || !data) {
+      showToast(error?.message || 'Could not load your profile. Please refresh.', 'error');
+      return;
     }
-  };
+    setHandle(data.handle);
+    setStreak(data.streak ?? 0);
+    setTotalXp(data.total_xp ?? 0);
+    setBadges(data.badges || []);
+    if (data.handle?.startsWith('Explorer_') && email !== 'guest@breaktheloop.app') {
+      setNewHandleInput('');
+      setShowHandleModal(true);
+    }
+  }
 
-  const saveHandleDirect = async (chosenHandle: string) => {
+  async function saveHandleDirect(chosenHandle: string) {
     const cleaned = chosenHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
     if (!cleaned) return;
     const previousHandle = handle;
     setHandle(cleaned);
-    if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
+    if (typeof window !== 'undefined') safeStorage.set('btl_user_handle', cleaned);
     setShowHandleModal(false);
 
     const { error } = await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
     if (error) {
       setHandle(previousHandle);
-      if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', previousHandle);
+      if (typeof window !== 'undefined') safeStorage.set('btl_user_handle', previousHandle);
       setShowHandleModal(true);
       showToast(`Couldn't save that handle: ${error.message}`, 'error');
     }
-  };
+  }
 
-  const saveHandle = async (newHandle: string) => {
+  async function saveHandle(newHandle: string) {
     const cleaned = newHandle.replace(/[^a-zA-Z0-9_]/g, '').trim();
     if (!cleaned) return;
     const previousHandle = handle;
     setHandle(cleaned);
-    if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', cleaned);
+    if (typeof window !== 'undefined') safeStorage.set('btl_user_handle', cleaned);
     setIsEditingHandle(false);
 
     const { error } = await supabase.rpc('update_user_handle', { p_new_handle: cleaned });
     if (error) {
       setHandle(previousHandle);
-      if (typeof window !== 'undefined') localStorage.setItem('btl_user_handle', previousHandle);
+      if (typeof window !== 'undefined') safeStorage.set('btl_user_handle', previousHandle);
       showToast(`Couldn't save that handle: ${error.message}`, 'error');
     }
-  };
+  }
 
-  const fetchFriends = async (userId: string) => {
+  async function fetchFriends(userId: string) {
     try {
-      const { data: friendsRows } = await supabase
+      const { data: friendsRows, error: friendsError } = await supabase
         .from('friends')
         .select('user_id, friend_user_id')
         .or(`user_id.eq.${userId},friend_user_id.eq.${userId}`);
 
+      if (friendsError) throw friendsError;
       if (friendsRows && friendsRows.length > 0) {
         const friendIds = friendsRows.map((f) => (f.user_id === userId ? f.friend_user_id : f.user_id));
         const uniqueFriendIds = Array.from(new Set(friendIds));
 
-        const { data: profiles } = await supabase
+        const { data: profiles, error: profilesError } = await supabase
           .from('profiles')
           .select('device_id, handle')
           .in('device_id', uniqueFriendIds);
 
+        if (profilesError) throw profilesError;
         const mappedList: FriendProfile[] = uniqueFriendIds.map((id) => {
           const match = profiles?.find((p) => p.device_id === id);
           return {
@@ -1135,24 +993,20 @@ export default function Home() {
       } else {
         setFriendsList([]);
       }
-    } catch {
-    }
-  };
+    } catch (error) { showToast(errorMessage(error, 'Could not load your squad.'), 'error'); }
+  }
 
-  const handleAddFriend = async (targetUserId: string) => {
+  async function handleAddFriend(targetUserId: string) {
     if (!currentUserId || !targetUserId) return;
     try {
-      await supabase.from('friends').upsert(
-        { user_id: currentUserId, friend_user_id: targetUserId },
-        { onConflict: 'user_id, friend_user_id' }
-      );
-      fetchFriends(currentUserId);
+      const { error } = await supabase.rpc('add_squad_friend', { p_friend_user_id: targetUserId });
+      if (error) throw error;
+      await fetchFriends(currentUserId);
       showToast('Squad friend added!', 'success');
-    } catch {
-    }
-  };
+    } catch (error) { showToast(errorMessage(error, 'Could not add this friend.'), 'error'); }
+  }
 
-  const handleSelectMode = (selectedMode: 'solo' | 'duo' | 'squad') => {
+  function handleSelectMode(selectedMode: 'solo' | 'duo' | 'squad') {
     if ((selectedMode === 'duo' || selectedMode === 'squad') && (isGuest || !userEmail || userEmail === 'guest@breaktheloop.app')) {
       setAuthModalReason(`Verify your email to match with other ${CURRENT_CITY.name} explorers in ${selectedMode.toUpperCase()} mode.`);
       setShowAuthModal(true);
@@ -1181,9 +1035,9 @@ export default function Home() {
     setIsSearching(false);
     setSquadRoster([]);
     setSquadCapacity(selectedMode === 'squad' ? 8 : 2);
-  };
+  }
 
-  const handleSelectQuestTrack = () => {
+  function handleSelectQuestTrack() {
     if (queueSubscriptionRef.current) {
       supabase.removeChannel(queueSubscriptionRef.current);
       queueSubscriptionRef.current = null;
@@ -1203,9 +1057,9 @@ export default function Home() {
     setIsSearching(false);
     setSquadRoster([]);
     setHiddenGemSubmittedBy(null);
-  };
+  }
 
-  const handleSelectExplorer = () => {
+  function handleSelectExplorer() {
     if (queueSubscriptionRef.current) {
       supabase.removeChannel(queueSubscriptionRef.current);
       queueSubscriptionRef.current = null;
@@ -1218,6 +1072,8 @@ export default function Home() {
     setIsExplorerMode(true);
     setActiveQuest(null);
     setRoomId('');
+    setMessages([]);
+    setNewMessage('');
     setProofImage(null);
     setIsCompleted(false);
     setIsInviteSession(false);
@@ -1226,140 +1082,124 @@ export default function Home() {
     setSquadCapacity(mode === 'squad' ? 8 : 2);
     setHiddenGemSubmittedBy(null);
     setActiveGem(null);
-  };
+  }
 
-  const handleRevealGem = async () => {
-    if (!selectedNeighborhood) return;
-    const { data, error } = await supabase.rpc('get_random_hidden_gem', { p_neighborhood: selectedNeighborhood });
-
-    if (error) {
-      showToast('Could not load a hidden gem right now — try again.', 'error');
-      return;
-    }
-
-    if (!data || !data.found) {
-      showToast(`No hidden gems submitted for ${selectedNeighborhood} yet — be the first!`, 'error');
-      return;
-    }
-
-    const { rarity, xp } = rollRarity();
-    setActiveQuestRarity(rarity);
-    setActiveQuestXp(xp);
-    setActiveQuestCredit(null);
-    setHiddenGemSubmittedBy(data.submitted_by_handle || null);
-    setIsMissionAccepted(false);
-    setActiveGem({ name: data.name, neighborhood: data.neighborhood, description: data.description, city: CURRENT_CITY.name });
-    // activeQuest still drives photo-proof, completion logging and the share
-    // card, so it stays set even though the gem card renders from activeGem.
-    setActiveQuest(`📍 ${data.name} (${data.neighborhood}) — ${data.description}`);
-  };
-
-  // Duo/Squad Explore -- mirrors executeMatchmaking's multiplayer path
-  // closely, but matches people wanting the same neighborhood (not the
-  // same generic mode) and sources content from hidden_gems.
-  const handleExploreMatchmaking = async () => {
-    setShowSafetyModal(false);
-    if (!selectedNeighborhood) {
-      showToast('Pick a neighborhood first.', 'error');
-      return;
-    }
-    if (!currentUserId) return;
-
-    setIsSearching(true);
-    setActiveQuest(null);
-    setActiveGem(null);
-    setProofImage(null);
+  async function applyAssignment(next: MissionAssignment) {
+    setAssignment(next);
+    setMode(next.mode);
+    setActiveQuest(next.quest_text);
+    setActiveQuestRarity(next.rarity);
+    setActiveQuestXp(next.xp_reward);
+    setActiveQuestCredit(next.credit);
+    setHiddenGemSubmittedBy(next.credit);
+    setIsExplorerMode(next.track === 'explore');
+    setActiveGem(next.gem);
+    if (next.gem) setSelectedNeighborhood(next.gem.neighborhood);
+    setIsMissionAccepted(Boolean(next.accepted_at));
+    setRoomId(next.room_id || '');
+    setIsSearching(false);
     setIsCompleted(false);
-    setCardDataUrl(null);
-    setMessages([]);
-    setSquadRoster([]);
-    setSquadCapacity(mode === 'squad' ? 8 : 2);
+    setProofPath(next.proof_path);
+    setShareToFeed(false);
+    const operation = missionOperationRef.current;
+    const url = next.proof_path ? await proofUrl(supabase, next) : null;
+    if (aliveRef.current && operation === missionOperationRef.current) setProofImage(url);
+  }
 
-    try {
-      const { data: matchResult, error } = await supabase.rpc('find_or_create_explore_match', {
-        p_user_id: currentUserId,
-        p_mode: mode,
-        p_handle: handle,
-        p_neighborhood: selectedNeighborhood
-      });
-
-      if (error) {
-        console.error('Explore matchmaking error:', error);
-        showToast(`Could not start exploring: ${error.message || JSON.stringify(error)}`, 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult && matchResult.error === 'banned') {
-        showToast('Your account has been suspended from multiplayer missions.', 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult && matchResult.error === 'no_gems_for_neighborhood') {
-        showToast(`No hidden gems submitted for ${selectedNeighborhood} yet — be the first!`, 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult) {
-        setRoomId(matchResult.room_id);
-        setSquadCapacity(matchResult.max_players || 2);
-        setIsQueueCreator(matchResult.is_creator || false);
-        if (matchResult.roster) setSquadRoster(matchResult.roster);
-
-        if (matchResult.queue_id) {
-          myQueueEntryIdRef.current = matchResult.queue_id;
-        }
-
-        if (matchResult.matched) {
-          setActiveGem({
-            name: matchResult.gem_name,
-            neighborhood: matchResult.neighborhood,
-            description: matchResult.gem_description,
-            city: CURRENT_CITY.name
-          });
-          setHiddenGemSubmittedBy(matchResult.gem_submitted_by || null);
-          setActiveQuest(matchResult.quest_text);
-          setActiveQuestRarity('common');
-          setActiveQuestXp(matchResult.xp_reward);
-          setActiveQuestCredit(null);
-          setIsMissionAccepted(false);
-          setIsSearching(false);
-          if (matchResult.queue_id) {
-            subscribeToQueueUpdates(matchResult.queue_id);
-          }
-        } else if (matchResult.queue_id) {
-          subscribeToQueueUpdates(matchResult.queue_id);
-
-          const rosterChannel = supabase
-            .channel(`roster_${matchResult.room_id}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'matchmaking_participants',
-                filter: `room_id=eq.${matchResult.room_id}`
-              },
-              () => fetchRoster(matchResult.room_id)
-            )
-            .subscribe();
-
-          participantsSubRef.current = rosterChannel;
-        }
-      }
-    } catch (err) {
-      console.error('Explore matchmaking exception:', err);
-      showToast('Could not start exploring right now — try again.', 'error');
-      setIsSearching(false);
+  function applyRoom(room: MissionRoom) {
+    if (!room?.queue_id) throw new Error('Could not load this room. Please try again.');
+    setMode(room.mode);
+    setRoomId(room.room_id);
+    setSquadCapacity(room.max_players || 2);
+    setSquadRoster(room.roster || []);
+    setIsQueueCreator(room.is_creator);
+    setIsInviteSession(Boolean(room.is_private));
+    setIsExplorerMode(Boolean(room.neighborhood));
+    setSelectedNeighborhood(room.neighborhood);
+    setIsSearching(!room.matched);
+    setTab('quest');
+    setSavedSelected(false);
+    myQueueEntryIdRef.current = room.queue_id;
+    if (room.matched) {
+      setActiveQuest(room.quest_text);
+      setActiveQuestRarity(room.rarity);
+      setActiveQuestXp(room.xp_reward);
+      setActiveQuestCredit(null);
+      setActiveGem(room.neighborhood ? { name: room.gem_name, neighborhood: room.neighborhood, description: room.gem_description, city: CURRENT_CITY.name } : null);
+      setHiddenGemSubmittedBy(room.gem_submitted_by);
     }
-  };
+    subscribeToQueueUpdates(room.queue_id);
+  }
 
-  const handleAbandonMission = async () => {
+  async function restoreMission() {
+    const operation = missionOperationRef.current;
+    try {
+      const { data, error } = await supabase.rpc('get_active_mission');
+      if (error) throw error;
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      if (data?.room) applyRoom(data.room);
+      if (data?.assignment) await applyAssignment(data.assignment);
+    } catch (error) { showToast(errorMessage(error, 'Could not restore your mission. Please refresh.'), 'error'); }
+  }
+
+  async function startSoloMission(explore: boolean) {
+    if (isSearching || completionPendingRef.current) return;
+    if (explore && !selectedNeighborhood) return;
+    const operation = ++missionOperationRef.current;
+    setIsSearching(true);
+    try {
+      const { data, error } = await supabase.rpc('start_solo_mission', {
+        p_track: explore ? 'explore' : 'quest', p_city: CURRENT_CITY.slug,
+        p_neighborhood: explore ? selectedNeighborhood : null, p_reroll: Boolean(assignment),
+      });
+      if (error) throw error;
+      if (!data) throw new Error('Could not load a mission. Please try again.');
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      await applyAssignment(data);
+    } catch (error) { showToast(errorMessage(error, 'Could not load your next adventure.'), 'error'); }
+    finally { if (operation === missionOperationRef.current) setIsSearching(false); }
+  }
+  const handleRevealGem = () => startSoloMission(true);
+  const pickRandomQuest = () => startSoloMission(false);
+
+  async function handleAcceptMission() {
+    if (completionPendingRef.current) return;
+    completionPendingRef.current = true;
+    const operation = missionOperationRef.current;
+    try {
+      const { data, error } = assignment
+        ? await supabase.rpc('accept_assignment', { p_assignment_id: assignment.id })
+        : await supabase.rpc('accept_room_mission', { p_room_id: roomId });
+      if (error) throw error;
+      if (!data) throw new Error('Could not accept this mission. Please try again.');
+      if (aliveRef.current && operation === missionOperationRef.current) await applyAssignment(data);
+    } catch (error) { showToast(errorMessage(error, 'Could not accept this mission.'), 'error'); }
+    finally { completionPendingRef.current = false; }
+  }
+
+  async function beginMultiplayer(explore: boolean) {
+    setShowSafetyModal(false);
+    if (!currentUserId || isSearching) return;
+    if (explore && !selectedNeighborhood) { showToast('Pick a neighbourhood first.', 'error'); return; }
+    const operation = ++missionOperationRef.current;
+    setIsSearching(true);
+    try {
+      const { data, error } = explore
+        ? await supabase.rpc('find_explore_match', { p_mode: mode, p_city: CURRENT_CITY.slug, p_neighborhood: selectedNeighborhood })
+        : await supabase.rpc('find_or_create_match', { p_user_id: currentUserId, p_mode: mode, p_handle: handle, p_city: CURRENT_CITY.slug });
+      if (error) throw error;
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      applyRoom(data);
+    } catch (error) {
+      if (operation === missionOperationRef.current) { setIsSearching(false); showToast(errorMessage(error, 'Could not start matchmaking.'), 'error'); }
+    }
+  }
+  const handleExploreMatchmaking = () => beginMultiplayer(true);
+
+  async function handleAbandonMission() {
     if (window.confirm("Are you sure you want to leave this mission? (Your streak won't be penalized)")) {
       track('mission_abandoned', { mode, track: isExplorerMode ? 'explore' : 'quest' });
-      await cancelSearch();
+      if (!await cancelSearch()) return;
       setActiveQuest(null);
       setActiveGem(null);
       setRoomId('');
@@ -1371,138 +1211,115 @@ export default function Home() {
       setSquadRoster([]);
       setSquadCapacity(2);
     }
-  };
+  }
 
   useEffect(() => {
     if (tab === 'feed') fetchGallery();
   }, [tab]);
 
+  const onLeaderboardOpened = useEffectEvent(() => { void fetchLeaderboard(); });
   useEffect(() => {
-    if (showFriendsModal && leaderboardTab === 'leaderboard') fetchLeaderboard();
+    if (showFriendsModal && leaderboardTab === 'leaderboard') onLeaderboardOpened();
   }, [showFriendsModal, leaderboardTab]);
 
-  const fetchGallery = async () => {
+  async function fetchGallery() {
     setLoadingFeed(true);
+    setFeedError('');
     try {
-      const { data: logs, error } = await supabase.from("mission_logs").select("*").order("created_at", { ascending: false }).limit(20);
-      if (logs && !error) {
-        const { data: profiles } = await supabase.from("profiles").select("device_id, handle");
-        const { data: reactions } = await supabase.from("feed_reactions").select("*");
+      const { data: logs, error } = await supabase.from('mission_logs').select('*')
+        .eq('is_public', true).eq('city', CURRENT_CITY.slug).order('created_at', { ascending: false }).limit(20);
+      if (error) throw error;
+      if (!logs?.length) { setFeedItems([]); return; }
+      const [profilesResult, reactionsResult] = await Promise.all([
+        supabase.from('profiles').select('device_id,handle').in('device_id', [...new Set(logs.map(log => log.user_id))]),
+        supabase.from('feed_reactions').select('log_id,reaction_type').in('log_id', logs.map(log => log.id)),
+      ]);
+      if (profilesResult.error) throw profilesResult.error;
+      if (reactionsResult.error) throw reactionsResult.error;
+      const profileMap = new Map((profilesResult.data || []).map(p => [p.device_id, p.handle]));
+      const items = await Promise.all(logs.map(async log => {
+        const reactions = (reactionsResult.data || []).filter(r => r.log_id === log.id);
+        return { ...log, photo_url: await proofUrl(supabase, log), handle: profileMap.get(log.user_id) || 'Explorer',
+          fire_count: reactions.filter(r => r.reaction_type === 'fire').length,
+          five_count: reactions.filter(r => r.reaction_type === 'five').length };
+      }));
+      if (aliveRef.current) setFeedItems(items);
+    } catch (error) { setFeedError(errorMessage(error, 'Could not load the community. Please try again.')); }
+    finally { setLoadingFeed(false); }
+  }
 
-        const profileMap = new Map((profiles || []).map(p => [p.device_id, p.handle]));
-
-        const logsWithReactions = logs.map((log) => {
-          const logReactions = reactions?.filter((r) => r.log_id === log.id) || [];
-          const userHandle = profileMap.get(log.user_id) || (log.user_id ? log.user_id.substring(0, 8) : "Anonymous");
-          return {
-            ...log,
-            handle: userHandle,
-            fire_count: logReactions.filter((r) => r.reaction_type === "fire").length,
-            five_count: logReactions.filter((r) => r.reaction_type === "five").length
-          };
-        });
-
-        setFeedItems(logsWithReactions);
-      }
-    } catch (err) {
-      console.error("Error fetching gallery:", err);
-    } finally {
-      setLoadingFeed(false);
-    }
-  };
-
-  const fetchLeaderboard = async () => {
+  async function fetchLeaderboard() {
     const { data, error } = await supabase.rpc('get_friends_leaderboard');
     if (error) {
       showToast(`Couldn't load leaderboard: ${error.message}`, 'error');
       return;
     }
     setLeaderboard(data || []);
-  };
+  }
 
-  const handleReact = async (logId: string, type: 'fire' | 'five') => {
-    try {
-      await supabase.from('feed_reactions').insert([
-        { log_id: logId, user_handle: handle, user_id: currentUserId, reaction_type: type }
-      ]);
-      fetchGallery();
-    } catch {
-    }
-  };
+  async function handleReact(logId: string, type: 'fire' | 'five') {
+    const { error } = await supabase.rpc('react_to_mission', { p_log_id: logId, p_reaction: type });
+    if (error) { showToast(error.message, 'error'); return; }
+    await fetchGallery();
+  }
 
-  const handleReport = async (type: 'chat' | 'feed', targetId: string) => {
+  async function handleReport(type: 'chat' | 'feed', targetId: string) {
     const reason = window.prompt('Please specify the reason for reporting this content:');
-    if (!reason || !reason.trim()) return;
-
+    if (!reason?.trim()) return;
     try {
-      await supabase.from('reports').insert([
-        {
-          reporter_handle: handle,
-          reported_type: type,
-          target_id: targetId,
-          reason: reason.trim()
-        }
-      ]);
+      const { error } = await supabase.rpc('report_content', { p_type: type, p_target_id: targetId, p_reason: reason.trim() });
+      if (error) throw error;
       showToast('Report submitted. Our moderation team will review this shortly.', 'success');
-    } catch {
-    }
-  };
+    } catch (error) { showToast(errorMessage(error, 'Could not send your report. Please try again.'), 'error'); }
+  }
 
-  // Realtime Live Chat Subscription
   useEffect(() => {
-    if (!activeQuest || mode === 'solo' || !roomId) return;
-
-    const channel = supabase
-      .channel(`chat_${roomId}`)
-      .on(
-        'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: `room_id=eq.${roomId}` },
-        (payload) => {
-          setMessages((prev) => [...prev, payload.new as ChatMessage]);
-          chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }
-      )
+    if (!activeQuest || mode === 'solo' || !roomId || isCompleted) return;
+    let live = true;
+    function addMessages(next: ChatMessage[]) {
+      if (!live) return;
+      setMessages(previous => Array.from(new Map([...previous, ...next].map(m => [m.id, m])).values())
+        .sort((a, b) => a.created_at.localeCompare(b.created_at)).slice(-100));
+    }
+    const channel = supabase.channel(`chat_${roomId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mission_messages', filter: `room_id=eq.${roomId}` }, payload => addMessages([payload.new as ChatMessage]))
       .subscribe();
+    void (async () => {
+      const { data, error } = await supabase.from('mission_messages').select('id,sender_handle,message,created_at').eq('room_id', roomId).order('created_at', { ascending: false }).limit(100);
+      if (!live) return;
+      if (error) showToast('Could not load earlier chat messages. Try reopening this mission.', 'error');
+      else addMessages(data || []);
+    })();
+    return () => { live = false; supabase.removeChannel(channel); };
+  }, [activeQuest, mode, roomId, isCompleted]);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [activeQuest, mode, roomId]);
-
-  const sendMessage = async () => {
+  async function sendMessage() {
     const trimmed = newMessage.trim();
-    if (!trimmed || !roomId) return;
-
-    const now = Date.now();
-    if (now - lastMessageSentTime < 3000) {
-      showToast('Please wait 3 seconds before sending another message.', 'info');
-      return;
-    }
-
-    if (trimmed.length > 300) {
-      showToast('Message must be 300 characters or fewer.', 'error');
-      return;
-    }
-
-    setLastMessageSentTime(now);
-    setNewMessage('');
+    if (!trimmed || !roomId || sendingMessage) return;
+    if (trimmed.length > 300) { showToast('Message must be 300 characters or fewer.', 'error'); return; }
+    const operation = missionOperationRef.current;
+    setSendingMessage(true);
     try {
-      await supabase.from('mission_messages').insert([
-        { room_id: roomId, sender_handle: handle, sender_id: currentUserId, message: trimmed }
-      ]);
-    } catch {
+      const { data, error } = await supabase.rpc('send_room_message', { p_room_id: roomId, p_message: trimmed });
+      if (error) throw error;
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      setNewMessage(previous => previous.trim() === trimmed ? '' : previous);
+      if (data) setMessages(previous => previous.some(m => m.id === data.id) ? previous : [...previous, data]);
+    } catch (error) {
+      if (aliveRef.current && operation === missionOperationRef.current) showToast(errorMessage(error, 'Message not sent. Your draft is still here.'), 'error');
     }
-  };
+    finally { setSendingMessage(false); }
+  }
 
-  const handleWhatsAppInvite = () => {
+  function handleWhatsAppInvite() {
     const inviteLink = `https://breaktheloopapp.in/?room=${roomId}`;
     const text = encodeURIComponent(
       `🔥 Hey! @${handle} invited you to a ${mode.toUpperCase()} Raid on Break The Loop!\n\nTap this link to join my exact mission lobby right now:\n${inviteLink}`
     );
     window.open(`https://wa.me/?text=${text}`, '_blank');
-  };
+  }
 
-  const onStartMatchingClick = () => {
+  function onStartMatchingClick() {
     track('mission_started', { mode, track: isExplorerMode ? 'explore' : 'quest' });
 
     if (isExplorerMode && mode === 'solo') {
@@ -1523,9 +1340,9 @@ export default function Home() {
     } else {
       executeMatchmaking();
     }
-  };
+  }
 
-  const fetchRoster = async (rId: string) => {
+  async function fetchRoster(rId: string) {
     const { data } = await supabase
       .from('matchmaking_participants')
       .select('user_id, handle')
@@ -1533,234 +1350,57 @@ export default function Home() {
     if (data && data.length > 0) {
       setSquadRoster(data);
     }
-  };
+  }
 
   // Kept open for the lifetime of a Duo/Squad match (not just until matching
   // completes) so both the initial match AND every later shared reroll keep
   // syncing to every participant, not just whoever triggered it.
-  const subscribeToQueueUpdates = (queueId: string) => {
-    const queueChannel = supabase
-      .channel(`queue_${queueId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'matchmaking_queue',
-          filter: `id=eq.${queueId}`
-        },
-        async (payload: any) => {
-          if (!payload.new) return;
-
-          const prevCount = payload.old?.current_players ?? 0;
-          const newCount = payload.new.current_players ?? 0;
-
-          // Reveal the mission the moment the room hits its minimum viable
-          // size (2) -- not when it's full. A Squad room keeps accepting
-          // joiners up to its cap long after this fires.
-          const justRevealed = prevCount < 2 && newCount >= 2;
-          if (justRevealed) {
-            setRoomId(payload.new.room_id);
-            setIsSearching(false);
-          }
-
-          // Keep the visible roster live as people keep trickling in,
-          // not just at the initial reveal moment.
-          if (newCount !== prevCount) {
-            await fetchRoster(payload.new.room_id);
-          }
-
-          setActiveQuest(payload.new.quest_text);
-          setActiveQuestRarity(payload.new.rarity);
-          setActiveQuestXp(payload.new.xp_reward);
-          setActiveQuestCredit(null);
-          setIsMissionAccepted(false);
-
-          // Explore rooms carry gem fields on the same row -- keep every
-          // participant's structured gem card in sync too, whether this
-          // update is the initial group reveal or a later shared reroll.
-          if (payload.new.neighborhood) {
-            setActiveGem({
-              name: payload.new.gem_name,
-              neighborhood: payload.new.neighborhood,
-              description: payload.new.gem_description,
-              city: CURRENT_CITY.name
-            });
-            setHiddenGemSubmittedBy(payload.new.gem_submitted_by || null);
-          } else {
-            setActiveGem(null);
-          }
-        }
-      )
-      .subscribe();
-
-    queueSubscriptionRef.current = queueChannel;
-  };
-
-  const executeMatchmaking = async () => {
-    setShowSafetyModal(false);
-    setIsSearching(true);
-    setActiveQuest(null);
-    setProofImage(null);
-    setIsCompleted(false);
-    setCardDataUrl(null);
-    setMessages([]);
-    setSquadRoster([]);
-    setSquadCapacity(mode === 'squad' ? 8 : 2);
-
-    if (mode === 'solo' || isInviteSession) {
-      await pickRandomQuest();
-      setIsSearching(false);
-      return;
-    }
-
-    if (!currentUserId) {
-      setIsSearching(false);
-      return;
-    }
-
-    try {
-      const { data: matchResult, error } = await supabase.rpc('find_or_create_match', {
-        p_user_id: currentUserId,
-        p_mode: mode,
-        p_handle: handle,
-        p_city: CURRENT_CITY.slug
-      });
-
-      if (error) {
-        console.error('Matchmaking error:', error);
-        showToast(`Matchmaking error: ${error.message || JSON.stringify(error)}`, 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult && matchResult.error === 'banned') {
-        showToast('Your account has been suspended from multiplayer missions.', 'error');
-        setIsSearching(false);
-        return;
-      }
-
-      if (matchResult) {
-        setRoomId(matchResult.room_id);
-        setSquadCapacity(matchResult.max_players || 2);
-        setIsQueueCreator(matchResult.is_creator || false);
-        if (matchResult.roster) setSquadRoster(matchResult.roster);
-
-        if (matchResult.queue_id) {
-          myQueueEntryIdRef.current = matchResult.queue_id;
-        }
-
-        if (matchResult.matched) {
-          setActiveQuest(matchResult.quest_text);
-          setActiveQuestRarity(matchResult.rarity);
-          setActiveQuestXp(matchResult.xp_reward);
-          setActiveQuestCredit(null);
-          setIsMissionAccepted(false);
+  function subscribeToQueueUpdates(queueId: string) {
+    if (queueSubscriptionRef.current) supabase.removeChannel(queueSubscriptionRef.current);
+    queueSubscriptionRef.current = supabase.channel(`queue_${queueId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matchmaking_queue', filter: `id=eq.${queueId}` }, async payload => {
+        if (!aliveRef.current || myQueueEntryIdRef.current !== queueId) return;
+        const next = payload.new;
+        await fetchRoster(next.room_id);
+        if (!aliveRef.current || myQueueEntryIdRef.current !== queueId) return;
+        if (next.revealed_at || next.current_players >= 2) {
+          setRoomId(next.room_id);
           setIsSearching(false);
-          if (matchResult.queue_id) {
-            subscribeToQueueUpdates(matchResult.queue_id);
-          }
-        } else if (matchResult.queue_id) {
-          subscribeToQueueUpdates(matchResult.queue_id);
-
-          const rosterChannel = supabase
-            .channel(`roster_${matchResult.room_id}`)
-            .on(
-              'postgres_changes',
-              {
-                event: '*',
-                schema: 'public',
-                table: 'matchmaking_participants'
-              },
-              (payload: any) => {
-                if (payload.new && payload.new.room_id === matchResult.room_id) {
-                  setSquadRoster((prev) => {
-                    if (prev.some((p) => p.user_id === payload.new.user_id)) return prev;
-                    return [...prev, { user_id: payload.new.user_id, handle: payload.new.handle }];
-                  });
-                }
-              }
-            )
-            .subscribe();
-
-          participantsSubRef.current = rosterChannel;
+          setActiveQuest(next.quest_text);
+          setActiveQuestRarity(next.rarity);
+          setActiveQuestXp(next.xp_reward);
+          setActiveGem(next.neighborhood ? { name: next.gem_name, neighborhood: next.neighborhood, description: next.gem_description, city: CURRENT_CITY.name } : null);
+          setHiddenGemSubmittedBy(next.gem_submitted_by || null);
+          // Occupancy changes must not reset an already accepted mission.
         }
-      }
-    } catch (err: any) {
-      console.error('Catastrophic match error:', err);
-      showToast(`Connection error: ${err.message || err}`, 'error');
-      setIsSearching(false);
-    }
-  };
+      }).subscribe();
+  }
 
-  const cancelSearch = async () => {
-    if (queueSubscriptionRef.current) {
-      supabase.removeChannel(queueSubscriptionRef.current);
-      queueSubscriptionRef.current = null;
-    }
-    if (participantsSubRef.current) {
-      supabase.removeChannel(participantsSubRef.current);
-      participantsSubRef.current = null;
-    }
+  const executeMatchmaking = () => mode === 'solo' ? pickRandomQuest() : beginMultiplayer(false);
 
-    if (myQueueEntryIdRef.current && currentUserId) {
-      try {
-        await supabase.rpc('leave_match_queue', {
-          p_queue_id: myQueueEntryIdRef.current,
-          p_user_id: currentUserId,
-          p_is_creator: isQueueCreator
-        });
-      } catch {
-      }
-      myQueueEntryIdRef.current = null;
-    }
+  async function cancelSearch() {
+    const { error } = await supabase.rpc('cancel_active_mission');
+    if (error) { showToast(error.message, 'error'); return false; }
+    missionOperationRef.current++;
+    if (queueSubscriptionRef.current) supabase.removeChannel(queueSubscriptionRef.current);
+    if (participantsSubRef.current) supabase.removeChannel(participantsSubRef.current);
+    queueSubscriptionRef.current = null;
+    participantsSubRef.current = null;
+    myQueueEntryIdRef.current = null;
+    setAssignment(null);
+    setProofPath(null);
+    setProofImage(null);
+    setIsMissionAccepted(false);
     setIsSearching(false);
     setActiveQuest(null);
     setRoomId('');
-  };
+    setMessages([]);
+    setNewMessage('');
+    void flushProofCleanup(supabase).catch(() => {});
+    return true;
+  }
 
-  const rollRarity = (): { rarity: 'common' | 'rare' | 'legendary'; xp: number } => {
-    const roll = Math.random() * 100;
-    if (roll > 85) return { rarity: 'legendary', xp: 75 };
-    if (roll > 60) return { rarity: 'rare', xp: 35 };
-    return { rarity: 'common', xp: 15 };
-  };
-
-  const pickRandomQuest = async () => {
-    try {
-      const { data: dbQuests } = await supabase
-        .from('quests')
-        .select('quest_text, submitted_by_handle')
-        .eq('mode', mode)
-        .eq('is_active', true);
-
-      if (dbQuests && dbQuests.length > 0) {
-        const { rarity, xp } = rollRarity();
-        setActiveQuestRarity(rarity);
-        setActiveQuestXp(xp);
-        const chosen = dbQuests[Math.floor(Math.random() * dbQuests.length)];
-        setActiveQuestCredit(chosen.submitted_by_handle || null);
-        setIsMissionAccepted(false);
-        setActiveQuest(chosen.quest_text);
-      } else {
-        const { rarity, xp } = rollRarity();
-        setActiveQuestRarity(rarity);
-        setActiveQuestXp(xp);
-        setActiveQuestCredit(null);
-        setIsMissionAccepted(false);
-        setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
-      }
-    } catch (e) {
-      const { rarity, xp } = rollRarity();
-      setActiveQuestRarity(rarity);
-      setActiveQuestXp(xp);
-      setActiveQuestCredit(null);
-      setIsMissionAccepted(false);
-      setActiveQuest("Head to the nearest tapri or cafe and order a beverage you have never tried!");
-    }
-  };
-
-  const handleSharedReroll = async () => {
+  async function handleSharedReroll() {
     const { error } = await supabase.rpc('reroll_shared_quest', {
       p_queue_id: myQueueEntryIdRef.current
     });
@@ -1771,12 +1411,12 @@ export default function Home() {
     // subscribeToQueueUpdates will deliver the update to this client too, the
     // same way it delivers it to the partner. Single source of truth, no
     // duplicate logic.
-  };
+  }
 
   // Reads the JPEG's EXIF orientation tag by walking its raw bytes -- no
   // library needed for just this one field. Returns 1 (normal) if the file
   // isn't a JPEG or has no EXIF block, which is a safe no-op default.
-  const getExifOrientation = (arrayBuffer: ArrayBuffer): number => {
+  function getExifOrientation(arrayBuffer: ArrayBuffer): number {
     const view = new DataView(arrayBuffer);
     if (view.getUint16(0, false) !== 0xFFD8) return 1;
 
@@ -1805,9 +1445,9 @@ export default function Home() {
       }
     }
     return 1;
-  };
+  }
 
-  const compressImage = (file: File, maxWidth = 800, quality = 0.6): Promise<Blob> => {
+  function compressImage(file: File, maxWidth = 800, quality = 0.6): Promise<Blob> {
     return new Promise((resolve, reject) => {
       const exifReader = new FileReader();
       exifReader.readAsArrayBuffer(file);
@@ -1879,43 +1519,42 @@ export default function Home() {
       };
       exifReader.onerror = (err) => reject(err);
     });
-  };
+  }
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (!file) return;
-
+    e.target.value = '';
+    if (!file || !assignment || !isMissionAccepted || uploading || isCompleting) return;
+    const operation = missionOperationRef.current;
+    const path = `${sessionUserId}/${assignment.id}/${crypto.randomUUID()}.jpg`;
+    let uploaded = false;
+    let attached = false;
     setUploading(true);
     try {
-      const compressedBlob = await compressImage(file, 800, 0.6);
-      const fileName = `${Date.now()}_${Math.random().toString(36).substring(2, 7)}.jpg`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('Proofs')
-        .upload(fileName, compressedBlob, {
-          cacheControl: '3600',
-          upsert: true,
-          contentType: 'image/jpeg'
-        });
-
-      if (uploadError) {
-        console.error('Storage upload error:', uploadError);
-        showToast('Could not upload image to cloud. Please check connection and try again.', 'error');
-        setProofImage(null);
-      } else {
-        const { data } = supabase.storage.from('Proofs').getPublicUrl(fileName);
-        setProofImage(data.publicUrl);
-      }
-    } catch (err) {
-      console.error('Compression error:', err);
-      showToast('Failed to process image. Please try again.', 'error');
-      setProofImage(null);
+      const blob = await compressImage(file, 800, 0.6);
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      const { error } = await supabase.storage.from('MissionProofs').upload(path, blob, { cacheControl: '3600', upsert: false, contentType: 'image/jpeg' });
+      if (error) throw error;
+      uploaded = true;
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      const result = await supabase.rpc('attach_mission_proof', { p_assignment_id: assignment.id, p_photo_path: path });
+      if (result.error) throw result.error;
+      attached = true;
+      const url = await proofUrl(supabase, { proof_path: path });
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
+      setProofPath(path);
+      setProofImage(url);
+      setAssignment(result.data);
+      void flushProofCleanup(supabase).catch(() => {});
+    } catch (error) {
+      if (aliveRef.current && operation === missionOperationRef.current) showToast(errorMessage(error, 'Could not upload your photo. Please try again.'), 'error');
     } finally {
-      setUploading(false);
+      if (uploaded && !attached) await supabase.storage.from('MissionProofs').remove([path]);
+      if (operation === missionOperationRef.current) setUploading(false);
     }
-  };
+  }
 
-  const generateRecapCard = () => {
+  function generateRecapCard() {
     try {
       const url = createStoryCard({ kind: 'recap', handle, cityName: CURRENT_CITY.name, streak, totalXp, rank: getRankTitle(totalXp), friendCount: friendsList.length });
       if (!url) throw new Error('Canvas unavailable');
@@ -1924,7 +1563,7 @@ export default function Home() {
     } catch {
       showToast('Could not create your recap. Please try again.', 'error');
     }
-  };
+  }
 
   // Capture the RPC result at completion. A delayed callback that reads the
   // previous render's state would show the old XP, streak and rank.
@@ -1946,19 +1585,21 @@ export default function Home() {
     return () => clearTimeout(timer);
   }, [pendingRecap, isCompleted]);
 
-  const handleCompleteMission = async () => {
-    if (!proofImage) {
+  async function handleCompleteMission() {
+    if (completionPendingRef.current) return;
+    if (!proofImage || !proofPath || !assignment) {
       showToast('Please capture a photo proof to complete your mission!', 'error');
       return;
     }
 
+    completionPendingRef.current = true;
+    setIsCompleting(true);
+    const operation = missionOperationRef.current;
     try {
-      const { data, error } = await supabase.rpc('complete_mission', {
-        p_quest_text: activeQuest || 'Micro Mission Completed',
-        p_photo_url: proofImage,
-        p_mode: isExplorerMode ? 'explorer' : mode,
-        p_xp_earned: activeQuestXp
+      const { data, error } = await supabase.rpc('complete_assigned_mission', {
+        p_assignment_id: assignment.id, p_photo_path: proofPath, p_is_public: shareToFeed,
       });
+      if (!aliveRef.current || operation !== missionOperationRef.current) return;
 
       if (error) {
         showToast(`Mission error: ${error.message}`, 'error');
@@ -1973,7 +1614,7 @@ export default function Home() {
           xp_earned: activeQuestXp
         });
 
-        confetti({
+        if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) confetti({
           particleCount: 120,
           spread: 70,
           origin: { y: 0.6 },
@@ -1981,6 +1622,7 @@ export default function Home() {
         });
 
         setIsCompleted(true);
+        myQueueEntryIdRef.current = null;
 
         // The match is over — tear down the persistent Duo/Squad channels
         // (same cleanup cancelSearch does when backing out early) so they
@@ -2018,7 +1660,7 @@ export default function Home() {
           rank: getRankTitle(data.new_total_xp ?? totalXp),
         };
         // Mission XP and lifetime XP are different fields; saved minutes are
-        // neither. Prefer the awarded XP returned by complete_mission.
+        // neither. Prefer the awarded XP returned by the server.
         try {
           setCardDataUrl(createStoryCard({
             kind: 'mission',
@@ -2037,10 +1679,13 @@ export default function Home() {
       }
     } catch {
       showToast('Failed to log mission completion. Please try again.', 'error');
+    } finally {
+      completionPendingRef.current = false;
+      setIsCompleting(false);
     }
-  };
+  }
 
-  const handleShareCard = async (imgUrl: string | null) => {
+  async function handleShareCard(imgUrl: string | null) {
     if (!imgUrl) return;
     try {
       const blob = await (await fetch(imgUrl)).blob();
@@ -2058,48 +1703,35 @@ export default function Home() {
         a.download = 'break-the-loop-card.png';
         a.click();
       }
-    } catch {
+    } catch (error) {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'AbortError') return;
       const a = document.createElement('a');
       a.href = imgUrl;
       a.download = 'break-the-loop-card.png';
       a.click();
     }
-  };
+  }
 
-  const goToTrack = async (explore: boolean) => {
+  async function goToTrack(explore: boolean) {
     if (isExplorerMode !== explore) {
       if ((activeQuest || isSearching) && !window.confirm('Leave this mission and switch activities? Your progress so far will not be saved.')) return;
-      if (activeQuest || isSearching) await cancelSearch();
+      if ((activeQuest || isSearching) && !await cancelSearch()) return;
       if (explore) handleSelectExplorer(); else handleSelectQuestTrack();
       setIsMissionAccepted(false);
     }
     setTab('quest');
+    setSavedSelected(false);
     window.scrollTo({ top: 0 });
-  };
-  const showFeed = () => { setTab('feed'); window.scrollTo({ top: 0 }); };
+  }
+  function showFeed() { setSavedSelected(false); setTab('feed'); window.scrollTo({ top: 0 }); }
+  const hasOpenDialog = Boolean(selectedProfile || showReportsModal || showPendingQuestsModal || showPendingGemsModal || showDevModal || showHandleModal || showAuthModal || inviteNeedsAuth || !isLoggedIn || showSaveProgressModal || showSuggestQuestModal || showSuggestGemModal || showRecoverModal || showSafetyModal || showFriendsModal || showWrappedModal);
   const nextRank = RANK_TIERS.find(tier => tier.minXp > totalXp);
 
   return (
     <main className="btl-app">
       <a className="skip-link" href="#activity">Skip to activity</a>
-      {/* Toast Stack */}
-      <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] flex flex-col items-center space-y-2 w-11/12 max-w-sm pointer-events-none">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            role={t.type === 'error' ? 'alert' : 'status'}
-            className={`w-full px-4 py-3 rounded-xl text-xs font-semibold shadow-2xl backdrop-blur-md border transition-all ${
-              t.type === 'error'
-                ? 'bg-orange-950/95 border-orange-500/40 text-orange-200'
-                : t.type === 'success'
-                ? 'bg-amber-950/95 border-amber-500/40 text-amber-200'
-                : 'bg-white border-stone-300 text-stone-800'
-            }`}
-          >
-            {t.message}
-          </div>
-        ))}
-      </div>
+      {loadingProfile && <p role="status" className="sr-only">Loading explorer profile…</p>}
+      {!hasOpenDialog && <ToastStack toasts={toasts} />}
 
       <header className="app-header">
         <div className="brand" onMouseDown={handleDevPressStart} onMouseUp={handleDevPressEnd} onTouchStart={handleDevPressStart} onTouchEnd={handleDevPressEnd}>
@@ -2107,19 +1739,18 @@ export default function Home() {
           <span>BREAK<br />THE LOOP<span className="brand-period">.</span></span>
         </div>
         <nav className="main-nav" aria-label="Main navigation">
-          <button aria-current={tab === 'quest' && !isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(false)}><AppIcon name="bolt" />Today</button>
-          <button aria-current={tab === 'quest' && isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(true)}><AppIcon name="compass" />Explore</button>
-          <button aria-current={tab === 'feed' ? 'page' : undefined} onClick={showFeed}><AppIcon name="grid" />Feed</button>
-          <a href="#saved-places"><AppIcon name="bookmark" /><span>Saved</span></a>
+          <button aria-current={!savedSelected && tab === 'quest' && !isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(false)}><AppIcon name="bolt" />Today</button>
+          <button aria-current={!savedSelected && tab === 'quest' && isExplorerMode ? 'page' : undefined} onClick={() => goToTrack(true)}><AppIcon name="compass" />Explore</button>
+          <button aria-current={!savedSelected && tab === 'feed' ? 'page' : undefined} onClick={showFeed}><AppIcon name="grid" />Feed</button>
+          <a href="#saved-places" aria-current={savedSelected ? 'location' : undefined} onClick={() => setSavedSelected(true)}><AppIcon name="bookmark" /><span>Saved</span></a>
         </nav>
         <div className="header-utilities">
           <span className="city-label"><AppIcon name="pin" size={16} />{CURRENT_CITY.name}</span>
-          <button className="icon-button" onClick={requestNotificationPermission} aria-label={notificationsEnabled ? 'Notifications active' : 'Enable notifications'}><AppIcon name="bell" /></button>
           <a className="profile-avatar" href="#your-progress" aria-label="Your profile">{handle.charAt(0).toUpperCase()}</a>
         </div>
       </header>
       {userEmail === ADMIN_EMAIL && <div className="admin-toolbar" aria-label="Admin tools">
-        <span>Admin</span><button onClick={fetchAdminReports}>🚩 Reports</button><button onClick={fetchPendingQuests}>📝 Quests</button><button onClick={fetchPendingGems}>🗺️ Gems {pendingGemCount > 0 && `(${pendingGemCount})`}</button>
+        <span>Admin</span><button onClick={fetchAdminReports} disabled={loadingReports}>{loadingReports ? 'Loading reports…' : '🚩 Reports'}</button><button onClick={fetchPendingQuests}>📝 Quests</button><button onClick={fetchPendingGems}>🗺️ Gems {pendingGemCount > 0 && `(${pendingGemCount})`}</button>
       </div>}
 
       {/* Incoming Live Raid Invite Banner */}
@@ -2130,7 +1761,7 @@ export default function Home() {
             @{incomingInvite.sender_handle} challenged you to a Duo Raid!
           </h3>
           <p className="text-[11px] text-orange-200 italic">
-            "{incomingInvite.quest_text}"
+            &quot;{incomingInvite.quest_text}&quot;
           </p>
           <div className="flex space-x-2 pt-2">
             <button
@@ -2151,7 +1782,7 @@ export default function Home() {
 
       {/* Explorer Public Profile Modal */}
       {selectedProfile && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Explorer profile" onClose={() => { setSelectedProfile(null); profileRequestRef.current++; }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-[60] flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-5 space-y-4 shadow-2xl relative">
             <button
               onClick={() => setSelectedProfile(null)}
@@ -2192,12 +1823,12 @@ export default function Home() {
             <div className="flex justify-around bg-stone-50 p-3 rounded-2xl border border-stone-200 text-center">
               <div>
                 <p className="text-[10px] text-stone-500 font-semibold">STREAK</p>
-                <p className="text-sm font-black text-stone-800">{selectedProfile.streak} Days 🔥</p>
+                <p className="text-sm font-black text-stone-800">{selectedProfile.streak} {selectedProfile.streak === 1 ? 'day' : 'days'}</p>
               </div>
               <div className="w-px bg-stone-100" />
               <div>
                 <p className="text-[10px] text-stone-500 font-semibold">IRL XP</p>
-                <p className="text-sm font-black text-orange-700">{selectedProfile.time_saved_mins} ⚡</p>
+                <p className="text-sm font-black text-orange-700">{selectedProfile.total_xp ?? 0} ⚡</p>
               </div>
             </div>
 
@@ -2219,10 +1850,10 @@ export default function Home() {
                   selectedProfile.history.map((h) => (
                     <div key={h.id} className="bg-stone-50 p-2 rounded-xl border border-stone-200 flex space-x-2 items-center">
                       {h.photo_url && (
-                        <img src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
+                        <NextImage unoptimized width={800} height={600} src={h.photo_url} alt="Proof" className="w-10 h-10 object-cover rounded-lg flex-shrink-0" />
                       )}
                       <div className="text-left overflow-hidden">
-                        <p className="text-[10px] text-stone-700 truncate font-medium">"{h.quest_text}"</p>
+                        <p className="text-[10px] text-stone-700 truncate font-medium">&quot;{h.quest_text}&quot;</p>
                         <span className="text-[9px] text-orange-700/80 uppercase font-mono font-bold">{h.mode} Mission</span>
                       </div>
                     </div>
@@ -2233,12 +1864,12 @@ export default function Home() {
               </div>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Admin Moderation Queue Modal */}
       {showReportsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Reports" onClose={() => { setShowReportsModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
             <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
@@ -2263,15 +1894,15 @@ export default function Home() {
                       <span className="text-[9px] text-stone-500 font-mono">{new Date(r.created_at).toLocaleTimeString()}</span>
                     </div>
                     <p className="text-stone-700 text-[11px]">
-                      <strong>Reason:</strong> "{r.reason}"
+                      <strong>Reason:</strong> &quot;{r.reason}&quot;
                     </p>
                     {r.content_text && (
                       <p className="text-stone-800 text-[11px] bg-white border border-stone-200 rounded-lg p-2">
-                        <strong className="text-amber-700">Reported content:</strong> "{r.content_text}"
+                        <strong className="text-amber-700">Reported content:</strong> &quot;{r.content_text}&quot;
                       </p>
                     )}
                     {r.content_photo_url && (
-                      <img
+                      <NextImage unoptimized width={800} height={600}
                         src={r.content_photo_url}
                         alt="Reported proof photo"
                         className="w-full max-h-40 object-cover rounded-lg border border-stone-200"
@@ -2332,12 +1963,12 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Admin Pending Quest Suggestions Modal */}
       {showPendingQuestsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Quest submissions" onClose={() => { setShowPendingQuestsModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
             <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
@@ -2374,7 +2005,7 @@ export default function Home() {
                       </span>
                       <span className="text-[9px] text-stone-500 font-mono">{new Date(q.created_at).toLocaleTimeString()}</span>
                     </div>
-                    <p className="text-stone-700 text-[11px]">"{q.quest_text}"</p>
+                    <p className="text-stone-700 text-[11px]">&quot;{q.quest_text}&quot;</p>
                     <p className="text-stone-500 text-[10px]">Suggested by @{q.submitted_by_handle}</p>
                     <div className="flex space-x-2 pt-1 border-t border-stone-200">
                       <button
@@ -2395,11 +2026,11 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {showPendingGemsModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Hidden gem submissions" onClose={() => { setShowPendingGemsModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl relative text-left">
             <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
@@ -2521,12 +2152,12 @@ export default function Home() {
               )}
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Developer Access Modal */}
       {showDevModal && userEmail === ADMIN_EMAIL && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Admin tools" onClose={() => { setShowDevModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-amber-500/40 rounded-3xl p-5 space-y-4 shadow-2xl text-left">
             <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-xs font-mono font-bold text-amber-700 uppercase tracking-wider">
@@ -2576,12 +2207,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Handle Setup Modal */}
       {showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Choose your handle" onClose={() => { setShowHandleModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-orange-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🏷️</div>
             <h2 className="text-lg font-extrabold text-stone-900">CHOOSE YOUR EXPLORER TAG</h2>
@@ -2606,12 +2237,12 @@ export default function Home() {
               Claim Tag & Start
             </button>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Auth Modal */}
-      {(!isLoggedIn || showAuthModal) && !showHandleModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+      {(!isLoggedIn || showAuthModal || inviteNeedsAuth) && !showHandleModal && (
+        <AccessibleDialog toasts={toasts} label="Choose your handle" onClose={() => { setShowHandleModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-5 shadow-2xl relative">
             {isLoggedIn && (
               <button
@@ -2685,12 +2316,12 @@ export default function Home() {
               </div>
             )}
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Save My Progress Modal */}
       {showSaveProgressModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Save your progress" onClose={() => { setShowSaveProgressModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSaveProgressModal(false)}
@@ -2720,12 +2351,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Suggest a Quest Modal */}
       {showSuggestQuestModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Suggest a quest" onClose={() => { setShowSuggestQuestModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestQuestModal(false)}
@@ -2770,11 +2401,11 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {showSuggestGemModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Suggest a hidden gem" onClose={() => { setShowSuggestGemModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowSuggestGemModal(false)}
@@ -2827,12 +2458,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Sign In / Recover Account Modal */}
       {showRecoverModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Sign in" onClose={() => { setShowRecoverModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 text-center space-y-4 shadow-2xl relative">
             <button
               onClick={() => setShowRecoverModal(false)}
@@ -2845,7 +2476,7 @@ export default function Home() {
             {!isRecoverOtpSent ? (
               <>
                 <p className="text-xs text-stone-600">
-                  Enter the email you previously saved your progress with, and we'll send you a 6-digit code.
+                  Enter the email you previously saved your progress with, and we&apos;ll send you a 6-digit code.
                 </p>
                 <div className="space-y-3">
                   <input
@@ -2894,12 +2525,12 @@ export default function Home() {
               </>
             )}
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Safety Modal */}
       {showSafetyModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Before you meet" onClose={() => { setShowSafetyModal(false); }} className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-orange-500/30 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
             <div className="text-3xl">🛡️</div>
             <h2 className="text-lg font-extrabold text-stone-900">SAFETY FIRST</h2>
@@ -2923,12 +2554,12 @@ export default function Home() {
               </button>
             </div>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Friends List Modal */}
       {showFriendsModal && (
-        <div className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
+        <AccessibleDialog toasts={toasts} label="Your squad" onClose={() => { setShowFriendsModal(false); }} className="fixed inset-0 bg-stone-950/90 backdrop-blur-md z-50 flex items-center justify-center p-6">
           <div className="w-full max-w-sm bg-white border border-stone-200 rounded-3xl p-6 space-y-4 shadow-2xl relative">
             <div className="flex justify-between items-center border-b border-stone-200 pb-2">
               <h2 className="text-sm font-bold text-stone-800">🤝 Raid Squad ({friendsList.length})</h2>
@@ -2992,7 +2623,7 @@ export default function Home() {
                 <div className="text-center py-8 space-y-2">
                   <div className="text-3xl">🤝</div>
                   <p className="text-xs text-stone-500 max-w-[220px] mx-auto">
-                    No squad friends added yet. Complete a Duo/Squad mission and tap "+ Add Friend"!
+                    No squad friends added yet. Complete a Duo/Squad mission and tap &quot;+ Add Friend&quot;!
                   </p>
                 </div>
               ) : (
@@ -3041,19 +2672,19 @@ export default function Home() {
             </div>
             )}
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       {/* Journey Recap Modal */}
       {showWrappedModal && (
-        <div className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
-          <div role="dialog" aria-modal="true" aria-labelledby="recap-title" className="recap-dialog w-full max-w-sm bg-white rounded-3xl p-5 space-y-4 shadow-2xl text-center">
+        <AccessibleDialog toasts={toasts} label="Your IRL Recap" onClose={() => { setShowWrappedModal(false); }} className="fixed inset-0 bg-stone-950/95 backdrop-blur-md z-50 flex items-center justify-center p-6">
+          <div className="recap-dialog w-full max-w-sm bg-white rounded-3xl p-5 space-y-4 shadow-2xl text-center">
             <div className="recap-heading">
               <h2 id="recap-title">Your IRL Recap</h2>
               <button onClick={() => setShowWrappedModal(false)} aria-label="Close recap" className="icon-button">✕</button>
             </div>
             {wrappedCardDataUrl && (
-              <img src={wrappedCardDataUrl} alt="Recap" width={1080} height={1920} className="story-preview" />
+              <NextImage unoptimized width={1080} height={1920} src={wrappedCardDataUrl} alt="Recap" className="story-preview" />
             )}
             <button
               onClick={() => handleShareCard(wrappedCardDataUrl)}
@@ -3063,7 +2694,7 @@ export default function Home() {
               <span>Share your recap</span>
             </button>
           </div>
-        </div>
+        </AccessibleDialog>
       )}
 
       <div className="page-intro">
@@ -3079,7 +2710,7 @@ export default function Home() {
           <div className="activity-heading"><h2>{isExplorerMode ? 'Find your next favourite place' : 'How are you heading out?'}</h2><span>{isExplorerMode ? 'LOCAL DISCOVERIES' : 'CHOOSE YOUR COMPANY'}</span></div>
           <div className="mode-selector" role="group" aria-label="Mission company">
             {(['solo', 'duo', 'squad'] as const).map((m) => (
-              <button key={m} aria-label={m === 'squad' ? 'Squad (2-8)' : m} aria-pressed={mode === m} disabled={Boolean(activeQuest) || isSearching} onClick={() => { handleSelectMode(m); setIsMissionAccepted(false); }}>
+              <button key={m} aria-label={m === 'squad' ? 'Squad (2-8)' : m} aria-pressed={mode === m} disabled={Boolean(activeQuest) || isSearching || !isReady} onClick={() => { handleSelectMode(m); setIsMissionAccepted(false); }}>
                 <span className="mode-icon"><AppIcon name={m === 'solo' ? 'person' : 'people'} /></span><span><strong>{m === 'solo' ? 'Just me' : m === 'duo' ? 'With a partner' : 'With a squad'}</strong><small>{m === 'solo' ? 'A little time for yourself' : m === 'duo' ? 'Two is an adventure' : 'Bring 2–8 people'}</small></span><span className="mode-radio">{mode === m && <span />}</span>
               </button>
             ))}
@@ -3096,7 +2727,7 @@ export default function Home() {
                     key={n}
                     onClick={() => setSelectedNeighborhood(n)}
                     aria-pressed={selectedNeighborhood === n}
-                    disabled={isSearching}
+                    disabled={isSearching || !isReady}
                     className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all disabled:opacity-40 ${
                       selectedNeighborhood === n
                         ? 'bg-amber-500 text-stone-950 border-amber-500'
@@ -3110,7 +2741,7 @@ export default function Home() {
               {!CURRENT_CITY.neighborhoods.some(n => n.toLowerCase().includes(neighborhoodSearch.toLowerCase().trim())) && <p role="status">No matching neighbourhood. Try another name.</p>}
               <button
                 onClick={onStartMatchingClick}
-                disabled={!selectedNeighborhood || isSearching}
+                disabled={!selectedNeighborhood || isSearching || !isReady}
                 className={`w-full font-black py-3 rounded-xl transition-all active:scale-95 ${
                   !selectedNeighborhood
                     ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
@@ -3144,7 +2775,7 @@ export default function Home() {
               <div className="start-card-top"><span className="eyebrow">YOUR DAILY DOSE OF DIFFERENT</span><span className="outline-chip"><AppIcon name="bolt" size={14} />REAL-WORLD MISSIONS</span></div>
               <h2>Same city.<br />New <span>story.</span></h2>
               <p>Try something you wouldn’t usually do.<br className="desktop-break" /> We’ll give you the nudge. You make it yours.</p>
-              <button className="primary-button start-button" onClick={onStartMatchingClick} disabled={isSearching}>
+              <button className="primary-button start-button" onClick={onStartMatchingClick} disabled={isSearching || !isReady}>
                 {isSearching ? (mode === 'solo' ? 'Finding your mission…' : 'Finding your company…') : 'Find my next mission'}<AppIcon name={isSearching ? 'refresh' : 'arrow'} size={22} />
               </button>
               <div className="start-card-bottom"><span>{mode === 'solo' ? 'Solo adventures. No sign-up needed.' : mode === 'duo' ? 'One mission. Two explorers.' : 'Make a memory with your people.'}</span><span>GO MAKE A MEMORY ↗</span></div>
@@ -3208,7 +2839,7 @@ export default function Home() {
                   gem={isExplorerMode ? activeGem : null}
                   onReroll={() => mode === 'solo' ? (isExplorerMode ? handleRevealGem() : pickRandomQuest()) : handleSharedReroll()}
                   accepted={isMissionAccepted}
-                  onAcceptMission={() => setIsMissionAccepted(true)}
+                  onAcceptMission={handleAcceptMission}
                 />
               </div>
 
@@ -3229,7 +2860,7 @@ export default function Home() {
                       <p className="text-[10px] text-stone-400 italic py-2 text-center">No messages yet. Coordinate your squad rally point!</p>
                     ) : (
                       messages.map((m) => (
-                        <div key={m.id || Math.random()} className="bg-white p-2 rounded-xl border border-stone-200/80 flex justify-between items-start">
+                        <div key={m.id} className="bg-white p-2 rounded-xl border border-stone-200/80 flex justify-between items-start">
                           <div>
                             <button
                               onClick={() => inspectProfile(m.sender_handle)}
@@ -3267,6 +2898,7 @@ export default function Home() {
                     />
                     <button
                       onClick={sendMessage}
+                      disabled={sendingMessage || !newMessage.trim()}
                       className="bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl transition-all"
                     >
                       Send
@@ -3283,11 +2915,11 @@ export default function Home() {
                       <span className="text-xs text-orange-700 font-semibold">Saving your photo…</span>
                     </div>
                   ) : proofImage ? (
-                    <img src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
+                    <NextImage unoptimized width={800} height={600} src={proofImage} alt="Proof" className="w-full h-36 object-cover rounded-xl" />
                   ) : (
                     <label className="cursor-pointer flex flex-col items-center space-y-1 w-full py-1">
                       <span className="text-xl">📸</span>
-                      <span className="text-sm text-stone-700 font-semibold">Done your mission? Add a photo</span><span className="text-xs text-stone-500">Your photo is shared in the community feed.</span>
+                      <span className="text-sm text-stone-700 font-semibold">Done your mission? Add a photo</span><span className="text-xs text-stone-500">Your proof stays private unless you choose to share it below.</span>
                       <input
                         type="file"
                         aria-label="Add mission photo"
@@ -3302,16 +2934,20 @@ export default function Home() {
               )}
 
               <div className="flex flex-col space-y-2 pt-1">
+                <label className="flex items-start gap-3 text-left text-sm text-stone-700 py-3">
+                  <input type="checkbox" checked={shareToFeed} onChange={e => setShareToFeed(e.target.checked)} disabled={isCompleting} className="mt-1 h-5 w-5 accent-orange-700" />
+                  <span><strong>Share this photo in the community Feed</strong><br />Other explorers can see your photo, mission and handle. Leave this off to keep the proof private.</span>
+                </label>
                 <button
                   onClick={handleCompleteMission}
-                  disabled={uploading || !proofImage}
+                  disabled={uploading || isCompleting || !proofImage || !proofPath}
                   className={`w-full py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${
                     proofImage && !uploading
                       ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/30 cursor-pointer'
                       : 'bg-stone-100 text-stone-500 cursor-not-allowed border border-stone-300'
                   }`}
                 >
-                  {proofImage ? 'Complete & Log Proof 🔥' : 'Take Photo Proof to Complete'}
+                  {isCompleting ? 'Saving your adventure…' : proofImage ? 'Complete mission' : 'Take Photo Proof to Complete'}
                 </button>
                 <button
                   onClick={handleAbandonMission}
@@ -3333,7 +2969,7 @@ export default function Home() {
 
               {cardDataUrl && (
                 <div className="space-y-3 pt-2">
-                  <img src={cardDataUrl} alt="Story Card" width={1080} height={1920} className="story-preview" />
+                  <NextImage unoptimized width={1080} height={1920} src={cardDataUrl} alt="Story Card" className="story-preview" />
 
                   <button
                     onClick={() => handleShareCard(cardDataUrl)}
@@ -3346,7 +2982,7 @@ export default function Home() {
               )}
 
               <button
-                onClick={() => { setIsCompleted(false); setActiveQuest(null); setActiveGem(null); setProofImage(null); setIsMissionAccepted(false); }}
+                onClick={() => { setIsCompleted(false); setActiveQuest(null); setActiveGem(null); setProofImage(null); setProofPath(null); setAssignment(null); setRoomId(''); setIsMissionAccepted(false); }}
                 className="w-full bg-stone-100 hover:bg-stone-200 text-stone-800 py-3 rounded-xl font-semibold text-sm transition-all active:scale-95"
               >
                 Back to Home
@@ -3362,7 +2998,9 @@ export default function Home() {
           </div>
 
           <div className="community-grid">
-            {loadingFeed ? (
+            {feedError ? (
+              <div role="alert" className="surface-card p-6"><p>{feedError}</p><button className="primary-button mt-4" onClick={fetchGallery}>Try again</button></div>
+            ) : loadingFeed ? (
               [1, 2, 3].map((i) => (
                 <div key={i} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3 animate-pulse">
                   <div className="w-full h-48 bg-stone-100 rounded-xl" />
@@ -3380,7 +3018,7 @@ export default function Home() {
               feedItems.map((item) => (
                 <div key={item.id} className="bg-white border border-stone-200 rounded-2xl p-3 flex flex-col space-y-3">
                   {item.photo_url && (
-                    <img src={item.photo_url} alt={`Photo from ${item.handle || 'an explorer'}: ${item.quest_text}`} loading="lazy" className="w-full h-48 object-cover rounded-xl" />
+                    <NextImage unoptimized width={800} height={600} src={item.photo_url} alt={`Photo from ${item.handle || 'an explorer'}: ${item.quest_text}`} loading="lazy" className="w-full h-48 object-cover rounded-xl" />
                   )}
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -3409,7 +3047,7 @@ export default function Home() {
                         </button>
                       </div>
                     </div>
-                    <p className="text-xs text-stone-800 italic font-medium">"{item.quest_text}"</p>
+                    <p className="text-xs text-stone-800 italic font-medium">&quot;{item.quest_text}&quot;</p>
 
                     <div className="flex space-x-2 pt-1 border-t border-stone-200/80">
                       <button

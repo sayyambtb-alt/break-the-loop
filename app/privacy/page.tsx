@@ -6,17 +6,6 @@ export const metadata: Metadata = {
   description: "How Break The Loop collects, uses, and protects your data.",
 };
 
-// Wraps a placeholder that still needs real content filled in before this
-// page is truly ready for real users. Visually loud on purpose -- this
-// should be impossible to miss on the live page until every one is gone.
-function TODO({ children }: { children: React.ReactNode }) {
-  return (
-    <span className="bg-amber-200 text-amber-900 font-bold px-1.5 py-0.5 rounded">
-      {children}
-    </span>
-  );
-}
-
 function H2({ children }: { children: React.ReactNode }) {
   return <h2 className="text-xl font-extrabold text-stone-900 mt-8 mb-3">{children}</h2>;
 }
@@ -35,13 +24,13 @@ export default function PrivacyPolicy() {
 
         <div className="bg-gradient-to-b from-white to-stone-50 rounded-3xl shadow-xl shadow-orange-900/10 p-6 sm:p-10 mt-4">
           <h1 className="text-2xl sm:text-3xl font-black text-stone-900 mb-1">Privacy Policy</h1>
-          <p className="text-sm text-stone-500 mb-6">Last updated: September 10, 2026</p>
+          <p className="text-sm text-stone-500 mb-6">Last updated: September 13, 2026</p>
 
           <P>
-            This Privacy Policy explains what information Break The Loop ("we," "us," "the App") collects when
+            This Privacy Policy explains what information Break The Loop (&quot;we,&quot; &quot;us,&quot; &quot;the App&quot;) collects when
             you use breaktheloopapp.in, why we collect it, and what rights you have over it. It is written to
-            comply with India's Digital Personal Data Protection Act, 2023 ("DPDP Act") and the Information
-            Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021 ("IT Rules").
+            comply with India&apos;s Digital Personal Data Protection Act, 2023 (&quot;DPDP Act&quot;) and the Information
+            Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021 (&quot;IT Rules&quot;).
           </P>
           <P>
             By using Break The Loop, you consent to the collection and use of your information as described
@@ -50,8 +39,8 @@ export default function PrivacyPolicy() {
 
           <H2>1. Who we are</H2>
           <P>
-            Break The Loop is a Mumbai-based app that gives you random real-world micro-missions (Solo, Duo, or
-            Squad) and helps you discover hyper-local "hidden gem" spots in your neighborhood, submitted by
+            Break The Loop is an app launching in Mumbai that gives you random real-world micro-missions (Solo, Duo, or
+            Squad) and helps you discover hyper-local &quot;hidden gem&quot; spots in your neighborhood, submitted by
             other users.
           </P>
           <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-sm text-stone-700 space-y-1">
@@ -130,24 +119,26 @@ export default function PrivacyPolicy() {
             your phone number (unless you separately provide it), payment information, or biometric data.
           </P>
 
+          <P>New proof photos stay private unless you select “Share this photo in the community Feed” when completing a mission. Photos posted before this option was introduced remain public. Contact us to request removal of a previous photo. Choosing to share a story image through your phone is a separate action.</P>
+
           <H2>3. How we use your information</H2>
           <P>To run the core features of the App (missions, matchmaking, streaks, badges, the feed, Explore).</P>
           <P>To moderate content and enforce our Terms of Service — including reviewing reports, removing content, and suspending accounts that violate our rules.</P>
-          <P>To communicate with you about your account, if you've provided an email.</P>
-          <P>To improve the App based on aggregated, anonymized usage patterns.</P>
+          <P>To communicate with you about your account, if you&apos;ve provided an email.</P>
+          <P>To improve the App based on aggregated usage patterns.</P>
           <P>We do not sell your personal data. We do not use your data for targeted advertising.</P>
 
           <H2>4. Who we share it with</H2>
-          <P><strong className="text-stone-800">Supabase</strong> (our database and authentication provider) stores your data on our behalf, as a data processor. Supabase's own security practices apply to how this data is stored.</P>
-          <P><strong className="text-stone-800">PostHog</strong> (our analytics provider) receives anonymized usage data — which features you use, whether a mission is completed or abandoned, and your public handle (never your email) — so we can understand how the App is actually used and fix what isn't working. It does not receive your photos, chat messages, or email address.</P>
+          <P><strong className="text-stone-800">Supabase</strong> (our database and authentication provider) stores your data on our behalf, as a data processor. Supabase&apos;s own security practices apply to how this data is stored.</P>
+          <P><strong className="text-stone-800">PostHog</strong> (our analytics provider) receives usage events — which features you use and whether a mission is completed or abandoned — linked to a pseudonymous account identifier — so we can understand how the App is actually used and fix what isn&apos;t working. We do not send it your photos, chat messages, email address or handle, and session recording and automatic click capture are disabled.</P>
           <P><strong className="text-stone-800">Other users</strong> can see your handle, badges, streak, public mission history, and anything you post to the public feed or submit as a quest/gem suggestion. They cannot see your email address.</P>
           <P>We do not sell or rent your data to third parties for marketing.</P>
           <P>We may disclose information if required by law, or to protect the safety of our users (for example, in response to a valid legal request).</P>
 
-          <H2>5. Children's data</H2>
+          <H2>5. Children&apos;s data</H2>
           <P>
             Break The Loop is not intended for children under 18. Certain features — specifically, matchmaking
-            with strangers you don't already know (Duo/Squad outside of a direct friend invite) — require you
+            with strangers you don&apos;t already know (Duo/Squad outside of a direct friend invite) — require you
             to confirm you are 18 or older. If we become aware that we have collected data from a child without
             verifiable parental consent as required under the DPDP Act, we will delete it.
           </P>
@@ -156,8 +147,8 @@ export default function PrivacyPolicy() {
           <H2>6. How long we keep your data</H2>
           <P>
             We keep your account data for as long as your account is active. If you ask us to delete your
-            account, we will delete your personal data within <TODO>[30]</TODO> days, except where we're
-            required to retain it (for example, records of a safety report under investigation).
+            account, contact us at sayyambtb@gmail.com. We will confirm the request, the deletion timeframe,
+            and any information that must be retained (for example, records of a safety report under investigation).
           </P>
 
           <H2>7. Your rights</H2>
@@ -175,12 +166,12 @@ export default function PrivacyPolicy() {
           <P>
             If a data breach occurs that affects your personal data, we will notify the Data Protection Board
             of India without delay and provide affected users with a clear, plain-language notice describing
-            what happened and what we're doing about it, consistent with our obligations under the DPDP Rules.
+            what happened and what we&apos;re doing about it, consistent with our obligations under the DPDP Rules.
           </P>
 
           <H2>9. Security</H2>
           <P>
-            We rely on Supabase's infrastructure, which includes encryption in transit and at rest, and access
+            We rely on Supabase&apos;s infrastructure, which includes encryption in transit and at rest, and access
             controls (Row Level Security) restricting who can read or write your data. No system is 100%
             secure, and we cannot guarantee absolute security, but we take reasonable measures appropriate to
             the sensitivity of the data we hold.
@@ -188,7 +179,7 @@ export default function PrivacyPolicy() {
 
           <H2>10. Changes to this policy</H2>
           <P>
-            We may update this Privacy Policy from time to time. If we make material changes, we'll notify
+            We may update this Privacy Policy from time to time. If we make material changes, we&apos;ll notify
             users in-app or by email (if provided) before the changes take effect.
           </P>
 
