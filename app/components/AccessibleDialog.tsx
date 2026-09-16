@@ -37,7 +37,7 @@ export default function AccessibleDialog({ label, onClose, className, children, 
   return <dialog ref={dialogRef} aria-label={label} className={`app-dialog ${className || ''}`}
     onCancel={event => { event.preventDefault(); closeRef.current(); }}
     onClick={event => { if (event.target === event.currentTarget) closeRef.current(); }}>
-    <ToastStack toasts={toasts} />
+    {toasts.length > 0 && <ToastStack toasts={toasts} />}
     {children}
   </dialog>;
 }
