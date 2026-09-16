@@ -40,9 +40,11 @@
 }
 
 /* Before a mission is accepted, keep proof/privacy/completion controls out of
-   sight. The mission card's ticket-actions are present only in the pre-accept
-   state; the secure completion handlers remain unchanged underneath. */
-.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 {
+   sight and avoid calling the assignment active. The mission card's
+   ticket-actions are present only in the pre-accept state; secure handlers are
+   unchanged underneath. */
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1,
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.justify-between.items-center > span:last-child {
   display:none;
 }
 
