@@ -40,12 +40,21 @@
 }
 
 /* Before a mission is accepted, keep proof/privacy/completion controls out of
-   sight and avoid calling the assignment active. The mission card's
-   ticket-actions are present only in the pre-accept state; secure handlers are
-   unchanged underneath. */
-.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1,
+   sight and avoid calling the assignment active. Keep a quiet escape action so
+   a user can switch company without having to accept the assigned mission. */
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > label,
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > button:first-of-type,
 .active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.justify-between.items-center > span:last-child {
   display:none;
+}
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > button:last-of-type {
+  align-self:center;
+  font-size:0;
+  margin-top:2px;
+}
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 > button:last-of-type::after {
+  content:"Change mode";
+  font-size:12px;
 }
 
 /* Make the assigned-mission artwork feel like an intentional city/map texture,
