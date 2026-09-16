@@ -39,6 +39,13 @@
   padding:0 !important;
 }
 
+/* Before a mission is accepted, keep proof/privacy/completion controls out of
+   sight. The mission card's ticket-actions are present only in the pre-accept
+   state; the secure completion handlers remain unchanged underneath. */
+.active-mission-panel:has(.mission-ticket .ticket-actions) > .flex.flex-col.space-y-2.pt-1 {
+  display:none;
+}
+
 /* Make the assigned-mission artwork feel like an intentional city/map texture,
    rather than a large empty gradient placeholder. */
 .mission-ticket { position:relative; }
